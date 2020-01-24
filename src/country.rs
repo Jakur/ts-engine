@@ -1,3 +1,4 @@
+#[derive(Clone, Copy, PartialEq)]
 pub enum Side {
     US,
     USSR,
@@ -27,10 +28,88 @@ pub enum Region {
     SouthAmerica,
 }
 
+impl Region {
+    pub fn score(&self, map: &Vec<Country>) -> i32 {
+        // Todo effects, e.g. Formosan and Shuttle
+        let countries = self.all_countries();
+        let mut ussr_bg = 0;
+        let mut ussr_n = 0;
+        let mut us_bg = 0;
+        let mut us_n = 0;
+        for i in countries {
+            let c = &map[i];
+            match c.controller() {
+                Some(x) if x == Side::US => {
+                    if c.bg {
+                        us_bg += 1;
+                    } else {
+                        us_n += 1;
+                    }
+                }
+                Some(x) if x == Side::USSR => {
+                    if c.bg {
+                        ussr_bg += 1;
+                    } else {
+                        ussr_n += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        todo!()
+    }
+    pub fn all_countries(&self) -> Vec<usize> {
+        use CName::*;
+        match self {
+            Region::Europe => (0..=Finland as usize).collect(),
+            Region::WesternEurope => {
+                let x = [
+                    Canada,
+                    UK,
+                    SpainPortugal,
+                    France,
+                    Benelux,
+                    WGermany,
+                    Italy,
+                    Austria,
+                    Greece,
+                    Turkey,
+                    Norway,
+                    Denmark,
+                    Sweden,
+                    Finland,
+                ];
+                x.into_iter().map(|n| *n as usize).collect()
+            }
+            Region::EasternEurope => {
+                let x = [
+                    Finland,
+                    EGermany,
+                    Poland,
+                    Czechoslovakia,
+                    Austria,
+                    Hungary,
+                    Romania,
+                    Yugoslavia,
+                    Bulgaria,
+                ];
+                x.into_iter().map(|n| *n as usize).collect()
+            }
+            Region::MiddleEast => (Lebanon as usize..=SaudiaArabia as usize).collect(),
+            Region::Asia => (Afghanistan as usize..=NKorea as usize).collect(),
+            Region::SoutheastAsia => (Burma as usize..=Philippines as usize).collect(),
+            Region::Africa => (Morocco as usize..=SouthAfrica as usize).collect(),
+            Region::CentralAmerica => (Mexico as usize..=DominicanRep as usize).collect(),
+            Region::SouthAmerica => (Venezuela as usize..=Uruguay as usize).collect(),
+        }
+    }
+}
+
 pub struct Country {
     pub stability: i8,
     pub us: i8,
     pub ussr: i8,
+    pub bg: bool,
 }
 
 impl Country {
@@ -46,7 +125,8 @@ impl Country {
     }
 }
 
-enum CName {
+#[derive(Clone, Copy)]
+pub enum CName {
     Canada = 0,
     UK,
     France,
@@ -86,9 +166,9 @@ enum CName {
     Thailand,
     Vietnam,
     Malaysia,
-    Australia,
     Indonesia,
     Philippines,
+    Australia,
     Taiwan,
     Japan,
     SKorea,
