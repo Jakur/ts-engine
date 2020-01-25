@@ -1,3 +1,5 @@
+pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
     US,
@@ -6,12 +8,21 @@ pub enum Side {
 
 pub struct Map {
     pub countries: Vec<Country>,
-    edges: Vec<Vec<usize>>,
+    pub edges: Vec<Vec<usize>>,
 }
 
 impl Map {
     pub fn new() -> Map {
-        unimplemented!()
+        let mut edge_list = vec![Vec::new(); NUM_COUNTRIES];
+        let e = edges();
+        for (v1, v2) in e.into_iter() {
+            edge_list[v1 as usize].push(v2 as usize);
+            edge_list[v2 as usize].push(v1 as usize);
+        }
+        Map {
+            countries: countries(),
+            edges: edge_list,
+        }
     }
 }
 
@@ -105,6 +116,7 @@ impl Region {
     }
 }
 
+#[derive(Clone)]
 pub struct Country {
     pub stability: i8,
     pub us: i8,
@@ -121,6 +133,22 @@ impl Country {
             Some(Side::USSR)
         } else {
             None
+        }
+    }
+    fn new_bg(stability: i8) -> Country {
+        Country {
+            stability,
+            us: 0,
+            ussr: 0,
+            bg: true,
+        }
+    }
+    fn new_non(stability: i8) -> Country {
+        Country {
+            stability,
+            us: 0,
+            ussr: 0,
+            bg: false,
         }
     }
 }
@@ -213,6 +241,110 @@ pub enum CName {
     Uruguay,
     US,
     USSR,
+}
+
+fn countries() -> Vec<Country> {
+    use CName::*;
+    let mut countries = vec![Country::new_non(0); NUM_COUNTRIES];
+    let bgs = [
+        (France, 3),
+        (WGermany, 4),
+        (EGermany, 3),
+        (Poland, 3),
+        (Italy, 2),
+        (Libya, 2),
+        (Egypt, 2),
+        (Israel, 4),
+        (SaudiaArabia, 3),
+        (Iraq, 3),
+        (Iran, 2),
+        (Pakistan, 2),
+        (India, 3),
+        (Thailand, 2),
+        (NKorea, 3),
+        (SKorea, 3),
+        (Japan, 4),
+        (Algeria, 2),
+        (Nigeria, 1),
+        (Zaire, 1),
+        (Angola, 1),
+        (SouthAfrica, 3),
+        (Mexico, 2),
+        (Cuba, 3),
+        (Panama, 2),
+        (Venezuela, 2),
+        (Brazil, 2),
+        (Chile, 3),
+        (Argentina, 2),
+    ];
+    let non = [
+        (Canada, 4),
+        (UK, 5),
+        (Norway, 4),
+        (Denmark, 3),
+        (Sweden, 4),
+        (Finland, 4),
+        (Benelux, 3),
+        (Czechoslovakia, 3),
+        (Austria, 4),
+        (Hungary, 3),
+        (Romania, 3),
+        (Yugoslavia, 3),
+        (Bulgaria, 3),
+        (SpainPortugal, 2),
+        (Greece, 2),
+        (Turkey, 2),
+        (Lebanon, 1),
+        (Syria, 2),
+        (Jordan, 2),
+        (GulfStates, 3),
+        (Afghanistan, 2),
+        (Burma, 2),
+        (LaosCambodia, 1),
+        (Vietnam, 1),
+        (Malaysia, 2),
+        (Australia, 4),
+        (Indonesia, 1),
+        (Philippines, 2),
+        (Taiwan, 3),
+        (Tunisia, 2),
+        (Morocco, 3),
+        (WestAfricanStates, 2),
+        (IvoryCoast, 2),
+        (SaharanStates, 1),
+        (Cameroon, 1),
+        (Botswana, 2),
+        (Zimbabwe, 1),
+        (SEAfricanStates, 1),
+        (Kenya, 2),
+        (Somalia, 2),
+        (Ethiopia, 1),
+        (Sudan, 1),
+        (Guatemala, 1),
+        (ElSalvador, 1),
+        (Honduras, 2),
+        (CostaRica, 3),
+        (Nicaragua, 1),
+        (Haiti, 1),
+        (DominicanRep, 1),
+        (Colombia, 1),
+        (Ecuador, 2),
+        (Peru, 2),
+        (Bolivia, 2),
+        (Paraguay, 2),
+        (Uruguay, 2),
+        (US, 6),
+        (USSR, 6),
+    ];
+    for (n, s) in bgs.into_iter() {
+        let c = Country::new_bg(*s);
+        countries[*n as usize] = c;
+    }
+    for (n, s) in non.into_iter() {
+        let c = Country::new_non(*s);
+        countries[*n as usize] = c;
+    }
+    countries
 }
 
 fn edges() -> Vec<(CName, CName)> {
@@ -346,10 +478,15 @@ fn edges() -> Vec<(CName, CName)> {
 mod tests {
     use super::*;
     #[test]
+    fn check_countries() {
+        let countries = countries();
+        assert!(countries.into_iter().all(|c| c.stability > 0));
+    }
+    #[test]
     fn check_degrees() {
         use CName::*;
         let e = edges();
-        let len = USSR as usize + 1;
+        let len = NUM_COUNTRIES;
         let mut edge_list = vec![Vec::new(); len];
         for (v1, v2) in e {
             edge_list[v1 as usize].push(v2);
