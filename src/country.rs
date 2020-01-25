@@ -125,7 +125,7 @@ impl Country {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum CName {
     Canada = 0,
     UK,
@@ -337,5 +337,119 @@ fn edges() -> Vec<(CName, CName)> {
         (Argentina, Chile),
         (Chile, Peru),
         (Peru, Ecuador),
+        (EGermany, Austria),
+        (Nicaragua, CostaRica),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn check_degrees() {
+        use CName::*;
+        let e = edges();
+        let len = USSR as usize + 1;
+        let mut edge_list = vec![Vec::new(); len];
+        for (v1, v2) in e {
+            edge_list[v1 as usize].push(v2);
+            edge_list[v2 as usize].push(v1);
+        }
+        let correct = [
+            (Canada, 2),
+            (UK, 4),
+            (Norway, 2),
+            (Sweden, 3),
+            (Finland, 2),
+            (Denmark, 2),
+            (Benelux, 2),
+            (France, 5),
+            (SpainPortugal, 3),
+            (Italy, 5),
+            (WGermany, 5),
+            (EGermany, 4),
+            (Austria, 4),
+            (Poland, 3),
+            (Czechoslovakia, 3),
+            (Hungary, 4),
+            (Romania, 4),
+            (Yugoslavia, 4),
+            (Greece, 4),
+            (Bulgaria, 2),
+            (Turkey, 4),
+            (Syria, 3),
+            (Lebanon, 3),
+            (Israel, 4),
+            (Egypt, 3),
+            (Libya, 2),
+            (Jordan, 4),
+            (Iraq, 4),
+            (SaudiaArabia, 3),
+            (GulfStates, 2),
+            (Iran, 3),
+            (Afghanistan, 3),
+            (Pakistan, 3),
+            (India, 2),
+            (Burma, 2),
+            (LaosCambodia, 3),
+            (Vietnam, 2),
+            (Thailand, 3),
+            (Malaysia, 3),
+            (Australia, 1),
+            (Indonesia, 2),
+            (Philippines, 2),
+            (Japan, 4),
+            (Taiwan, 2),
+            (SKorea, 3),
+            (NKorea, 2),
+            (Tunisia, 2),
+            (Algeria, 4),
+            (Morocco, 3),
+            (WestAfricanStates, 2),
+            (IvoryCoast, 2),
+            (SaharanStates, 2),
+            (Nigeria, 3),
+            (Cameroon, 2),
+            (Zaire, 3),
+            (Angola, 3),
+            (SouthAfrica, 2),
+            (Botswana, 3),
+            (Zimbabwe, 3),
+            (SEAfricanStates, 2),
+            (Kenya, 2),
+            (Somalia, 2),
+            (Ethiopia, 2),
+            (Sudan, 2),
+            (Mexico, 2),
+            (Guatemala, 3),
+            (ElSalvador, 2),
+            (Honduras, 4),
+            (CostaRica, 3),
+            (Panama, 2),
+            (Nicaragua, 3),
+            (Cuba, 3),
+            (Haiti, 2),
+            (DominicanRep, 1),
+            (Colombia, 3),
+            (Venezuela, 2),
+            (Brazil, 2),
+            (Uruguay, 3),
+            (Paraguay, 3),
+            (Bolivia, 2),
+            (Argentina, 3),
+            (Chile, 2),
+            (Peru, 3),
+            (Ecuador, 2),
+            (US, 4),
+            (USSR, 5),
+        ];
+        // Check that I didn't miss a country in this list
+        assert_eq!(len, correct.len());
+        let s: usize = correct.iter().map(|(x, _y)| *x as usize).sum();
+        assert_eq!(s, len * (len - 1) / 2);
+        // Check degrees of every node
+        assert!(correct
+            .iter()
+            .all(|(x, y)| edge_list[*x as usize].len() == *y));
+    }
 }
