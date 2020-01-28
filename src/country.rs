@@ -51,7 +51,7 @@ enum Status {
 }
 
 impl Region {
-    pub fn score(&self, state: &mut GameState) {
+    pub fn score(&self, state: &mut GameState) -> i8 {
         use Region::*;
         let countries = self.all_countries();
         let mut ussr_bg = 0;
@@ -148,7 +148,7 @@ impl Region {
                 vp_change += 2 * us_bg; // US Thailand
                 vp_change -= 2 * ussr_bg; // USSR Thailand
                 state.vp += vp_change;
-                return;
+                return vp_change;
             }
             _ => {
                 let diff = us_bg + us_n - ussr_bg - ussr_n;
@@ -180,12 +180,14 @@ impl Region {
         // Auto win for control
         if *self == Europe {
             if let Status::Control = us_status {
+                let x = 20 - state.vp;
                 state.vp = 20;
-                return;
+                return x;
             }
             if let Status::Control = ussr_status {
+                let x = -20 - state.vp;
                 state.vp = -20;
-                return;
+                return x;
             }
         }
 
@@ -205,6 +207,7 @@ impl Region {
         vp_change += us_bg;
         vp_change -= ussr_bg;
         state.vp += vp_change;
+        return vp_change;
     }
     pub fn all_countries(&self) -> Vec<usize> {
         use CName::*;
