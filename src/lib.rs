@@ -1,6 +1,11 @@
+#[macro_use]
+extern crate lazy_static;
+
+pub mod action;
 pub mod card;
 pub mod country;
 pub mod state;
+
 #[cfg(test)]
 mod tests {
     use super::*;

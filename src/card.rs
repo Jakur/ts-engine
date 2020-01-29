@@ -1,6 +1,12 @@
 #![allow(non_camel_case_types)]
 
-use crate::country::Side;
+use crate::action::Action;
+use crate::country::{Region, Side};
+use crate::state::GameState;
+
+lazy_static! {
+    pub static ref ATT: Vec<Attributes> = init_cards();
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Effect {
@@ -37,7 +43,7 @@ impl Attributes {
 fn init_cards() -> Vec<Attributes> {
     use Side::*;
     let c = Attributes::new;
-    vec![
+    let x = vec![
         c(Neutral, 0), // Dummy
         c(Neutral, 0).scoring(),
         c(Neutral, 0).scoring(),
@@ -74,9 +80,11 @@ fn init_cards() -> Vec<Attributes> {
         c(USSR, 3).star(),
         c(Neutral, 4),
         c(US, 2).star(), // Formosan
-    ]
+    ];
+    x
 }
 
+#[derive(Clone, Copy)]
 pub enum Card {
     Asia_Scoring = 1,
     Europe_Scoring,
@@ -113,6 +121,47 @@ pub enum Card {
     De_Stalinization,
     Nuclear_Test_Ban,
     Formosan_Resolution = 35,
+}
+
+impl Card {
+    pub fn event(&self, state: &mut GameState) {
+        use Card::*;
+        if !self.can_event(state) {
+            return;
+        }
+        match self {
+            Asia_Scoring => {
+                Region::Asia.score(state);
+            }
+            Europe_Scoring => {
+                Region::Europe.score(state);
+            }
+            Middle_East_Scoring => {
+                Region::MiddleEast.score(state);
+            }
+            Duck_and_Cover => {
+                state.defcon -= 1;
+                state.vp += 5 - state.defcon;
+            }
+            Five_Year_Plan => {
+                let index = state.random_card(Side::USSR);
+                let card = state.ussr_hand[index];
+                if card.att().side == Side::US {
+                    state.pending_actions.push(Action::Event(card));
+                }
+                state.discard_card(Side::USSR, index);
+            }
+            _ => {}
+        }
+    }
+    pub fn can_event(&self, _state: &GameState) -> bool {
+        match self {
+            _ => true, // todo make this accurate
+        }
+    }
+    pub fn att(&self) -> &'static Attributes {
+        &ATT[*self as usize]
+    }
 }
 
 #[cfg(test)]
