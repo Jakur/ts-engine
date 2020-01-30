@@ -3,11 +3,28 @@ use crate::state::GameState;
 
 pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
 
+lazy_static! {
+    pub static ref EUROPE: Vec<usize> = Region::Europe.all_countries();
+    pub static ref ASIA: Vec<usize> = Region::Asia.all_countries();
+    pub static ref MIDDLE_EAST: Vec<usize> = Region::Asia.all_countries();
+    pub static ref WESTERN_EUROPE: Vec<usize> = Region::WesternEurope.all_countries();
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
     US,
     USSR,
     Neutral,
+}
+
+impl Side {
+    pub fn opposite(&self) -> Side {
+        match self {
+            Side::US => Side::USSR,
+            Side::USSR => Side::US,
+            Side::Neutral => unimplemented!(), // Not sure if this should be called
+        }
+    }
 }
 
 pub struct Map {

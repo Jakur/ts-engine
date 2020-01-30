@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 pub mod action;
+pub mod agent;
 pub mod card;
 pub mod country;
 pub mod state;

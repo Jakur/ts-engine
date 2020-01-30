@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
-use crate::action::Action;
-use crate::country::{Region, Side};
+use crate::action::{Action, Decision, Restriction};
+use crate::country::{self, CName, Region, Side};
 use crate::state::GameState;
 
 lazy_static! {
@@ -12,6 +12,8 @@ lazy_static! {
 pub enum Effect {
     ShuttleDiplomacy,
     FormosanResolution,
+    IronLady,
+    VietnamRevolts,
 }
 
 pub struct Attributes {
@@ -84,7 +86,7 @@ fn init_cards() -> Vec<Attributes> {
     x
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Card {
     Asia_Scoring = 1,
     Europe_Scoring,
@@ -124,10 +126,11 @@ pub enum Card {
 }
 
 impl Card {
-    pub fn event(&self, state: &mut GameState) {
+    pub fn event(&self, state: &mut GameState) -> bool {
         use Card::*;
+        // let att = self.att();
         if !self.can_event(state) {
-            return;
+            return false;
         }
         match self {
             Asia_Scoring => {
@@ -147,15 +150,35 @@ impl Card {
                 let index = state.random_card(Side::USSR);
                 let card = state.ussr_hand[index];
                 if card.att().side == Side::US {
-                    state.pending_actions.push(Action::Event(card));
+                    let x = Decision::new(Side::US, Action::Event(card), &[]);
+                    state.pending_actions.push(x);
                 }
                 state.discard_card(Side::USSR, index);
             }
+            Socialist_Governments => {
+                let x = Decision::new(
+                    Side::USSR,
+                    Action::Remove(Side::US),
+                    &country::WESTERN_EUROPE,
+                );
+                state.pending_actions.push(x.clone());
+                state.pending_actions.push(x.clone());
+                state.pending_actions.push(x);
+                state.restrict = Some(Restriction::Limit(2));
+            }
+            Fidel => {
+                state.remove_all(Side::US, CName::Cuba);
+                state.control(Side::USSR, CName::Cuba);
+            }
+            Vietnam_Revolts => state.ussr_effects.push(Effect::VietnamRevolts),
             _ => {}
         }
+        return true;
     }
-    pub fn can_event(&self, _state: &GameState) -> bool {
+    pub fn can_event(&self, state: &GameState) -> bool {
+        use Card::*;
         match self {
+            Socialist_Governments => state.has_effect(Side::US, Effect::IronLady).is_none(),
             _ => true, // todo make this accurate
         }
     }
