@@ -20,8 +20,7 @@ pub struct GameState<'a> {
     pub ussr_effects: Vec<Effect>,
     pub pending_actions: Vec<Decision<'a>>, // Todo figure out actions
     pub rng: SmallRng,
-    pub us_hand: Vec<Card>,
-    pub ussr_hand: Vec<Card>,
+    pub deck: Deck,
     pub china: Side,
     pub restrict: Option<Restriction>,
     pub ussr_agent: RandAgent,
@@ -44,8 +43,7 @@ impl<'a> GameState<'a> {
             ussr_effects: Vec::new(),
             pending_actions: Vec::new(),
             rng: SmallRng::from_entropy(),
-            us_hand: Vec::new(),
-            ussr_hand: Vec::new(),
+            deck: Deck::new(),
             china: Side::USSR,
             restrict: None,
             ussr_agent: RandAgent::new(),
@@ -195,7 +193,7 @@ impl<'a> GameState<'a> {
             Side::Neutral => unimplemented!(),
         }
     }
-    pub fn take_coup(&mut self, side: Side, country_index: usize, ops: i8, roll: i8) {
+    pub fn take_coup(&mut self, side: Side, country_index: usize, ops: i8, roll: i8, free: bool) {
         let c = &mut self.countries[country_index];
         let delta = std::cmp::max(0, ops + roll - 2 * c.stability);
         match side {
@@ -222,6 +220,10 @@ impl<'a> GameState<'a> {
         if c.bg {
             self.defcon -= 1;
         }
+        if !free {
+            let x = side as usize;
+            self.mil_ops[x] = std::cmp::max(5, self.mil_ops[x] + ops);
+        }
     }
     pub fn random_card(&mut self, side: Side) -> usize {
         let start = {
@@ -232,19 +234,14 @@ impl<'a> GameState<'a> {
             }
         };
         let end = match side {
-            Side::US => self.us_hand.len(),
-            Side::USSR => self.ussr_hand.len(),
+            Side::US => self.deck.us_hand().len(),
+            Side::USSR => self.deck.ussr_hand().len(),
             _ => unimplemented!(),
         };
         self.rng.gen_range(start, end)
     }
     pub fn discard_card(&mut self, side: Side, index: usize) {
-        let hand = match side {
-            Side::US => &mut self.us_hand,
-            Side::USSR => &mut self.ussr_hand,
-            _ => unimplemented!(),
-        };
-        hand.swap_remove(index);
+        self.deck.play_card(side, index, false);
     }
     pub fn can_space(&self, side: Side) -> bool {
         let me = side as usize;
@@ -255,11 +252,7 @@ impl<'a> GameState<'a> {
     pub fn space_card(&mut self, side: Side, index: usize, roll: i8) -> bool {
         let me = side as usize;
         let opp = side.opposite() as usize;
-        let hand = match side {
-            Side::US => &mut self.us_hand,
-            Side::USSR => &mut self.ussr_hand,
-            _ => unimplemented!(),
-        };
+        self.deck.play_card(side, index, false);
         let success = match self.space[me] {
             0 | 2 | 4 | 6 => roll <= 3,
             1 | 3 | 5 => roll <= 4,
@@ -267,7 +260,6 @@ impl<'a> GameState<'a> {
             _ => unimplemented!(),
         };
         self.space_attempts[me] += 1;
-        hand.swap_remove(index); // Todo fix hand management
         if success {
             self.space[me] += 1;
             let first = self.space[me] > self.space[opp];

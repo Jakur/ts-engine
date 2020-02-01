@@ -8,6 +8,54 @@ lazy_static! {
     pub static ref ATT: Vec<Attributes> = init_cards();
 }
 
+pub struct Deck {
+    us_hand: Vec<Card>,
+    ussr_hand: Vec<Card>,
+    discard: Vec<Card>,
+    draw: Vec<Card>,
+    removed: Vec<Card>,
+}
+
+impl Deck {
+    pub fn new() -> Self {
+        Deck {
+            us_hand: Vec::new(),
+            ussr_hand: Vec::new(),
+            discard: Vec::new(),
+            draw: Vec::new(),
+            removed: Vec::new(),
+        }
+    }
+    pub fn us_hand(&self) -> &Vec<Card> {
+        &self.us_hand
+    }
+    pub fn ussr_hand(&self) -> &Vec<Card> {
+        &self.ussr_hand
+    }
+    pub fn discard(&self) -> &Vec<Card> {
+        &self.discard
+    }
+    pub fn draw(&self) -> &Vec<Card> {
+        &self.draw
+    }
+    pub fn removed(&self) -> &Vec<Card> {
+        &self.removed
+    }
+    pub fn play_card(&mut self, side: Side, index: usize, evented: bool) {
+        let hand = match side {
+            Side::US => &mut self.us_hand,
+            Side::USSR => &mut self.ussr_hand,
+            Side::Neutral => unimplemented!(),
+        };
+        let card = hand.swap_remove(index);
+        if evented && card.att().starred {
+            self.removed.push(card);
+        } else {
+            self.discard.push(card);
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Effect {
     ShuttleDiplomacy,
@@ -148,12 +196,14 @@ impl Card {
             }
             Five_Year_Plan => {
                 let index = state.random_card(Side::USSR);
-                let card = state.ussr_hand[index];
+                let card = state.deck.ussr_hand()[index];
                 if card.att().side == Side::US {
                     let x = Decision::new(Side::US, Action::Event(card), &[]);
                     state.pending_actions.push(x);
+                    state.deck.play_card(Side::USSR, index, true);
+                } else {
+                    state.discard_card(Side::USSR, index);
                 }
-                state.discard_card(Side::USSR, index);
             }
             Socialist_Governments => {
                 let x = Decision::new(
