@@ -13,14 +13,12 @@ pub struct GameState<'a> {
     turn: i8,
     ar: i8,
     side: Side,
-    ussr_space: i8,
-    ussr_mil_ops: i8,
-    us_space: i8,
-    us_mil_ops: i8,
+    space: [i8; 2],
+    mil_ops: [i8; 2],
+    space_attempts: [i8; 2],
     pub us_effects: Vec<Effect>,
     pub ussr_effects: Vec<Effect>,
     pub pending_actions: Vec<Decision<'a>>, // Todo figure out actions
-    pub history: Vec<Decision<'a>>,         // Single turn
     pub rng: SmallRng,
     pub us_hand: Vec<Card>,
     pub ussr_hand: Vec<Card>,
@@ -39,14 +37,12 @@ impl<'a> GameState<'a> {
             turn: 1, // Todo make compatible with initial placements
             ar: 1,
             side: Side::USSR,
-            ussr_space: 0,
-            ussr_mil_ops: 0,
-            us_space: 0,
-            us_mil_ops: 0,
+            space: [0, 0],
+            mil_ops: [0, 0],
+            space_attempts: [0, 0],
             us_effects: Vec::new(),
             ussr_effects: Vec::new(),
             pending_actions: Vec::new(),
-            history: Vec::new(),
             rng: SmallRng::from_entropy(),
             us_hand: Vec::new(),
             ussr_hand: Vec::new(),
@@ -249,6 +245,77 @@ impl<'a> GameState<'a> {
             _ => unimplemented!(),
         };
         hand.swap_remove(index);
+    }
+    pub fn can_space(&self, side: Side) -> bool {
+        let me = side as usize;
+        let opp = side.opposite() as usize;
+        self.space_attempts[me] < 1
+            || self.space_attempts[me] < 2 && self.space[me] >= 2 && self.space[opp] < 2
+    }
+    pub fn space_card(&mut self, side: Side, index: usize, roll: i8) -> bool {
+        let me = side as usize;
+        let opp = side.opposite() as usize;
+        let hand = match side {
+            Side::US => &mut self.us_hand,
+            Side::USSR => &mut self.ussr_hand,
+            _ => unimplemented!(),
+        };
+        let success = match self.space[me] {
+            0 | 2 | 4 | 6 => roll <= 3,
+            1 | 3 | 5 => roll <= 4,
+            7 => roll <= 2,
+            _ => unimplemented!(),
+        };
+        self.space_attempts[me] += 1;
+        hand.swap_remove(index); // Todo fix hand management
+        if success {
+            self.space[me] += 1;
+            let first = self.space[me] > self.space[opp];
+            let points = match self.space[me] {
+                1 => {
+                    if first {
+                        2
+                    } else {
+                        1
+                    }
+                }
+                3 => {
+                    if first {
+                        2
+                    } else {
+                        0
+                    }
+                }
+                5 => {
+                    if first {
+                        3
+                    } else {
+                        1
+                    }
+                }
+                7 => {
+                    if first {
+                        4
+                    } else {
+                        2
+                    }
+                }
+                8 => {
+                    if first {
+                        2
+                    } else {
+                        0
+                    }
+                }
+                _ => 0,
+            };
+            match side {
+                Side::US => self.vp += points,
+                Side::USSR => self.vp -= points,
+                _ => unimplemented!(),
+            }
+        }
+        success
     }
     pub fn is_final_scoring(&self) -> bool {
         false // Todo fix this

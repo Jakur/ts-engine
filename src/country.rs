@@ -19,9 +19,9 @@ lazy_static! {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
-    US,
-    USSR,
-    Neutral,
+    US = 0,
+    USSR = 1,
+    Neutral = 2,
 }
 
 impl Side {
