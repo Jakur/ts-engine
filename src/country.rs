@@ -1,6 +1,8 @@
 use crate::card::Effect;
 use crate::state::GameState;
 
+use std::collections::HashSet;
+
 pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
 
 lazy_static! {
@@ -8,6 +10,11 @@ lazy_static! {
     pub static ref ASIA: Vec<usize> = Region::Asia.all_countries();
     pub static ref MIDDLE_EAST: Vec<usize> = Region::Asia.all_countries();
     pub static ref WESTERN_EUROPE: Vec<usize> = Region::WesternEurope.all_countries();
+    pub static ref EASTERN_EUROPE: Vec<usize> = Region::EasternEurope.all_countries();
+    pub static ref AFRICA: Vec<usize> = Region::Africa.all_countries();
+    pub static ref SOUTH_AMERICA: Vec<usize> = Region::SouthAmerica.all_countries();
+    pub static ref CENTRAL_AMERICA: Vec<usize> = Region::CentralAmerica.all_countries();
+    pub static ref EDGES: Vec<Vec<usize>> = adjacency_list();
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -27,6 +34,31 @@ impl Side {
     }
 }
 
+pub fn access(state: &GameState, side: Side) -> Vec<usize> {
+    let mut set = HashSet::new();
+    for (i, list) in EDGES
+        .iter()
+        .enumerate()
+        .filter(|(i, _list)| state.countries[*i].has_influence(side))
+    {
+        for v in list.iter() {
+            set.insert(*v);
+        }
+        set.insert(i);
+    }
+    set.into_iter().collect()
+}
+
+fn adjacency_list() -> Vec<Vec<usize>> {
+    let mut edge_list = vec![Vec::new(); NUM_COUNTRIES];
+    let e = edges();
+    for (v1, v2) in e.into_iter() {
+        edge_list[v1 as usize].push(v2 as usize);
+        edge_list[v2 as usize].push(v1 as usize);
+    }
+    edge_list
+}
+
 pub struct Map {
     pub countries: Vec<Country>,
     pub edges: Vec<Vec<usize>>,
@@ -34,12 +66,7 @@ pub struct Map {
 
 impl Map {
     pub fn new() -> Map {
-        let mut edge_list = vec![Vec::new(); NUM_COUNTRIES];
-        let e = edges();
-        for (v1, v2) in e.into_iter() {
-            edge_list[v1 as usize].push(v2 as usize);
-            edge_list[v2 as usize].push(v1 as usize);
-        }
+        let edge_list = adjacency_list();
         Map {
             countries: countries(),
             edges: edge_list,
@@ -292,6 +319,13 @@ impl Country {
             Side::Neutral
         }
     }
+    pub fn has_influence(&self, side: Side) -> bool {
+        match side {
+            Side::US => self.us > 0,
+            Side::USSR => self.ussr > 0,
+            Side::Neutral => unimplemented!(),
+        }
+    }
     fn new_bg(stability: i8) -> Country {
         Country {
             stability,
@@ -398,6 +432,12 @@ pub enum CName {
     Uruguay,
     US,
     USSR,
+}
+
+impl From<CName> for usize {
+    fn from(item: CName) -> Self {
+        item as usize
+    }
 }
 
 fn countries() -> Vec<Country> {

@@ -56,6 +56,38 @@ impl<'a> GameState<'a> {
             us_agent: RandAgent::new(),
         }
     }
+    pub fn standard_allowed(&self, side: Side, action: Action) -> Vec<usize> {
+        let allowed = match action {
+            Action::StandardOps => access(self, side),
+            Action::Coup(_) | Action::FreeCoup(_) | Action::Realignment => {
+                let opp = side.opposite();
+                let action = |v: &'static Vec<usize>| {
+                    v.iter().filter_map(|x| {
+                        if self.countries[*x].has_influence(opp) {
+                            Some(*x)
+                        } else {
+                            None
+                        }
+                    })
+                };
+                let mut vec: Vec<usize> = action(&AFRICA).collect();
+                vec.extend(action(&CENTRAL_AMERICA));
+                vec.extend(action(&SOUTH_AMERICA));
+                if self.defcon >= 3 {
+                    vec.extend(action(&MIDDLE_EAST));
+                }
+                if self.defcon >= 4 {
+                    vec.extend(action(&ASIA));
+                }
+                if self.defcon >= 5 {
+                    vec.extend(action(&EUROPE));
+                }
+                vec
+            }
+            _ => vec![],
+        };
+        allowed
+    }
     pub fn resolve_actions(&mut self) {
         let mut temp = Vec::new();
         while !self.pending_actions.is_empty() {
@@ -117,8 +149,8 @@ impl<'a> GameState<'a> {
         };
         vec.swap_remove(index);
     }
-    pub fn is_controlled(&self, side: Side, country: CName) -> bool {
-        side == self.countries[country as usize].controller()
+    pub fn is_controlled<T: Into<usize>>(&self, side: Side, country: T) -> bool {
+        side == self.countries[country.into()].controller()
     }
     pub fn control(&mut self, side: Side, country: CName) {
         let c = &mut self.countries[country as usize];
@@ -165,6 +197,34 @@ impl<'a> GameState<'a> {
                 c.ussr = 0;
             }
             Side::Neutral => unimplemented!(),
+        }
+    }
+    pub fn take_coup(&mut self, side: Side, country_index: usize, ops: i8, roll: i8) {
+        let c = &mut self.countries[country_index];
+        let delta = std::cmp::max(0, ops + roll - 2 * c.stability);
+        match side {
+            Side::US => {
+                let left = delta - c.ussr;
+                if left > 0 {
+                    c.ussr = 0;
+                    c.us += left;
+                } else {
+                    c.ussr -= delta;
+                }
+            }
+            Side::USSR => {
+                let left = delta - c.us;
+                if left > 0 {
+                    c.us = 0;
+                    c.ussr += left;
+                } else {
+                    c.us -= delta;
+                }
+            }
+            Side::Neutral => unimplemented!(),
+        }
+        if c.bg {
+            self.defcon -= 1;
         }
     }
     pub fn random_card(&mut self, side: Side) -> usize {
