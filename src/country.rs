@@ -326,6 +326,15 @@ impl Country {
             Side::Neutral => unimplemented!(),
         }
     }
+    pub fn greater_influence(&self) -> Side {
+        if self.ussr > self.us {
+            Side::USSR
+        } else if self.us > self.ussr {
+            Side::US
+        } else {
+            Side::Neutral
+        }
+    }
     fn new_bg(stability: i8) -> Country {
         Country {
             stability,

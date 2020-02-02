@@ -56,7 +56,7 @@ impl<'a> GameState<'a> {
             Action::StandardOps => access(self, side),
             Action::Coup(_, _) | Action::Realignment => {
                 let opp = side.opposite();
-                let action = |v: &'static Vec<usize>| {
+                let valid = |v: &'static Vec<usize>| {
                     v.iter().filter_map(|x| {
                         if self.countries[*x].has_influence(opp) {
                             Some(*x)
@@ -65,17 +65,17 @@ impl<'a> GameState<'a> {
                         }
                     })
                 };
-                let mut vec: Vec<usize> = action(&AFRICA).collect();
-                vec.extend(action(&CENTRAL_AMERICA));
-                vec.extend(action(&SOUTH_AMERICA));
+                let mut vec: Vec<usize> = valid(&AFRICA).collect();
+                vec.extend(valid(&CENTRAL_AMERICA));
+                vec.extend(valid(&SOUTH_AMERICA));
                 if self.defcon >= 3 {
-                    vec.extend(action(&MIDDLE_EAST));
+                    vec.extend(valid(&MIDDLE_EAST));
                 }
                 if self.defcon >= 4 {
-                    vec.extend(action(&ASIA));
+                    vec.extend(valid(&ASIA));
                 }
                 if self.defcon >= 5 {
-                    vec.extend(action(&EUROPE));
+                    vec.extend(valid(&EUROPE));
                 }
                 vec
             }
@@ -142,7 +142,8 @@ impl<'a> GameState<'a> {
                     self.remove_influence(side, choice);
                 }
                 Action::Realignment => {
-                    todo!();
+                    let (us_roll, ussr_roll) = (self.roll(), self.roll());
+                    self.take_realign(choice, us_roll, ussr_roll);
                 }
                 Action::Place(side) => {
                     self.add_influence(side, choice);
@@ -225,6 +226,29 @@ impl<'a> GameState<'a> {
             Side::Neutral => unimplemented!(),
         }
     }
+    pub fn take_realign(&mut self, country_index: usize, mut us_roll: i8, mut ussr_roll: i8) {
+        // This should include superpowers as well
+        for &c in EDGES[country_index].iter() {
+            match self.countries[c].controller() {
+                Side::US => us_roll += 1,
+                Side::USSR => ussr_roll += 1,
+                Side::Neutral => {}
+            }
+        }
+        let country = &mut self.countries[country_index];
+        match country.greater_influence() {
+            Side::US => us_roll += 1,
+            Side::USSR => ussr_roll += 1,
+            Side::Neutral => {}
+        }
+        if us_roll > ussr_roll {
+            let diff = us_roll - ussr_roll;
+            country.ussr = std::cmp::max(0, country.ussr - diff);
+        } else if ussr_roll > us_roll {
+            let diff = ussr_roll - us_roll;
+            country.us = std::cmp::max(0, country.us - diff);
+        }
+    }
     pub fn take_coup(&mut self, side: Side, country_index: usize, ops: i8, roll: i8, free: bool) {
         let c = &mut self.countries[country_index];
         let delta = std::cmp::max(0, ops + roll - 2 * c.stability);
@@ -258,6 +282,7 @@ impl<'a> GameState<'a> {
         }
     }
     pub fn random_card(&mut self, side: Side) -> usize {
+        // Todo figure out if this should end up in the Deck struct
         let start = {
             if side == self.deck.china() {
                 1
