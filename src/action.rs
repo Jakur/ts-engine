@@ -21,11 +21,10 @@ impl<'a> Decision<'a> {
 #[derive(Clone, PartialEq)]
 pub enum Action {
     StandardOps,
-    Coup(i8),
+    Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
     Place(Side),
-    FreeCoup(i8), // Todo figure out if this should exist
     Remove(Side),
     Discard(Side),
     Event(Card),

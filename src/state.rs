@@ -21,7 +21,6 @@ pub struct GameState<'a> {
     pub pending_actions: Vec<Decision<'a>>, // Todo figure out actions
     pub rng: SmallRng,
     pub deck: Deck,
-    pub china: Side,
     pub restrict: Option<Restriction>,
     pub ussr_agent: RandAgent,
     pub us_agent: RandAgent,
@@ -44,16 +43,18 @@ impl<'a> GameState<'a> {
             pending_actions: Vec::new(),
             rng: SmallRng::from_entropy(),
             deck: Deck::new(),
-            china: Side::USSR,
             restrict: None,
             ussr_agent: RandAgent::new(),
             us_agent: RandAgent::new(),
         }
     }
+    pub fn roll(&mut self) -> i8 {
+        self.rng.gen_range(1, 7)
+    }
     pub fn standard_allowed(&self, side: Side, action: Action) -> Vec<usize> {
         let allowed = match action {
             Action::StandardOps => access(self, side),
-            Action::Coup(_) | Action::FreeCoup(_) | Action::Realignment => {
+            Action::Coup(_, _) | Action::Realignment => {
                 let opp = side.opposite();
                 let action = |v: &'static Vec<usize>| {
                     v.iter().filter_map(|x| {
@@ -123,7 +124,29 @@ impl<'a> GameState<'a> {
                         self.pending_actions.pop(); // The earlier check should apply
                     }
                 }
-                _ => todo!(),
+                Action::Coup(ops, free) => {
+                    let roll = self.roll();
+                    self.take_coup(dec.agent, choice, ops, roll, free);
+                }
+                Action::Space => {
+                    let roll = self.roll();
+                    self.space_card(dec.agent, choice, roll);
+                }
+                Action::Event(card) => {
+                    card.event(self);
+                }
+                Action::Discard(side) => {
+                    self.discard_card(side, choice);
+                }
+                Action::Remove(side) => {
+                    self.remove_influence(side, choice);
+                }
+                Action::Realignment => {
+                    todo!();
+                }
+                Action::Place(side) => {
+                    self.add_influence(side, choice);
+                }
             }
         }
     }
@@ -156,6 +179,15 @@ impl<'a> GameState<'a> {
                 c.ussr = std::cmp::max(c.ussr, c.us + c.stability);
             }
             Side::Neutral => unimplemented!(),
+        }
+    }
+    pub fn remove_influence(&mut self, side: Side, country_index: usize) {
+        let c = &mut self.countries[country_index];
+        // Require checking for influence prior to this step
+        match side {
+            Side::US => c.us -= 1,
+            Side::USSR => c.ussr -= 1,
+            _ => unimplemented!(),
         }
     }
     pub fn add_influence(&mut self, side: Side, country_index: usize) -> i8 {
@@ -227,7 +259,7 @@ impl<'a> GameState<'a> {
     }
     pub fn random_card(&mut self, side: Side) -> usize {
         let start = {
-            if side == self.china {
+            if side == self.deck.china() {
                 1
             } else {
                 0

@@ -4,6 +4,9 @@ use crate::action::{Action, Decision, Restriction};
 use crate::country::{self, CName, Region, Side};
 use crate::state::GameState;
 
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 lazy_static! {
     pub static ref ATT: Vec<Attributes> = init_cards();
 }
@@ -11,9 +14,10 @@ lazy_static! {
 pub struct Deck {
     us_hand: Vec<Card>,
     ussr_hand: Vec<Card>,
-    discard: Vec<Card>,
-    draw: Vec<Card>,
+    discard_pile: Vec<Card>,
+    draw_pile: Vec<Card>,
     removed: Vec<Card>,
+    china: Side,
 }
 
 impl Deck {
@@ -21,9 +25,45 @@ impl Deck {
         Deck {
             us_hand: Vec::new(),
             ussr_hand: Vec::new(),
-            discard: Vec::new(),
-            draw: Vec::new(),
+            discard_pile: Vec::new(),
+            draw_pile: Vec::new(),
             removed: Vec::new(),
+            china: Side::USSR,
+        }
+    }
+    pub fn draw_cards(&mut self, target: usize) {
+        let (us_goal, ussr_goal) = match self.china {
+            Side::US => (target + 1, target),
+            Side::USSR => (target, target + 1),
+            Side::Neutral => unimplemented!(),
+        };
+        let mut pick_ussr = true;
+        // Oscillating is relevant when reshuffles do occur
+        while self.ussr_hand.len() < ussr_goal && self.us_hand.len() < us_goal {
+            let next_card = self.draw_card();
+            if pick_ussr {
+                self.ussr_hand.push(next_card);
+            } else {
+                self.us_hand.push(next_card);
+            }
+            pick_ussr = !pick_ussr;
+        }
+        while self.ussr_hand.len() < ussr_goal {
+            let c = self.draw_card();
+            self.ussr_hand.push(c);
+        }
+        while self.us_hand.len() < us_goal {
+            let c = self.draw_card();
+            self.us_hand.push(c);
+        }
+    }
+    fn draw_card(&mut self) -> Card {
+        match self.draw_pile.pop() {
+            Some(c) => c,
+            None => {
+                self.reshuffle();
+                self.draw_card()
+            }
         }
     }
     pub fn us_hand(&self) -> &Vec<Card> {
@@ -32,11 +72,11 @@ impl Deck {
     pub fn ussr_hand(&self) -> &Vec<Card> {
         &self.ussr_hand
     }
-    pub fn discard(&self) -> &Vec<Card> {
-        &self.discard
+    pub fn discard_pile(&self) -> &Vec<Card> {
+        &self.discard_pile
     }
-    pub fn draw(&self) -> &Vec<Card> {
-        &self.draw
+    pub fn draw_pile(&self) -> &Vec<Card> {
+        &self.draw_pile
     }
     pub fn removed(&self) -> &Vec<Card> {
         &self.removed
@@ -51,8 +91,16 @@ impl Deck {
         if evented && card.att().starred {
             self.removed.push(card);
         } else {
-            self.discard.push(card);
+            self.discard_pile.push(card);
         }
+    }
+    pub fn china(&self) -> Side {
+        self.china
+    }
+    fn reshuffle(&mut self) {
+        let mut rng = thread_rng();
+        self.discard_pile.shuffle(&mut rng);
+        self.draw_pile.append(&mut self.discard_pile);
     }
 }
 
