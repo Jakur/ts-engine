@@ -16,6 +16,9 @@ impl<'a> Decision<'a> {
             allowed,
         }
     }
+    pub fn restriction_clear() -> Decision<'a> {
+        Decision::new(Side::Neutral, Action::ClearRestriction, &[])
+    }
 }
 
 #[derive(Clone)]
@@ -27,11 +30,12 @@ pub enum Action<'a> {
     Place(Side),
     Remove(Side),
     Discard(Side),
-    Event(Card, i8),
+    Event(Card, Option<usize>),
+    ClearRestriction,
     AfterStates(Vec<Vec<Decision<'a>>>),
 }
 
 #[derive(Clone)]
 pub enum Restriction {
-    Limit(i8),
+    Limit(usize),
 }

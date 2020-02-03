@@ -247,7 +247,7 @@ impl Card {
                 let index = state.random_card(Side::USSR);
                 let card = state.deck.ussr_hand()[index];
                 if card.att().side == Side::US {
-                    let x = Decision::new(Side::US, Action::Event(card, -1), &[]);
+                    let x = Decision::new(Side::US, Action::Event(card, None), &[]);
                     state.pending_actions.push(x);
                     state.deck.play_card(Side::USSR, index, true);
                 } else {
@@ -260,6 +260,7 @@ impl Card {
                     Action::Remove(Side::US),
                     &country::WESTERN_EUROPE,
                 );
+                state.pending_actions.push(Decision::restriction_clear());
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x);

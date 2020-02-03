@@ -3,8 +3,11 @@ use crate::agent::{Agent, RandAgent};
 use crate::card::*;
 use crate::country::*;
 
+use counter::Counter;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+
+use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct GameState<'a> {
@@ -52,9 +55,9 @@ impl<'a> GameState<'a> {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
-    pub fn standard_allowed(&self, side: Side, action: &Action) -> Vec<usize> {
+    pub fn standard_allowed(&self, side: Side, action: &Action) -> Option<Vec<usize>> {
         let allowed = match action {
-            Action::StandardOps => access(self, side),
+            Action::StandardOps => Some(access(self, side)),
             Action::Coup(_, _) | Action::Realignment => {
                 let opp = side.opposite();
                 let valid = |v: &'static Vec<usize>| {
@@ -78,21 +81,23 @@ impl<'a> GameState<'a> {
                 if self.defcon >= 5 {
                     vec.extend(valid(&EUROPE));
                 }
-                vec
+                Some(vec)
             }
-            _ => vec![],
+            _ => None,
         };
         allowed
     }
     pub fn resolve_actions(&mut self) -> f32 {
         let mut eval = 0.0;
+        // Todo figure out how to get history out of local
+        let mut history = Vec::new();
         while !self.pending_actions.is_empty() {
             let dec = self.pending_actions.pop().unwrap();
             // Todo don't compute this every time and see if dec.agent is right
             let mut computed_allowed = self.standard_allowed(dec.agent, &dec.action);
             if let Action::StandardOps = dec.action {
                 // Check if we cannot break control
-                if !self
+                let mut is_last_op = !self
                     .pending_actions
                     .last()
                     .and_then(|e| {
@@ -102,19 +107,45 @@ impl<'a> GameState<'a> {
                             Some(false)
                         }
                     })
-                    .unwrap_or(false)
-                {
-                    computed_allowed = computed_allowed
-                        .into_iter()
-                        .filter_map(|x| {
-                            let c = &self.countries[x];
-                            if c.controller() == dec.agent.opposite() {
-                                None
-                            } else {
-                                Some(x)
-                            }
-                        })
-                        .collect();
+                    .unwrap_or(false);
+                if is_last_op {
+                    // Unwrap is safe because we always compute on StandardOps
+                    computed_allowed = Some(
+                        computed_allowed
+                            .unwrap()
+                            .into_iter()
+                            .filter_map(|x| {
+                                let c = &self.countries[x];
+                                if c.controller() == dec.agent.opposite() {
+                                    None
+                                } else {
+                                    Some(x)
+                                }
+                            })
+                            .collect(),
+                    );
+                }
+            }
+            // Todo figure out if restriction is always limit
+            if let Some(restrict) = &self.restrict {
+                match restrict {
+                    Restriction::Limit(num) => {
+                        let counter: Counter<_> = history.iter().copied().collect();
+                        let bad: HashSet<_> = counter
+                            .into_map()
+                            .into_iter()
+                            .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
+                            .collect();
+                        if !bad.is_empty() {
+                            // Todo: Under restrictions we should always use a reference slice?
+                            computed_allowed = Some(
+                                dec.allowed
+                                    .iter()
+                                    .filter_map(|x| if bad.contains(x) { None } else { Some(*x) })
+                                    .collect(),
+                            );
+                        }
+                    }
                 }
             }
             let agent = match dec.agent {
@@ -123,14 +154,13 @@ impl<'a> GameState<'a> {
                 Side::Neutral => todo!(), // Events with no agency?
             };
             let decision = {
-                // Todo fix these conditions to seeing if we computed something
-                if dec.allowed.len() > 0 {
-                    agent.decide(&self, dec.allowed, dec.action.clone())
-                } else {
-                    agent.decide(&self, &computed_allowed[..], dec.action.clone())
+                match computed_allowed {
+                    Some(vec) => agent.decide(&self, &vec[..], dec.action.clone()),
+                    None => agent.decide(&self, dec.allowed, dec.action.clone()),
                 }
             };
             let choice = decision.0;
+            history.push(choice);
             eval = decision.1;
             match dec.action {
                 Action::StandardOps => {
@@ -178,6 +208,10 @@ impl<'a> GameState<'a> {
                     }
                     // Add the best found line to the actions queue to be executed
                     self.pending_actions.append(&mut acts[max_index]);
+                }
+                Action::ClearRestriction => {
+                    history = Vec::new();
+                    self.restrict = None;
                 }
             }
         }
@@ -399,6 +433,6 @@ impl<'a> GameState<'a> {
         success
     }
     pub fn is_final_scoring(&self) -> bool {
-        false // Todo fix this
+        self.turn > 10
     }
 }
