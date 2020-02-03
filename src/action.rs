@@ -4,12 +4,12 @@ use crate::country::Side;
 #[derive(Clone)]
 pub struct Decision<'a> {
     pub agent: Side,
-    pub action: Action,
+    pub action: Action<'a>,
     pub allowed: &'a [usize],
 }
 
 impl<'a> Decision<'a> {
-    pub fn new(agent: Side, action: Action, allowed: &'a [usize]) -> Decision<'a> {
+    pub fn new(agent: Side, action: Action<'a>, allowed: &'a [usize]) -> Decision<'a> {
         Decision {
             agent,
             action,
@@ -18,8 +18,8 @@ impl<'a> Decision<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub enum Action {
+#[derive(Clone)]
+pub enum Action<'a> {
     StandardOps,
     Coup(i8, bool), // Ops, Free
     Space,
@@ -27,9 +27,11 @@ pub enum Action {
     Place(Side),
     Remove(Side),
     Discard(Side),
-    Event(Card),
+    Event(Card, i8),
+    AfterStates(Vec<Vec<Decision<'a>>>),
 }
 
+#[derive(Clone)]
 pub enum Restriction {
     Limit(i8),
 }

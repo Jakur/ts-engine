@@ -11,6 +11,7 @@ lazy_static! {
     pub static ref ATT: Vec<Attributes> = init_cards();
 }
 
+#[derive(Clone)]
 pub struct Deck {
     us_hand: Vec<Card>,
     ussr_hand: Vec<Card>,
@@ -246,7 +247,7 @@ impl Card {
                 let index = state.random_card(Side::USSR);
                 let card = state.deck.ussr_hand()[index];
                 if card.att().side == Side::US {
-                    let x = Decision::new(Side::US, Action::Event(card), &[]);
+                    let x = Decision::new(Side::US, Action::Event(card, -1), &[]);
                     state.pending_actions.push(x);
                     state.deck.play_card(Side::USSR, index, true);
                 } else {

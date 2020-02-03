@@ -6,6 +6,7 @@ use crate::country::*;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
+#[derive(Clone)]
 pub struct GameState<'a> {
     pub countries: Vec<Country>,
     pub vp: i8,
@@ -51,7 +52,7 @@ impl<'a> GameState<'a> {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
-    pub fn standard_allowed(&self, side: Side, action: Action) -> Vec<usize> {
+    pub fn standard_allowed(&self, side: Side, action: &Action) -> Vec<usize> {
         let allowed = match action {
             Action::StandardOps => access(self, side),
             Action::Coup(_, _) | Action::Realignment => {
@@ -83,31 +84,37 @@ impl<'a> GameState<'a> {
         };
         allowed
     }
-    pub fn resolve_actions(&mut self) {
-        let mut temp = Vec::new();
+    pub fn resolve_actions(&mut self) -> f32 {
+        let mut eval = 0.0;
         while !self.pending_actions.is_empty() {
-            let mut dec = self.pending_actions.pop().unwrap();
+            let dec = self.pending_actions.pop().unwrap();
+            // Todo don't compute this every time and see if dec.agent is right
+            let mut computed_allowed = self.standard_allowed(dec.agent, &dec.action);
             if let Action::StandardOps = dec.action {
                 // Check if we cannot break control
                 if !self
                     .pending_actions
                     .last()
-                    .and_then(|e| Some(e.action == Action::StandardOps))
+                    .and_then(|e| {
+                        if let Action::StandardOps = e.action {
+                            Some(true)
+                        } else {
+                            Some(false)
+                        }
+                    })
                     .unwrap_or(false)
                 {
-                    temp = dec
-                        .allowed
-                        .iter()
+                    computed_allowed = computed_allowed
+                        .into_iter()
                         .filter_map(|x| {
-                            let c = &self.countries[*x];
+                            let c = &self.countries[x];
                             if c.controller() == dec.agent.opposite() {
                                 None
                             } else {
-                                Some(*x)
+                                Some(x)
                             }
                         })
                         .collect();
-                    dec.allowed = &temp[..];
                 }
             }
             let agent = match dec.agent {
@@ -115,8 +122,16 @@ impl<'a> GameState<'a> {
                 Side::USSR => &self.ussr_agent,
                 Side::Neutral => todo!(), // Events with no agency?
             };
-            let choice = agent.decide(&self, dec.allowed, dec.action.clone());
-            let choice = dec.allowed[choice];
+            let decision = {
+                // Todo fix these conditions to seeing if we computed something
+                if dec.allowed.len() > 0 {
+                    agent.decide(&self, dec.allowed, dec.action.clone())
+                } else {
+                    agent.decide(&self, &computed_allowed[..], dec.action.clone())
+                }
+            };
+            let choice = decision.0;
+            eval = decision.1;
             match dec.action {
                 Action::StandardOps => {
                     let cost = self.add_influence(dec.agent, choice);
@@ -132,7 +147,7 @@ impl<'a> GameState<'a> {
                     let roll = self.roll();
                     self.space_card(dec.agent, choice, roll);
                 }
-                Action::Event(card) => {
+                Action::Event(card, _num) => {
                     card.event(self);
                 }
                 Action::Discard(side) => {
@@ -148,8 +163,25 @@ impl<'a> GameState<'a> {
                 Action::Place(side) => {
                     self.add_influence(side, choice);
                 }
+                Action::AfterStates(mut acts) => {
+                    // We can't be functional because float comparison is weird
+                    let mut max_index = 0;
+                    let mut max_val = 0.0;
+                    for (i, v) in acts.iter().enumerate() {
+                        let mut x = self.clone();
+                        x.pending_actions.extend_from_slice(&v[..]);
+                        let value = x.resolve_actions();
+                        if value > max_val {
+                            max_val = value;
+                            max_index = i;
+                        }
+                    }
+                    // Add the best found line to the actions queue to be executed
+                    self.pending_actions.append(&mut acts[max_index]);
+                }
             }
         }
+        return eval;
     }
     pub fn has_effect(&self, side: Side, effect: Effect) -> Option<usize> {
         let vec = match side {
