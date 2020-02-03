@@ -253,50 +253,27 @@ impl Region {
         state.vp += vp_change;
         return vp_change;
     }
-    pub fn all_countries(&self) -> Vec<usize> {
+    fn low_high(&self) -> (usize, usize) {
         use CName::*;
         match self {
-            Region::Europe => (0..=Finland as usize).collect(),
-            Region::WesternEurope => {
-                let x = [
-                    Canada,
-                    UK,
-                    SpainPortugal,
-                    France,
-                    Benelux,
-                    WGermany,
-                    Italy,
-                    Austria,
-                    Greece,
-                    Turkey,
-                    Norway,
-                    Denmark,
-                    Sweden,
-                    Finland,
-                ];
-                x.into_iter().map(|n| *n as usize).collect()
-            }
-            Region::EasternEurope => {
-                let x = [
-                    Finland,
-                    EGermany,
-                    Poland,
-                    Czechoslovakia,
-                    Austria,
-                    Hungary,
-                    Romania,
-                    Yugoslavia,
-                    Bulgaria,
-                ];
-                x.into_iter().map(|n| *n as usize).collect()
-            }
-            Region::MiddleEast => (Lebanon as usize..=SaudiaArabia as usize).collect(),
-            Region::Asia => (Afghanistan as usize..=NKorea as usize).collect(),
-            Region::SoutheastAsia => (Burma as usize..=Philippines as usize).collect(),
-            Region::Africa => (Morocco as usize..=SouthAfrica as usize).collect(),
-            Region::CentralAmerica => (Mexico as usize..=DominicanRep as usize).collect(),
-            Region::SouthAmerica => (Venezuela as usize..=Uruguay as usize).collect(),
+            Region::Europe => (0, Bulgaria as usize),
+            Region::WesternEurope => (0, Finland as usize),
+            Region::EasternEurope => (Austria as usize, Bulgaria as usize),
+            Region::MiddleEast => (Lebanon as usize, SaudiaArabia as usize),
+            Region::Asia => (Afghanistan as usize, NKorea as usize),
+            Region::SoutheastAsia => (Burma as usize, Philippines as usize),
+            Region::Africa => (Morocco as usize, SouthAfrica as usize),
+            Region::CentralAmerica => (Mexico as usize, DominicanRep as usize),
+            Region::SouthAmerica => (Venezuela as usize, Uruguay as usize),
         }
+    }
+    pub fn has_country(&self, index: usize) -> bool {
+        let (low, high) = self.low_high();
+        low <= index && index <= high
+    }
+    pub fn all_countries(&self) -> Vec<usize> {
+        let (low, high) = self.low_high();
+        (low..=high).collect()
     }
 }
 
@@ -355,27 +332,27 @@ impl Country {
 
 #[derive(Clone, Copy, Debug)]
 pub enum CName {
-    Canada = 0,
-    UK,
-    France,
+    Turkey = 0,
+    Greece,
+    Italy,
     SpainPortugal,
+    France,
+    WGermany,
     Benelux,
+    UK,
+    Canada,
     Norway,
     Denmark,
     Sweden,
-    WGermany,
+    Austria, // Start East
+    Finland, // End West
     EGermany,
-    Italy,
-    Austria,
     Poland,
     Czechoslovakia,
     Hungary,
-    Yugoslavia,
-    Greece,
     Romania,
-    Bulgaria,
-    Turkey,
-    Finland,
+    Yugoslavia,
+    Bulgaria, // End Europe
     Lebanon,
     Syria,
     Israel,
@@ -687,6 +664,43 @@ mod tests {
     fn check_countries() {
         let countries = countries();
         assert!(countries.into_iter().all(|c| c.stability > 0));
+    }
+    #[test]
+    fn check_east_west_europe() {
+        use crate::country::CName::*;
+        let west = &[
+            Canada,
+            UK,
+            SpainPortugal,
+            France,
+            Benelux,
+            WGermany,
+            Italy,
+            Austria,
+            Greece,
+            Turkey,
+            Norway,
+            Denmark,
+            Sweden,
+            Finland,
+        ];
+        for w in west.into_iter().map(|&x| x as usize) {
+            assert!(Region::WesternEurope.has_country(w));
+        }
+        let east = &[
+            Finland,
+            EGermany,
+            Poland,
+            Czechoslovakia,
+            Austria,
+            Hungary,
+            Romania,
+            Yugoslavia,
+            Bulgaria,
+        ];
+        for e in east.into_iter().map(|&x| x as usize) {
+            assert!(Region::EasternEurope.has_country(e));
+        }
     }
     #[test]
     fn check_degrees() {
