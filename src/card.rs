@@ -32,6 +32,13 @@ impl Deck {
             china: Side::USSR,
         }
     }
+    pub fn hand(&self, side: Side) -> &Vec<Card> {
+        match side {
+            Side::US => &self.us_hand,
+            Side::USSR => &self.ussr_hand,
+            Side::Neutral => unimplemented!(),
+        }
+    }
     pub fn draw_cards(&mut self, target: usize) {
         let (us_goal, ussr_goal) = match self.china {
             Side::US => (target + 1, target),
@@ -111,6 +118,9 @@ pub enum Effect {
     FormosanResolution,
     IronLady,
     VietnamRevolts,
+    RedScarePurge,
+    Containment,
+    Brezhnev,
 }
 
 pub struct Attributes {
@@ -271,6 +281,10 @@ impl Card {
                 state.control(Side::USSR, CName::Cuba);
             }
             Vietnam_Revolts => state.ussr_effects.push(Effect::VietnamRevolts),
+            Blockade => {
+                // let can_discard = state.cards_above_value(Side::US, 3);
+                // state.pending_actions.push(Decision::new(Side::US, Action::Discard(Side::US), &can_discard[..]))
+            }
             _ => {}
         }
         return true;

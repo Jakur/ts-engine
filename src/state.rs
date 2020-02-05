@@ -451,6 +451,54 @@ impl<'a> GameState<'a> {
     pub fn discard_card(&mut self, side: Side, index: usize) {
         self.deck.play_card(side, index, false);
     }
+    /// Filters cards above a certain value, as could be relevant to discarding
+    /// or spacing.
+    pub fn cards_above_value(&self, side: Side, val: i8) -> Vec<usize> {
+        let cards = self.deck.hand(side);
+        let offset = self.base_ops_offset(side);
+        cards
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                let mut x = c.att().ops + offset;
+                if x < 1 {
+                    x = 1;
+                } else if x > 4 {
+                    x = 4;
+                }
+                if x > val {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    /// Calculates the base offset to card ops, as influenced by Containment,
+    /// Brezhnez, and RSP.
+    fn base_ops_offset(&self, side: Side) -> i8 {
+        let mut offset = 0;
+        match side {
+            Side::US => {
+                if self.ussr_effects.contains(&Effect::RedScarePurge) {
+                    offset -= 1;
+                }
+                if self.us_effects.contains(&Effect::Containment) {
+                    offset += 1;
+                }
+            }
+            Side::USSR => {
+                if self.us_effects.contains(&Effect::RedScarePurge) {
+                    offset -= 1;
+                }
+                if self.ussr_effects.contains(&Effect::Brezhnev) {
+                    offset += 1;
+                }
+            }
+            _ => unimplemented!(),
+        }
+        offset
+    }
     pub fn can_space(&self, side: Side) -> bool {
         let me = side as usize;
         let opp = side.opposite() as usize;
