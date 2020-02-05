@@ -31,7 +31,7 @@ pub enum Action<'a> {
     Realignment,
     Place(Side),
     Remove(Side),
-    Discard(Side),
+    Discard(Side, i8), // Side, ops minimum
     Event(Card, Option<usize>),
     ClearRestriction,
     AfterStates(Vec<Vec<Decision<'a>>>),

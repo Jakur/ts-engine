@@ -19,6 +19,7 @@ pub struct Deck {
     draw_pile: Vec<Card>,
     removed: Vec<Card>,
     china: Side,
+    china_up: bool,
 }
 
 impl Deck {
@@ -30,6 +31,7 @@ impl Deck {
             draw_pile: Vec::new(),
             removed: Vec::new(),
             china: Side::USSR,
+            china_up: true,
         }
     }
     pub fn hand(&self, side: Side) -> &Vec<Card> {
@@ -40,14 +42,9 @@ impl Deck {
         }
     }
     pub fn draw_cards(&mut self, target: usize) {
-        let (us_goal, ussr_goal) = match self.china {
-            Side::US => (target + 1, target),
-            Side::USSR => (target, target + 1),
-            Side::Neutral => unimplemented!(),
-        };
         let mut pick_ussr = true;
         // Oscillating is relevant when reshuffles do occur
-        while self.ussr_hand.len() < ussr_goal && self.us_hand.len() < us_goal {
+        while self.ussr_hand.len() < target && self.us_hand.len() < target {
             let next_card = self.draw_card();
             if pick_ussr {
                 self.ussr_hand.push(next_card);
@@ -56,11 +53,11 @@ impl Deck {
             }
             pick_ussr = !pick_ussr;
         }
-        while self.ussr_hand.len() < ussr_goal {
+        while self.ussr_hand.len() < target {
             let c = self.draw_card();
             self.ussr_hand.push(c);
         }
-        while self.us_hand.len() < us_goal {
+        while self.us_hand.len() < target {
             let c = self.draw_card();
             self.us_hand.push(c);
         }
@@ -88,6 +85,10 @@ impl Deck {
     }
     pub fn removed(&self) -> &Vec<Card> {
         &self.removed
+    }
+    pub fn play_china(&mut self) {
+        self.china = self.china.opposite();
+        self.china_up = false;
     }
     pub fn play_card(&mut self, side: Side, index: usize, evented: bool) {
         let hand = match side {
@@ -233,7 +234,20 @@ pub enum Card {
 }
 
 impl Card {
-    pub fn event(&self, state: &mut GameState, choice: Option<usize>) -> bool {
+    pub fn e_choices(&self, state: &GameState) -> Option<Vec<usize>> {
+        use Card::*;
+        match self {
+            Blockade => {
+                if !state.cards_above_value(Side::US, 3).is_empty() {
+                    Some(vec![0, 1])
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    pub fn event(&self, state: &mut GameState, choice: usize) -> bool {
         use Card::*;
         // let att = self.att();
         if !self.can_event(state) {
@@ -282,8 +296,15 @@ impl Card {
             }
             Vietnam_Revolts => state.ussr_effects.push(Effect::VietnamRevolts),
             Blockade => {
-                // let can_discard = state.cards_above_value(Side::US, 3);
-                // state.pending_actions.push(Decision::new(Side::US, Action::Discard(Side::US), &can_discard[..]))
+                if choice == 0 {
+                    state.remove_all(Side::US, CName::WGermany);
+                } else {
+                    state.pending_actions.push(Decision::new(
+                        Side::US,
+                        Action::Discard(Side::US, 3),
+                        &[],
+                    ))
+                }
             }
             _ => {}
         }

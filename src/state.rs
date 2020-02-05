@@ -74,6 +74,7 @@ impl<'a> GameState<'a> {
                         .collect(),
                 )
             }
+            Action::Discard(side, ops_min) => Some(self.cards_above_value(*side, *ops_min)),
             Action::Coup(_, _) | Action::Realignment => {
                 let opp = side.opposite();
                 let valid = |v: &'static Vec<usize>| {
@@ -139,6 +140,23 @@ impl<'a> GameState<'a> {
             .is_some();
         while !self.pending_actions.is_empty() {
             let dec = self.pending_actions.pop().unwrap();
+            // Check for branching event decisions
+            if let Action::Event(card, num) = dec.action {
+                if num.is_none() {
+                    let opts = card.e_choices(self);
+                    if let Some(vec) = opts {
+                        let vec = vec
+                            .into_iter()
+                            .map(|i| {
+                                vec![Decision::new(dec.agent, Action::Event(card, Some(i)), &[])]
+                            })
+                            .collect();
+                        let a = Decision::new(dec.agent, Action::AfterStates(vec), &[]);
+                        self.pending_actions.push(a);
+                        continue;
+                    }
+                }
+            }
             let mut computed_allowed = self.standard_allowed(dec.agent, &dec.action);
             match dec.action {
                 Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
@@ -205,6 +223,7 @@ impl<'a> GameState<'a> {
                     }
                 }
             }
+
             let agent = match dec.agent {
                 Side::US => &self.us_agent,
                 Side::USSR => &self.ussr_agent,
@@ -216,6 +235,7 @@ impl<'a> GameState<'a> {
                     None => agent.decide(&self, dec.allowed, dec.action.clone()),
                 }
             };
+
             let choice = decision.0;
             history.push(choice);
             eval = decision.1;
@@ -263,9 +283,10 @@ impl<'a> GameState<'a> {
                     self.space_card(dec.agent, choice, roll);
                 }
                 Action::Event(card, num) => {
-                    card.event(self, num);
+                    // Todo use event return value?
+                    let went_off = card.event(self, num.unwrap_or(0));
                 }
-                Action::Discard(side) => {
+                Action::Discard(side, _ops) => {
                     self.discard_card(side, choice);
                 }
                 Action::Remove(side) => {
@@ -434,19 +455,12 @@ impl<'a> GameState<'a> {
     }
     pub fn random_card(&mut self, side: Side) -> usize {
         // Todo figure out if this should end up in the Deck struct
-        let start = {
-            if side == self.deck.china() {
-                1
-            } else {
-                0
-            }
-        };
         let end = match side {
             Side::US => self.deck.us_hand().len(),
             Side::USSR => self.deck.ussr_hand().len(),
             _ => unimplemented!(),
         };
-        self.rng.gen_range(start, end)
+        self.rng.gen_range(0, end)
     }
     pub fn discard_card(&mut self, side: Side, index: usize) {
         self.deck.play_card(side, index, false);
@@ -506,6 +520,7 @@ impl<'a> GameState<'a> {
             || self.space_attempts[me] < 2 && self.space[me] >= 2 && self.space[opp] < 2
     }
     pub fn space_card(&mut self, side: Side, index: usize, roll: i8) -> bool {
+        // Todo allow spacing China
         let me = side as usize;
         let opp = side.opposite() as usize;
         self.deck.play_card(side, index, false);
