@@ -58,6 +58,22 @@ impl<'a> GameState<'a> {
     pub fn standard_allowed(&self, side: Side, action: &Action) -> Option<Vec<usize>> {
         let allowed = match action {
             Action::StandardOps => Some(access(self, side)),
+            Action::ChinaInf => {
+                let vec = access(self, side);
+                Some(
+                    vec.into_iter()
+                        .filter(|x| Region::Asia.has_country(*x))
+                        .collect(),
+                )
+            }
+            Action::VietnamInf => {
+                let vec = access(self, side);
+                Some(
+                    vec.into_iter()
+                        .filter(|x| Region::SoutheastAsia.has_country(*x))
+                        .collect(),
+                )
+            }
             Action::Coup(_, _) | Action::Realignment => {
                 let opp = side.opposite();
                 let valid = |v: &'static Vec<usize>| {
@@ -91,40 +107,81 @@ impl<'a> GameState<'a> {
         let mut eval = 0.0;
         // Todo figure out how to get history out of local
         let mut history = Vec::new();
+        let mut china_active = self
+            .pending_actions
+            .iter()
+            .find(|x| {
+                if let Action::ChinaInf = x.action {
+                    true
+                } else {
+                    false
+                }
+            })
+            .is_some();
+        let mut vietnam_active = self
+            .pending_actions
+            .iter()
+            .find(|&x| {
+                if x.agent == Side::USSR
+                    && self
+                        .has_effect(Side::USSR, Effect::VietnamRevolts)
+                        .is_some()
+                {
+                    // Todo find out if this is correct
+                    match x.action {
+                        Action::StandardOps | Action::Realignment => true,
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            })
+            .is_some();
         while !self.pending_actions.is_empty() {
             let dec = self.pending_actions.pop().unwrap();
-            // Todo don't compute this every time and see if dec.agent is right
             let mut computed_allowed = self.standard_allowed(dec.agent, &dec.action);
-            if let Action::StandardOps = dec.action {
-                // Check if we cannot break control
-                let mut is_last_op = !self
-                    .pending_actions
-                    .last()
-                    .and_then(|e| {
-                        if let Action::StandardOps = e.action {
-                            Some(true)
-                        } else {
-                            Some(false)
+            match dec.action {
+                Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
+                    let next_op = self.pending_actions.last().map(|x| &x.action);
+                    if let Some(op) = next_op {
+                        computed_allowed = match op {
+                            Action::StandardOps => computed_allowed, // No change
+                            Action::ChinaInf => Some(
+                                computed_allowed
+                                    .unwrap()
+                                    .into_iter()
+                                    .filter(|&x| {
+                                        let c = &self.countries[x];
+                                        c.controller() != dec.agent.opposite()
+                                            || Region::Asia.has_country(x)
+                                    })
+                                    .collect(),
+                            ),
+                            Action::VietnamInf => Some(
+                                computed_allowed
+                                    .unwrap()
+                                    .into_iter()
+                                    .filter(|&x| {
+                                        let c = &self.countries[x];
+                                        c.controller() != dec.agent.opposite()
+                                            || Region::SoutheastAsia.has_country(x)
+                                    })
+                                    .collect(),
+                            ),
+                            _ => Some(
+                                computed_allowed
+                                    .unwrap()
+                                    .into_iter()
+                                    .filter(|x| {
+                                        let c = &self.countries[*x];
+                                        c.controller() != dec.agent.opposite()
+                                    })
+                                    .collect(),
+                            ),
                         }
-                    })
-                    .unwrap_or(false);
-                if is_last_op {
-                    // Unwrap is safe because we always compute on StandardOps
-                    computed_allowed = Some(
-                        computed_allowed
-                            .unwrap()
-                            .into_iter()
-                            .filter_map(|x| {
-                                let c = &self.countries[x];
-                                if c.controller() == dec.agent.opposite() {
-                                    None
-                                } else {
-                                    Some(x)
-                                }
-                            })
-                            .collect(),
-                    );
+                    }
                 }
+                _ => {}
             }
             // Todo figure out if restriction is always limit
             if let Some(restrict) = &self.restrict {
@@ -163,10 +220,38 @@ impl<'a> GameState<'a> {
             history.push(choice);
             eval = decision.1;
             match dec.action {
-                Action::StandardOps => {
+                Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
                     let cost = self.add_influence(dec.agent, choice);
                     if cost == 2 {
                         self.pending_actions.pop(); // The earlier check should apply
+                    }
+                    if !Region::Asia.has_country(choice) && china_active {
+                        china_active = false;
+                        let index = self.pending_actions.iter().enumerate().find(|(_i, x)| {
+                            if let Action::ChinaInf = x.action {
+                                true
+                            } else {
+                                false
+                            }
+                        });
+                        if index.is_some() {
+                            let (index, _) = index.unwrap();
+                            self.pending_actions.remove(index);
+                        }
+                    }
+                    if !Region::SoutheastAsia.has_country(choice) && vietnam_active {
+                        vietnam_active = false;
+                        let index = self.pending_actions.iter().enumerate().find(|(_i, x)| {
+                            if let Action::VietnamInf = x.action {
+                                true
+                            } else {
+                                false
+                            }
+                        });
+                        if index.is_some() {
+                            let (index, _) = index.unwrap();
+                            self.pending_actions.remove(index);
+                        }
                     }
                 }
                 Action::Coup(ops, free) => {
@@ -177,8 +262,8 @@ impl<'a> GameState<'a> {
                     let roll = self.roll();
                     self.space_card(dec.agent, choice, roll);
                 }
-                Action::Event(card, _num) => {
-                    card.event(self);
+                Action::Event(card, num) => {
+                    card.event(self, num);
                 }
                 Action::Discard(side) => {
                     self.discard_card(side, choice);

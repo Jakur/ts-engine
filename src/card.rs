@@ -223,7 +223,7 @@ pub enum Card {
 }
 
 impl Card {
-    pub fn event(&self, state: &mut GameState) -> bool {
+    pub fn event(&self, state: &mut GameState, choice: Option<usize>) -> bool {
         use Card::*;
         // let att = self.att();
         if !self.can_event(state) {

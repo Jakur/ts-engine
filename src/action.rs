@@ -24,6 +24,8 @@ impl<'a> Decision<'a> {
 #[derive(Clone)]
 pub enum Action<'a> {
     StandardOps,
+    ChinaInf,
+    VietnamInf,
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
