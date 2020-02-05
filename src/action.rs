@@ -29,7 +29,7 @@ pub enum Action<'a> {
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
-    Place(Side),
+    Place(Side, bool), //Side, can place in opponent controlled
     Remove(Side),
     Discard(Side, i8), // Side, ops minimum
     Event(Card, Option<usize>),

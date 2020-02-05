@@ -140,22 +140,35 @@ impl<'a> GameState<'a> {
             .is_some();
         while !self.pending_actions.is_empty() {
             let dec = self.pending_actions.pop().unwrap();
-            // Check for branching event decisions
-            if let Action::Event(card, num) = dec.action {
-                if num.is_none() {
-                    let opts = card.e_choices(self);
-                    if let Some(vec) = opts {
-                        let vec = vec
-                            .into_iter()
-                            .map(|i| {
-                                vec![Decision::new(dec.agent, Action::Event(card, Some(i)), &[])]
-                            })
-                            .collect();
-                        let a = Decision::new(dec.agent, Action::AfterStates(vec), &[]);
-                        self.pending_actions.push(a);
-                        continue;
+            // Check for decisions with no agency
+            match dec.action {
+                Action::ClearRestriction => {
+                    history = Vec::new();
+                    self.restrict = None;
+                    continue;
+                }
+                Action::Event(card, num) => {
+                    // Check for branching event decisions
+                    if num.is_none() {
+                        let opts = card.e_choices(self);
+                        if let Some(vec) = opts {
+                            let vec = vec
+                                .into_iter()
+                                .map(|i| {
+                                    vec![Decision::new(
+                                        dec.agent,
+                                        Action::Event(card, Some(i)),
+                                        &[],
+                                    )]
+                                })
+                                .collect();
+                            let a = Decision::new(dec.agent, Action::AfterStates(vec), &[]);
+                            self.pending_actions.push(a);
+                            continue;
+                        }
                     }
                 }
+                _ => {}
             }
             let mut computed_allowed = self.standard_allowed(dec.agent, &dec.action);
             match dec.action {
@@ -199,6 +212,18 @@ impl<'a> GameState<'a> {
                         }
                     }
                 }
+                Action::Place(side, in_opp) if !in_opp => {
+                    computed_allowed = Some(
+                        dec.allowed
+                            .iter()
+                            .cloned()
+                            .filter(|x| {
+                                let c = &self.countries[*x];
+                                c.controller() != side.opposite()
+                            })
+                            .collect(),
+                    )
+                }
                 _ => {}
             }
             // Todo figure out if restriction is always limit
@@ -212,13 +237,24 @@ impl<'a> GameState<'a> {
                             .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
                             .collect();
                         if !bad.is_empty() {
-                            // Todo: Under restrictions we should always use a reference slice?
-                            computed_allowed = Some(
-                                dec.allowed
-                                    .iter()
-                                    .filter_map(|x| if bad.contains(x) { None } else { Some(*x) })
-                                    .collect(),
-                            );
+                            if computed_allowed.is_some() {
+                                computed_allowed = Some(
+                                    computed_allowed
+                                        .unwrap()
+                                        .into_iter()
+                                        .filter(|x| !bad.contains(x))
+                                        .collect(),
+                                );
+                            } else {
+                                computed_allowed = Some(
+                                    dec.allowed
+                                        .iter()
+                                        .filter_map(
+                                            |x| if bad.contains(x) { None } else { Some(*x) },
+                                        )
+                                        .collect(),
+                                );
+                            }
                         }
                     }
                 }
@@ -296,7 +332,7 @@ impl<'a> GameState<'a> {
                     let (us_roll, ussr_roll) = (self.roll(), self.roll());
                     self.take_realign(choice, us_roll, ussr_roll);
                 }
-                Action::Place(side) => {
+                Action::Place(side, _allowed) => {
                     self.add_influence(side, choice);
                 }
                 Action::AfterStates(mut acts) => {
@@ -315,10 +351,7 @@ impl<'a> GameState<'a> {
                     // Add the best found line to the actions queue to be executed
                     self.pending_actions.append(&mut acts[max_index]);
                 }
-                Action::ClearRestriction => {
-                    history = Vec::new();
-                    self.restrict = None;
-                }
+                Action::ClearRestriction => unreachable!(), // We should remove this earlier
             }
         }
         return eval;
@@ -397,6 +430,35 @@ impl<'a> GameState<'a> {
             }
             Side::Neutral => unimplemented!(),
         }
+    }
+    /// Calculates the number of adjacent controlled countries for use in wars.
+    pub fn adjacent_controlled(&self, country_index: usize, side: Side) -> i8 {
+        EDGES[country_index].iter().fold(0, |acc, c| {
+            if self.countries[*c].controller() == side {
+                acc + 1
+            } else {
+                acc
+            }
+        })
+    }
+    pub fn war_flip(&mut self, country_index: usize, war_side: Side) {
+        let c = &mut self.countries[country_index];
+        match war_side {
+            Side::US => {
+                let opp = c.ussr;
+                c.ussr = 0;
+                c.us += opp;
+            }
+            Side::USSR => {
+                let opp = c.us;
+                c.us = 0;
+                c.ussr += opp;
+            }
+            Side::Neutral => unimplemented!(),
+        }
+    }
+    pub fn add_mil_ops(&mut self, side: Side, amount: i8) {
+        self.mil_ops[side as usize] += amount;
     }
     pub fn take_realign(&mut self, country_index: usize, mut us_roll: i8, mut ussr_roll: i8) {
         // This should include superpowers as well

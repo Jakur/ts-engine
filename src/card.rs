@@ -122,6 +122,7 @@ pub enum Effect {
     RedScarePurge,
     Containment,
     Brezhnev,
+    CampDavid,
 }
 
 pub struct Attributes {
@@ -306,6 +307,47 @@ impl Card {
                     ))
                 }
             }
+            Korean_War => {
+                let index = CName::SKorea as usize;
+                let mut roll = state.roll();
+                roll -= state.adjacent_controlled(index, Side::US);
+                state.add_mil_ops(Side::USSR, 2);
+                if roll >= 4 {
+                    state.vp -= 2;
+                    state.war_flip(index, Side::USSR);
+                }
+            }
+            Romanian_Abdication => {
+                state.remove_all(Side::US, CName::Romania);
+                state.control(Side::USSR, CName::Romania);
+            }
+            Arab_Israeli_War => {
+                let index = CName::Israel as usize;
+                let mut roll = state.roll();
+                roll -= state.adjacent_controlled(index, Side::US);
+                // This war is special, and includes the country itself
+                if state.is_controlled(Side::US, index) {
+                    roll -= 1;
+                }
+                state.add_mil_ops(Side::USSR, 2);
+                if roll >= 4 {
+                    state.vp -= 2;
+                    state.war_flip(index, Side::USSR);
+                }
+            }
+            Comecon => {
+                let x = Decision::new(
+                    Side::USSR,
+                    Action::Place(Side::USSR, false),
+                    &country::EASTERN_EUROPE,
+                );
+                state.pending_actions.push(Decision::restriction_clear());
+                state.pending_actions.push(x.clone());
+                state.pending_actions.push(x.clone());
+                state.pending_actions.push(x.clone());
+                state.pending_actions.push(x);
+                state.restrict = Some(Restriction::Limit(1));
+            }
             _ => {}
         }
         return true;
@@ -314,6 +356,7 @@ impl Card {
         use Card::*;
         match self {
             Socialist_Governments => state.has_effect(Side::US, Effect::IronLady).is_none(),
+            Arab_Israeli_War => state.has_effect(Side::US, Effect::CampDavid).is_none(),
             _ => true, // todo make this accurate
         }
     }
