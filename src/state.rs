@@ -55,6 +55,17 @@ impl<'a> GameState<'a> {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
+    pub fn choose_card(&mut self) -> Card {
+        let agent = match self.side {
+            Side::US => &self.us_agent,
+            Side::USSR => &self.ussr_agent,
+            Side::Neutral => unimplemented!(),
+        };
+        let hand = self.deck.hand(self.side);
+        let china = self.deck.china() == self.side;
+        let (card, _eval) = agent.decide_card(&self, &hand[..], china);
+        card
+    }
     pub fn standard_allowed(&self, side: Side, action: &Action) -> Option<Vec<usize>> {
         let allowed = match action {
             Action::StandardOps => Some(access(self, side)),
@@ -267,8 +278,8 @@ impl<'a> GameState<'a> {
             };
             let decision = {
                 match computed_allowed {
-                    Some(vec) => agent.decide(&self, &vec[..], dec.action.clone()),
-                    None => agent.decide(&self, dec.allowed, dec.action.clone()),
+                    Some(vec) => agent.decide_action(&self, &vec[..], dec.action.clone()),
+                    None => agent.decide_action(&self, dec.allowed, dec.action.clone()),
                 }
             };
 
@@ -319,8 +330,10 @@ impl<'a> GameState<'a> {
                     self.space_card(dec.agent, choice, roll);
                 }
                 Action::Event(card, num) => {
-                    // Todo use event return value?
                     let went_off = card.event(self, num.unwrap_or(0));
+                    if card.is_starred() && went_off {
+                        self.deck.remove_card(card);
+                    }
                 }
                 Action::Discard(side, _ops) => {
                     self.discard_card(side, choice);
@@ -356,6 +369,7 @@ impl<'a> GameState<'a> {
         }
         return eval;
     }
+    /// Returns the index of the effect if it is in play, or else None
     pub fn has_effect(&self, side: Side, effect: Effect) -> Option<usize> {
         let vec = match side {
             Side::US => &self.us_effects,

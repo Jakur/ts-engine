@@ -62,6 +62,18 @@ impl Deck {
             self.us_hand.push(c);
         }
     }
+    /// Searches the discard pile for a played card and removes it.
+    pub fn remove_card(&mut self, card: Card) -> bool {
+        let found = self.discard_pile.iter().rposition(|&c| c == card);
+        if let Some(i) = found {
+            let c = self.discard_pile.remove(i); // Should be fast since i should be near the end
+            self.removed.push(c);
+            true
+        } else {
+            false
+        }
+    }
+    /// Draws the next card from the draw pile, reshuffling if necessary.
     fn draw_card(&mut self) -> Card {
         match self.draw_pile.pop() {
             Some(c) => c,
@@ -235,6 +247,9 @@ pub enum Card {
 }
 
 impl Card {
+    /// Returns the list of event options an agent can select from this given
+    /// card. If the return is None, the default behavior of just picking
+    /// option 0 is sufficient.
     pub fn e_choices(&self, state: &GameState) -> Option<Vec<usize>> {
         use Card::*;
         match self {
@@ -352,6 +367,9 @@ impl Card {
         }
         return true;
     }
+    /// Returns whether a card can be evented, which is primarily relevant to
+    /// whether or not a starred event will be removed if play by its opposing
+    /// side.
     pub fn can_event(&self, state: &GameState) -> bool {
         use Card::*;
         match self {
@@ -360,6 +378,10 @@ impl Card {
             _ => true, // todo make this accurate
         }
     }
+    pub fn is_starred(&self) -> bool {
+        self.att().starred
+    }
+    /// Returns the attributes relevant to each unique card.
     pub fn att(&self) -> &'static Attributes {
         &ATT[*self as usize]
     }
