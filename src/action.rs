@@ -38,7 +38,8 @@ pub enum Action<'a> {
     Realignment,
     Place(Side, bool), //Side, can place in opponent controlled
     Remove(Side),
-    Discard(Side, i8), // Side, ops minimum
+    RemoveAll(Side, bool), // Side, can remove in opponent controlled
+    Discard(Side, i8),     // Side, ops minimum
     Event(Card, Option<usize>),
     ClearRestriction,
     AfterStates(Vec<Vec<Decision<'a>>>),

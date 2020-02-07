@@ -19,22 +19,35 @@ impl RandAgent {
 
 impl Agent for RandAgent {
     fn decide_action(&self, _s: &GameState, choices: &[usize], _a: Action) -> (usize, f32) {
+        if choices.len() == 0 {
+            return (0, 0.0); // Todo detect this earlier?
+        }
         let mut x = thread_rng();
         let choice = x.gen_range(0, choices.len());
         (choices[choice], x.gen())
     }
     fn decide_card(&self, _state: &GameState, hand: &[Card], china: bool) -> (Card, f32) {
         let mut x = thread_rng();
-        let choice = if china {
-            x.gen_range(0, hand.len() + 1)
+        if hand.len() > 0 {
+            let choice = if china {
+                x.gen_range(0, hand.len() + 1)
+            } else {
+                x.gen_range(0, hand.len())
+            };
+            let card = if choice >= hand.len() {
+                Card::The_China_Card
+            } else {
+                hand[choice]
+            };
+            (card, x.gen())
         } else {
-            x.gen_range(0, hand.len())
-        };
-        let card = if choice >= hand.len() {
-            Card::The_China_Card
-        } else {
-            hand[choice]
-        };
-        (card, x.gen())
+            let choices = &[Card::Pass, Card::The_China_Card];
+            // A player cannot be forced to play the China card
+            if china {
+                (choices[x.gen_range(0, 2)], x.gen())
+            } else {
+                (Card::Pass, x.gen())
+            }
+        }
     }
 }

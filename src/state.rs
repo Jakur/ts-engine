@@ -16,7 +16,7 @@ pub struct GameState<'a> {
     pub defcon: i8,
     turn: i8,
     ar: i8,
-    side: Side,
+    pub side: Side,
     space: [i8; 2],
     mil_ops: [i8; 2],
     space_attempts: [i8; 2],
@@ -386,8 +386,9 @@ impl<'a> GameState<'a> {
                     self.take_coup(dec.agent, choice, ops, roll, free);
                 }
                 Action::Space => {
+                    // Todo don't need choice?
                     let roll = self.roll();
-                    self.space_card(dec.agent, choice, roll);
+                    self.space_card(dec.agent, roll);
                 }
                 Action::Event(card, num) => {
                     let went_off = card.event(self, num.unwrap_or(0));
@@ -398,9 +399,8 @@ impl<'a> GameState<'a> {
                 Action::Discard(side, _ops) => {
                     self.discard_card(side, choice);
                 }
-                Action::Remove(side) => {
-                    self.remove_influence(side, choice);
-                }
+                Action::Remove(side) => self.remove_influence(side, choice),
+                Action::RemoveAll(side, _allowed) => self.remove_all(side, choice),
                 Action::Realignment => {
                     let (us_roll, ussr_roll) = (self.roll(), self.roll());
                     self.take_realign(choice, us_roll, ussr_roll);
@@ -493,8 +493,8 @@ impl<'a> GameState<'a> {
             Side::Neutral => unimplemented!(),
         }
     }
-    pub fn remove_all(&mut self, side: Side, country: CName) {
-        let c = &mut self.countries[country as usize];
+    pub fn remove_all<T: Into<usize>>(&mut self, side: Side, country: T) {
+        let c = &mut self.countries[country.into()];
         match side {
             Side::US => {
                 c.us = 0;
@@ -663,11 +663,9 @@ impl<'a> GameState<'a> {
             space_allowed && ops >= 4
         }
     }
-    pub fn space_card(&mut self, side: Side, index: usize, roll: i8) -> bool {
-        // Todo allow spacing China
+    pub fn space_card(&mut self, side: Side, roll: i8) -> bool {
         let me = side as usize;
         let opp = side.opposite() as usize;
-        self.deck.play_card(side, index, false);
         let success = match self.space[me] {
             0 | 2 | 4 | 6 => roll <= 3,
             1 | 3 | 5 => roll <= 4,
@@ -723,6 +721,10 @@ impl<'a> GameState<'a> {
             }
         }
         success
+    }
+    pub fn set_limit(&mut self, limit: usize) {
+        self.restrict = Some(Restriction::Limit(limit));
+        self.pending_actions.push(Decision::restriction_clear());
     }
     pub fn is_final_scoring(&self) -> bool {
         self.turn > 10

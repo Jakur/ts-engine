@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use crate::action::{Action, Decision, Restriction};
+use crate::action::{Action, Decision};
 use crate::country::{self, CName, Region, Side};
 use crate::state::GameState;
 
@@ -135,6 +135,8 @@ pub enum Effect {
     Containment,
     Brezhnev,
     CampDavid,
+    AllowNato,
+    DeGaulle,
 }
 
 pub struct Attributes {
@@ -209,6 +211,7 @@ fn init_cards() -> Vec<Attributes> {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Card {
+    Pass = 0,
     Asia_Scoring = 1,
     Europe_Scoring,
     Middle_East_Scoring,
@@ -300,11 +303,10 @@ impl Card {
                     Action::Remove(Side::US),
                     &country::WESTERN_EUROPE,
                 );
-                state.pending_actions.push(Decision::restriction_clear());
+                state.set_limit(2);
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x);
-                state.restrict = Some(Restriction::Limit(2));
             }
             Fidel => {
                 state.remove_all(Side::US, CName::Cuba);
@@ -356,13 +358,55 @@ impl Card {
                     Action::Place(Side::USSR, false),
                     &country::EASTERN_EUROPE,
                 );
-                state.pending_actions.push(Decision::restriction_clear());
+                state.set_limit(1);
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x.clone());
                 state.pending_actions.push(x);
-                state.restrict = Some(Restriction::Limit(1));
             }
+            Nasser => {
+                let c = &mut state.countries[CName::Egypt as usize];
+                c.ussr += 2;
+                c.us /= 2;
+            }
+            Warsaw_Pact_Formed => {
+                if !state.us_effects.contains(&Effect::AllowNato) {
+                    state.us_effects.push(Effect::AllowNato);
+                }
+                if choice == 0 {
+                    for _ in 0..4 {
+                        state.pending_actions.push(Decision::new(
+                            Side::USSR,
+                            Action::RemoveAll(Side::US, true),
+                            &country::EASTERN_EUROPE[..],
+                        ));
+                    }
+                } else {
+                    state.set_limit(2);
+                    for _ in 0..5 {
+                        state.pending_actions.push(Decision::new(
+                            Side::USSR,
+                            Action::Place(Side::USSR, true),
+                            &country::EASTERN_EUROPE[..],
+                        ));
+                    }
+                }
+            }
+            De_Gaulle_Leads_France => {
+                let c = &mut state.countries[CName::France as usize];
+                let remove = std::cmp::min(2, c.us);
+                c.us -= remove;
+                c.ussr += 1;
+                state.ussr_effects.push(Effect::DeGaulle);
+            }
+            Captured_Nazi_Scientist => {
+                state.space_card(state.side, 1); // Todo ensure state.side is accurate
+            }
+            Truman_Doctrine => state.pending_actions.push(Decision::new(
+                Side::US,
+                Action::RemoveAll(Side::USSR, false),
+                &country::EUROPE[..],
+            )),
             _ => {}
         }
         return true;
@@ -401,6 +445,6 @@ mod tests {
     #[test]
     fn check_cards() {
         let cards = super::init_cards();
-        assert_eq!(cards.len(), 36);
+        assert_eq!(cards.len(), 37);
     }
 }
