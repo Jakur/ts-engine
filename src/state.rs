@@ -66,6 +66,66 @@ impl<'a> GameState<'a> {
         let (card, _eval) = agent.decide_card(&self, &hand[..], china);
         card
     }
+    pub fn use_card(&mut self, card: Card) {
+        use std::iter::repeat;
+        // Todo unusual actions, discards, etc.
+        let d = Decision::new_no_allowed;
+        let mut vec = Vec::new();
+        // Event
+        if card.side() != self.side.opposite() && card.can_event(&self) {
+            vec.push(vec![d(self.side, Action::Event(card, None))]);
+        }
+        if !card.is_scoring() {
+            let op_event = card.side() == self.side.opposite() && card.can_event(&self);
+            let ops = card.ops() + self.base_ops_offset(self.side);
+            if op_event {
+                // Standard Influence Placement
+                let event = d(self.side.opposite(), Action::Event(card, None));
+                let inf = repeat(d(self.side, Action::StandardOps)).take(ops as usize);
+                let mut x: Vec<_> = inf.clone().collect();
+                x.push(event.clone());
+                let mut y = vec![event.clone()];
+                y.extend(inf);
+                vec.push(x);
+                vec.push(y);
+                // Coup
+                // Todo cuban missile
+                vec.push(vec![d(self.side, Action::Coup(ops, false)), event.clone()]);
+                vec.push(vec![event.clone(), d(self.side, Action::Coup(ops, false))]);
+                // Realignment
+                let realign = repeat(d(self.side, Action::Realignment)).take(ops as usize);
+                x = realign.clone().collect();
+                x.push(event.clone());
+                let mut y = vec![event];
+                y.extend(realign);
+                vec.push(x);
+                vec.push(y);
+            } else {
+                // Standard Influence Placement
+                vec.push(
+                    repeat(d(self.side, Action::StandardOps))
+                        .take(ops as usize)
+                        .collect(),
+                );
+                // Coup
+                vec.push(vec![d(self.side, Action::Coup(ops, false))]); // Todo Cuban Missile
+
+                // Realignment
+                vec.push(
+                    repeat(d(self.side, Action::Realignment))
+                        .take(ops as usize)
+                        .collect(),
+                );
+            }
+
+            // Space
+            if self.can_space(self.side, card.ops()) {
+                vec.push(vec![d(self.side, Action::Space)])
+            }
+        }
+        self.pending_actions
+            .push(d(self.side, Action::AfterStates(vec)));
+    }
     pub fn standard_allowed(&self, side: Side, action: &Action) -> Option<Vec<usize>> {
         let allowed = match action {
             Action::StandardOps => Some(access(self, side)),
@@ -550,7 +610,7 @@ impl<'a> GameState<'a> {
             .iter()
             .enumerate()
             .filter_map(|(i, c)| {
-                let mut x = c.att().ops + offset;
+                let mut x = c.ops() + offset;
                 if x < 1 {
                     x = 1;
                 } else if x > 4 {
@@ -589,11 +649,19 @@ impl<'a> GameState<'a> {
         }
         offset
     }
-    pub fn can_space(&self, side: Side) -> bool {
+    pub fn can_space(&self, side: Side, ops: i8) -> bool {
         let me = side as usize;
         let opp = side.opposite() as usize;
-        self.space_attempts[me] < 1
-            || self.space_attempts[me] < 2 && self.space[me] >= 2 && self.space[opp] < 2
+        let my_space = self.space[me];
+        let space_allowed = self.space_attempts[me] < 1
+            || self.space_attempts[me] < 2 && my_space >= 2 && self.space[opp] < 2;
+        if my_space <= 3 {
+            space_allowed && ops >= 2
+        } else if my_space <= 6 {
+            space_allowed && ops >= 3
+        } else {
+            space_allowed && ops >= 4
+        }
     }
     pub fn space_card(&mut self, side: Side, index: usize, roll: i8) -> bool {
         // Todo allow spacing China
@@ -658,5 +726,25 @@ impl<'a> GameState<'a> {
     }
     pub fn is_final_scoring(&self) -> bool {
         self.turn > 10
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn count_actions() {
+        let map = Map::new();
+        let mut state = GameState::new(&map);
+        let cards = &[Card::Duck_and_Cover, Card::Arab_Israeli_War, Card::Blockade];
+        let sizes = &[7, 5, 4];
+        for (&c, &s) in cards.into_iter().zip(sizes.into_iter()) {
+            state.use_card(c);
+            let x = &state.pending_actions.pop().unwrap();
+            match &x.action {
+                Action::AfterStates(vec) => assert_eq!(vec.len(), s),
+                _ => assert!(false),
+            }
+        }
     }
 }

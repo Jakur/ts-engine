@@ -16,6 +16,13 @@ impl<'a> Decision<'a> {
             allowed,
         }
     }
+    pub fn new_no_allowed(agent: Side, action: Action<'a>) -> Decision<'a> {
+        Decision {
+            agent,
+            action,
+            allowed: &[],
+        }
+    }
     pub fn restriction_clear() -> Decision<'a> {
         Decision::new(Side::Neutral, Action::ClearRestriction, &[])
     }

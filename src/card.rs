@@ -8,7 +8,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 lazy_static! {
-    pub static ref ATT: Vec<Attributes> = init_cards();
+    static ref ATT: Vec<Attributes> = init_cards();
 }
 
 #[derive(Clone)]
@@ -381,8 +381,17 @@ impl Card {
     pub fn is_starred(&self) -> bool {
         self.att().starred
     }
+    pub fn is_scoring(&self) -> bool {
+        self.att().scoring
+    }
+    pub fn ops(&self) -> i8 {
+        self.att().ops
+    }
+    pub fn side(&self) -> Side {
+        self.att().side
+    }
     /// Returns the attributes relevant to each unique card.
-    pub fn att(&self) -> &'static Attributes {
+    fn att(&self) -> &'static Attributes {
         &ATT[*self as usize]
     }
 }
