@@ -16,6 +16,7 @@ lazy_static! {
     pub static ref AFRICA: Vec<usize> = Region::Africa.all_countries();
     pub static ref SOUTH_AMERICA: Vec<usize> = Region::SouthAmerica.all_countries();
     pub static ref CENTRAL_AMERICA: Vec<usize> = Region::CentralAmerica.all_countries();
+    pub static ref SOUTHEAST_ASIA: Vec<usize> = Region::SoutheastAsia.all_countries();
     pub static ref INDIA_PAKISTAN: Vec<usize> =
         vec![CName::India as usize, CName::Pakistan as usize];
     pub static ref SUEZ: Vec<usize> = vec![
@@ -23,6 +24,11 @@ lazy_static! {
         CName::UK as usize,
         CName::Israel as usize
     ];
+    pub static ref DECOL: Vec<usize> = AFRICA
+        .iter()
+        .cloned()
+        .chain(SOUTHEAST_ASIA.iter().cloned())
+        .collect();
     pub static ref EDGES: Vec<Vec<usize>> = adjacency_list();
 }
 

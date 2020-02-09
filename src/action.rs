@@ -34,6 +34,9 @@ impl<'a> Decision<'a> {
     pub fn restriction_clear() -> Decision<'a> {
         Decision::new(Side::Neutral, Action::ClearRestriction, &[])
     }
+    pub fn limit_set(num: usize) -> Decision<'a> {
+        Decision::new(Side::Neutral, Action::SetLimit(num), &[])
+    }
 }
 
 #[derive(Clone)]
@@ -52,6 +55,7 @@ pub enum Action<'a> {
     ClearRestriction,
     AfterStates(Vec<Vec<Decision<'a>>>),
     War(Side, bool), // Side, is brush war?
+    SetLimit(usize),
 }
 
 #[derive(Clone)]

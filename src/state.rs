@@ -14,7 +14,7 @@ pub struct GameState<'a> {
     pub countries: Vec<Country>,
     pub vp: i8,
     pub defcon: i8,
-    turn: i8,
+    pub turn: i8,
     ar: i8,
     side: Side,
     space: [i8; 2],
@@ -226,6 +226,11 @@ impl<'a> GameState<'a> {
             let dec = self.pending_actions.pop().unwrap();
             // Check for decisions with no agency
             match dec.action {
+                Action::SetLimit(num) => {
+                    history = Vec::new();
+                    self.restrict = Some(Restriction::Limit(num));
+                    continue;
+                }
                 Action::ClearRestriction => {
                     history = Vec::new();
                     self.restrict = None;
@@ -446,7 +451,7 @@ impl<'a> GameState<'a> {
                     }
                     self.war_target(side, choice, roll);
                 }
-                Action::ClearRestriction => unreachable!(), // We should remove this earlier
+                Action::ClearRestriction | Action::SetLimit(_) => unreachable!(), // We should remove this earlier
             }
         }
         return eval;
@@ -459,6 +464,14 @@ impl<'a> GameState<'a> {
             _ => unimplemented!(),
         };
         vec.iter().position(|e| *e == effect)
+    }
+    pub fn add_effect(&mut self, side: Side, effect: Effect) {
+        let vec = match side {
+            Side::US => &mut self.us_effects,
+            Side::USSR => &mut self.ussr_effects,
+            _ => unimplemented!(),
+        };
+        vec.push(effect);
     }
     pub fn clear_effect(&mut self, side: Side, index: usize) {
         let vec = match side {

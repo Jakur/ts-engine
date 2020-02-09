@@ -83,6 +83,16 @@ impl Deck {
             }
         }
     }
+    /// Removes and returns the card from the given index.
+    /// # Panics
+    /// If the index is out of bounds for the hand
+    pub fn grab_card(&mut self, side: Side, index: usize) -> Card {
+        match side {
+            Side::US => self.us_hand.swap_remove(index),
+            Side::USSR => self.ussr_hand.swap_remove(index),
+            _ => unimplemented!(),
+        }
+    }
     pub fn us_hand(&self) -> &Vec<Card> {
         &self.us_hand
     }
@@ -281,6 +291,26 @@ impl Card {
                     .enumerate()
                     .filter_map(|(i, c)| {
                         if state.countries[*c as usize].has_influence(Side::USSR) {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if vec.is_empty() {
+                    None
+                } else {
+                    Some(vec)
+                }
+            }
+            UN_Intervention => {
+                let side = *state.side();
+                let hand = state.deck.hand(side);
+                let vec: Vec<_> = hand
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, c)| {
+                        if c.side() == side.opposite() {
                             Some(i)
                         } else {
                             None
@@ -518,6 +548,66 @@ impl Card {
                     ));
                 }
             }
+            East_European_Unrest => {
+                let value = if state.turn <= 7 { 1 } else { 2 };
+                state.set_limit(1);
+                for _ in 0..3 {
+                    state.pending_actions.push(Decision::new(
+                        Side::US,
+                        Action::Remove(Side::USSR, value),
+                        &country::EASTERN_EUROPE,
+                    ));
+                }
+            }
+            Decolonization => {
+                state.set_limit(1);
+                for _ in 0..4 {
+                    state.pending_actions.push(Decision::new(
+                        Side::USSR,
+                        Action::Place(Side::USSR, 1, true),
+                        &country::DECOL,
+                    ));
+                }
+            }
+            Red_Scare_Purge => state.add_effect(*state.side(), Effect::RedScarePurge),
+            UN_Intervention => {
+                let card = state.deck.grab_card(*state.side(), choice);
+                state.deck.discard_pile.push(card);
+                let ops = card.ops();
+                state
+                    .pending_actions
+                    .push(Decision::conduct_ops(*state.side(), ops));
+            }
+            De_Stalinization => {
+                state.pending_actions.push(Decision::restriction_clear());
+                // Todo fix &[] for place to be world
+                for _ in 0..4 {
+                    state.pending_actions.push(Decision::new(
+                        Side::USSR,
+                        Action::Place(Side::USSR, 1, false),
+                        &[],
+                    ))
+                }
+                // Limit only applies to placement. This may be a singular case
+                state.pending_actions.push(Decision::limit_set(2));
+                for _ in 0..4 {
+                    state.pending_actions.push(Decision::new(
+                        Side::USSR,
+                        Action::Remove(Side::USSR, 1),
+                        &[],
+                    ));
+                }
+            }
+            Nuclear_Test_Ban => {
+                let vps = state.defcon - 2;
+                match state.side() {
+                    Side::US => state.vp += vps,
+                    Side::USSR => state.vp -= vps,
+                    _ => unimplemented!(),
+                }
+                state.defcon = std::cmp::min(5, state.defcon + 2);
+            }
+            Formosan_Resolution => state.us_effects.push(Effect::FormosanResolution),
             _ => {}
         }
         return true;
