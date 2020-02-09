@@ -16,7 +16,7 @@ pub struct GameState<'a> {
     pub defcon: i8,
     turn: i8,
     ar: i8,
-    pub side: Side,
+    side: Side,
     space: [i8; 2],
     mil_ops: [i8; 2],
     space_attempts: [i8; 2],
@@ -52,6 +52,13 @@ impl<'a> GameState<'a> {
             us_agent: RandAgent::new(),
         }
     }
+    pub fn side(&self) -> &Side {
+        &self.side
+    }
+    pub fn valid_countries(&self) -> &[Country] {
+        let len = self.countries.len();
+        &self.countries[0..len - 2]
+    }
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
@@ -73,7 +80,13 @@ impl<'a> GameState<'a> {
         let mut vec = Vec::new();
         // Event
         if card.side() != self.side.opposite() && card.can_event(&self) {
-            vec.push(vec![d(self.side, Action::Event(card, None))]);
+            let side = if card == Card::Olympic_Games {
+                // Todo more special cases?
+                self.side.opposite()
+            } else {
+                self.side
+            };
+            vec.push(vec![d(side, Action::Event(card, None))]);
         }
         if !card.is_scoring() {
             let op_event = card.side() == self.side.opposite() && card.can_event(&self);
@@ -283,7 +296,7 @@ impl<'a> GameState<'a> {
                         }
                     }
                 }
-                Action::Place(side, in_opp) if !in_opp => {
+                Action::Place(side, _, in_opp) if !in_opp => {
                     computed_allowed = Some(
                         dec.allowed
                             .iter()
@@ -399,14 +412,16 @@ impl<'a> GameState<'a> {
                 Action::Discard(side, _ops) => {
                     self.discard_card(side, choice);
                 }
-                Action::Remove(side) => self.remove_influence(side, choice),
+                Action::Remove(side, num) => self.remove_influence(side, choice, num),
                 Action::RemoveAll(side, _allowed) => self.remove_all(side, choice),
                 Action::Realignment => {
                     let (us_roll, ussr_roll) = (self.roll(), self.roll());
                     self.take_realign(choice, us_roll, ussr_roll);
                 }
-                Action::Place(side, _allowed) => {
-                    self.add_influence(side, choice);
+                Action::Place(side, num, _allowed) => {
+                    for _ in 0..num {
+                        self.add_influence(side, choice);
+                    }
                 }
                 Action::AfterStates(mut acts) => {
                     // We can't be functional because float comparison is weird
@@ -423,6 +438,13 @@ impl<'a> GameState<'a> {
                     }
                     // Add the best found line to the actions queue to be executed
                     self.pending_actions.append(&mut acts[max_index]);
+                }
+                Action::War(side, brush) => {
+                    let mut roll = self.roll();
+                    if brush {
+                        roll += 1;
+                    }
+                    self.war_target(side, choice, roll);
                 }
                 Action::ClearRestriction => unreachable!(), // We should remove this earlier
             }
@@ -461,12 +483,12 @@ impl<'a> GameState<'a> {
             Side::Neutral => unimplemented!(),
         }
     }
-    pub fn remove_influence(&mut self, side: Side, country_index: usize) {
+    pub fn remove_influence(&mut self, side: Side, country_index: usize, num: i8) {
         let c = &mut self.countries[country_index];
         // Require checking for influence prior to this step
         match side {
-            Side::US => c.us -= 1,
-            Side::USSR => c.ussr -= 1,
+            Side::US => c.us -= num,
+            Side::USSR => c.ussr -= num,
             _ => unimplemented!(),
         }
     }
@@ -506,7 +528,7 @@ impl<'a> GameState<'a> {
         }
     }
     /// Calculates the number of adjacent controlled countries for use in wars.
-    pub fn adjacent_controlled(&self, country_index: usize, side: Side) -> i8 {
+    fn adjacent_controlled(&self, country_index: usize, side: Side) -> i8 {
         EDGES[country_index].iter().fold(0, |acc, c| {
             if self.countries[*c].controller() == side {
                 acc + 1
@@ -515,7 +537,19 @@ impl<'a> GameState<'a> {
             }
         })
     }
-    pub fn war_flip(&mut self, country_index: usize, war_side: Side) {
+    /// Calculates a war on a standard 4-6 roll. Modify Brush War +1, Israel -1
+    /// for these respective events
+    pub fn war_target(&mut self, war_side: Side, country_index: usize, mut roll: i8) -> bool {
+        let adjacent = self.adjacent_controlled(country_index, war_side.opposite());
+        roll -= adjacent;
+        if roll >= 4 {
+            self.war_flip(war_side, country_index);
+            true
+        } else {
+            false
+        }
+    }
+    fn war_flip(&mut self, war_side: Side, country_index: usize) {
         let c = &mut self.countries[country_index];
         match war_side {
             Side::US => {

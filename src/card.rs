@@ -137,6 +137,10 @@ pub enum Effect {
     CampDavid,
     AllowNato,
     DeGaulle,
+    Nato,
+    US_Hand_Revealed,
+    USSR_Hand_Revealed,
+    US_Japan,
 }
 
 pub struct Attributes {
@@ -263,6 +267,32 @@ impl Card {
                     None
                 }
             }
+            Olympic_Games => Some(vec![0, 1]),
+            Independent_Reds => {
+                let list = &[
+                    CName::Yugoslavia,
+                    CName::Romania,
+                    CName::Bulgaria,
+                    CName::Hungary,
+                    CName::Czechoslovakia,
+                ];
+                let vec: Vec<_> = list
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(i, c)| {
+                        if state.countries[*c as usize].has_influence(Side::USSR) {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if vec.is_empty() {
+                    None
+                } else {
+                    Some(vec)
+                }
+            }
             _ => None,
         }
     }
@@ -300,7 +330,7 @@ impl Card {
             Socialist_Governments => {
                 let x = Decision::new(
                     Side::USSR,
-                    Action::Remove(Side::US),
+                    Action::Remove(Side::US, 1),
                     &country::WESTERN_EUROPE,
                 );
                 state.set_limit(2);
@@ -326,12 +356,10 @@ impl Card {
             }
             Korean_War => {
                 let index = CName::SKorea as usize;
-                let mut roll = state.roll();
-                roll -= state.adjacent_controlled(index, Side::US);
                 state.add_mil_ops(Side::USSR, 2);
-                if roll >= 4 {
+                let roll = state.roll();
+                if state.war_target(Side::USSR, index, roll) {
                     state.vp -= 2;
-                    state.war_flip(index, Side::USSR);
                 }
             }
             Romanian_Abdication => {
@@ -341,21 +369,19 @@ impl Card {
             Arab_Israeli_War => {
                 let index = CName::Israel as usize;
                 let mut roll = state.roll();
-                roll -= state.adjacent_controlled(index, Side::US);
                 // This war is special, and includes the country itself
                 if state.is_controlled(Side::US, index) {
                     roll -= 1;
                 }
                 state.add_mil_ops(Side::USSR, 2);
-                if roll >= 4 {
+                if state.war_target(Side::USSR, index, roll) {
                     state.vp -= 2;
-                    state.war_flip(index, Side::USSR);
                 }
             }
             Comecon => {
                 let x = Decision::new(
                     Side::USSR,
-                    Action::Place(Side::USSR, false),
+                    Action::Place(Side::USSR, 1, false),
                     &country::EASTERN_EUROPE,
                 );
                 state.set_limit(1);
@@ -386,7 +412,7 @@ impl Card {
                     for _ in 0..5 {
                         state.pending_actions.push(Decision::new(
                             Side::USSR,
-                            Action::Place(Side::USSR, true),
+                            Action::Place(Side::USSR, 1, true),
                             &country::EASTERN_EUROPE[..],
                         ));
                     }
@@ -400,13 +426,98 @@ impl Card {
                 state.ussr_effects.push(Effect::DeGaulle);
             }
             Captured_Nazi_Scientist => {
-                state.space_card(state.side, 1); // Todo ensure state.side is accurate
+                state.space_card(*state.side(), 1); // Todo ensure state.side is accurate
             }
             Truman_Doctrine => state.pending_actions.push(Decision::new(
                 Side::US,
                 Action::RemoveAll(Side::USSR, false),
                 &country::EUROPE[..],
             )),
+            Olympic_Games => {
+                if choice == 0 {
+                    let mut ussr_roll = 0;
+                    let mut us_roll = 0;
+                    while ussr_roll == us_roll {
+                        ussr_roll = state.roll();
+                        us_roll = state.roll();
+                        if let Side::USSR = state.side() {
+                            ussr_roll += 2;
+                        } else {
+                            us_roll += 2;
+                        }
+                    }
+                    if us_roll > ussr_roll {
+                        state.vp += 2;
+                    } else {
+                        state.vp -= 2;
+                    }
+                } else {
+                    state.defcon -= 1;
+                    let x = Decision::conduct_ops(*state.side(), 4);
+                    state.pending_actions.push(x);
+                }
+            }
+            NATO => {
+                // let index = state
+                //     .has_effect(Side::US, Effect::AllowNato)
+                //     .expect("Already checked");
+                // state.clear_effect(Side::US, index);
+                state.us_effects.push(Effect::Nato);
+            }
+            Independent_Reds => {
+                // Todo figure out if afterstates is too resource intensive
+                let list = &[
+                    CName::Yugoslavia,
+                    CName::Romania,
+                    CName::Bulgaria,
+                    CName::Hungary,
+                    CName::Czechoslovakia,
+                ];
+                let index = list[choice] as usize;
+                let c = &mut state.countries[index];
+                c.us = c.ussr;
+            }
+            Marshall_Plan => {
+                if !state.us_effects.contains(&Effect::AllowNato) {
+                    state.us_effects.push(Effect::AllowNato);
+                }
+                state.set_limit(1);
+                for _ in 0..7 {
+                    state.pending_actions.push(Decision::new(
+                        Side::US,
+                        Action::Place(Side::US, 1, false),
+                        &country::WESTERN_EUROPE[..],
+                    ));
+                }
+            }
+            Indo_Pakistani_War => state.pending_actions.push(Decision::new(
+                *state.side(),
+                Action::War(*state.side(), false),
+                &country::INDIA_PAKISTAN[..],
+            )),
+            Containment => state.us_effects.push(Effect::Containment),
+            CIA_Created => {
+                state.us_effects.push(Effect::USSR_Hand_Revealed);
+                // Todo see what affects ops value
+                state
+                    .pending_actions
+                    .push(Decision::conduct_ops(Side::US, 1));
+            }
+            US_Japan_Mutual_Defense_Pact => {
+                state.control(Side::US, CName::Japan);
+                // This effect is so useless I wonder if I should bother
+                state.us_effects.push(Effect::US_Japan);
+            }
+            Suez_Crisis => {
+                state.set_limit(2);
+                for _ in 0..4 {
+                    state.pending_actions.push(Decision::new(
+                        Side::USSR,
+                        Action::Remove(Side::US, 1),
+                        &country::SUEZ,
+                    ));
+                }
+            }
             _ => {}
         }
         return true;
@@ -417,8 +528,10 @@ impl Card {
     pub fn can_event(&self, state: &GameState) -> bool {
         use Card::*;
         match self {
+            The_China_Card => false,
             Socialist_Governments => state.has_effect(Side::US, Effect::IronLady).is_none(),
             Arab_Israeli_War => state.has_effect(Side::US, Effect::CampDavid).is_none(),
+            NATO => state.has_effect(Side::US, Effect::AllowNato).is_some(),
             _ => true, // todo make this accurate
         }
     }
@@ -445,6 +558,6 @@ mod tests {
     #[test]
     fn check_cards() {
         let cards = super::init_cards();
-        assert_eq!(cards.len(), 37);
+        assert_eq!(cards.len(), 36);
     }
 }

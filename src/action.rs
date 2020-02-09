@@ -23,6 +23,14 @@ impl<'a> Decision<'a> {
             allowed: &[],
         }
     }
+    pub fn conduct_ops(agent: Side, ops: i8) -> Decision<'a> {
+        let d = Decision::new;
+        let inf = vec![d(agent, Action::StandardOps, &[]); ops as usize];
+        let coup = vec![d(agent, Action::Coup(ops, false), &[])];
+        let realign = vec![d(agent, Action::Realignment, &[]); ops as usize];
+        let vec = vec![inf, coup, realign];
+        d(agent, Action::AfterStates(vec), &[])
+    }
     pub fn restriction_clear() -> Decision<'a> {
         Decision::new(Side::Neutral, Action::ClearRestriction, &[])
     }
@@ -36,13 +44,14 @@ pub enum Action<'a> {
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
-    Place(Side, bool), //Side, can place in opponent controlled
-    Remove(Side),
+    Place(Side, i8, bool), //Side, amount, can place in opponent controlled
+    Remove(Side, i8),      // Side, amount
     RemoveAll(Side, bool), // Side, can remove in opponent controlled
     Discard(Side, i8),     // Side, ops minimum
     Event(Card, Option<usize>),
     ClearRestriction,
     AfterStates(Vec<Vec<Decision<'a>>>),
+    War(Side, bool), // Side, is brush war?
 }
 
 #[derive(Clone)]
