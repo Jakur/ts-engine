@@ -76,21 +76,6 @@ fn adjacency_list() -> Vec<Vec<usize>> {
     edge_list
 }
 
-pub struct Map {
-    pub countries: Vec<Country>,
-    pub edges: Vec<Vec<usize>>,
-}
-
-impl Map {
-    pub fn new() -> Map {
-        let edge_list = adjacency_list();
-        Map {
-            countries: countries(),
-            edges: edge_list,
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 pub enum Region {
     Europe,
@@ -441,6 +426,37 @@ impl From<CName> for usize {
     fn from(item: CName) -> Self {
         item as usize
     }
+}
+/// Returns countries with their starting influence before players have any agency.
+pub fn standard_start() -> Vec<Country> {
+    use CName::*;
+    let mut c = countries();
+    let ussr = [
+        (1, Syria),
+        (1, Iraq),
+        (3, NKorea),
+        (3, EGermany),
+        (1, Finland),
+    ];
+    let us = [
+        (2, Canada),
+        (1, Iran),
+        (1, Israel),
+        (1, Japan),
+        (4, Australia),
+        (1, Philippines),
+        (1, SKorea),
+        (1, Panama),
+        (1, SouthAfrica),
+        (5, UK),
+    ];
+    for (x, y) in ussr.into_iter() {
+        c[*y as usize].ussr += x;
+    }
+    for (x, y) in us.into_iter() {
+        c[*y as usize].us += x;
+    }
+    c
 }
 
 fn countries() -> Vec<Country> {

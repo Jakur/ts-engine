@@ -29,9 +29,9 @@ pub struct GameState<'a> {
 }
 
 impl<'a> GameState<'a> {
-    pub fn new(map: &Map) -> GameState {
+    pub fn new() -> GameState<'a> {
         GameState {
-            countries: map.countries.clone(),
+            countries: standard_start(),
             vp: 0,
             defcon: 5,
             turn: 1, // Todo make compatible with initial placements
@@ -131,6 +131,8 @@ impl<'a> GameState<'a> {
         self.pending_actions
             .push(d(self.side, Action::AfterStates(vec)));
     }
+    /// Returns the standard allowed actions if they differ from the decision
+    /// slice, or else None.
     fn standard_allowed(&self, dec: &Decision, history: &[usize]) -> Option<Vec<usize>> {
         let Decision {
             agent,
@@ -346,10 +348,13 @@ impl<'a> GameState<'a> {
             };
 
             let choice = decision.0;
-            history.push(choice);
+            if choice.is_some() {
+                history.push(choice.unwrap());
+            }
             eval = decision.1;
             match dec.action {
                 Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
+                    let choice = choice.unwrap(); // Should always be a valid option
                     let cost = self.add_influence(dec.agent, choice);
                     if cost == 2 {
                         self.pending_actions.pop(); // The earlier check should apply
@@ -385,8 +390,10 @@ impl<'a> GameState<'a> {
                     }
                 }
                 Action::Coup(ops, free) => {
-                    let roll = self.roll();
-                    self.take_coup(dec.agent, choice, ops, roll, free);
+                    if let Some(choice) = choice {
+                        let roll = self.roll();
+                        self.take_coup(dec.agent, choice, ops, roll, free);
+                    }
                 }
                 Action::Space => {
                     // Todo don't need choice?
@@ -400,17 +407,31 @@ impl<'a> GameState<'a> {
                     }
                 }
                 Action::Discard(side, _ops) => {
-                    self.discard_card(side, choice);
+                    if let Some(choice) = choice {
+                        self.discard_card(side, choice);
+                    }
                 }
-                Action::Remove(side, num) => self.remove_influence(side, choice, num),
-                Action::RemoveAll(side, _allowed) => self.remove_all(side, choice),
+                Action::Remove(side, num) => {
+                    if let Some(choice) = choice {
+                        self.remove_influence(side, choice, num)
+                    }
+                }
+                Action::RemoveAll(side, _allowed) => {
+                    if let Some(choice) = choice {
+                        self.remove_all(side, choice)
+                    }
+                }
                 Action::Realignment => {
                     let (us_roll, ussr_roll) = (self.roll(), self.roll());
-                    self.take_realign(choice, us_roll, ussr_roll);
+                    if let Some(choice) = choice {
+                        self.take_realign(choice, us_roll, ussr_roll);
+                    }
                 }
                 Action::Place(side, num, _allowed) => {
                     for _ in 0..num {
-                        self.add_influence(side, choice);
+                        if let Some(choice) = choice {
+                            self.add_influence(side, choice);
+                        }
                     }
                 }
                 Action::AfterStates(mut acts) => {
@@ -434,7 +455,7 @@ impl<'a> GameState<'a> {
                     if brush {
                         roll += 1;
                     }
-                    self.war_target(side, choice, roll);
+                    self.war_target(side, choice.unwrap(), roll);
                 }
                 Action::ClearRestriction | Action::SetLimit(_) => unreachable!(), // We should remove this earlier
             }
@@ -767,9 +788,30 @@ impl<'a> GameState<'a> {
 mod tests {
     use super::*;
     #[test]
+    fn basic_actions() {
+        use crate::agent;
+        let template = GameState::new();
+        let agent = agent::DebugAgent::new(
+            Action::Coup(0, false),
+            Card::De_Stalinization,
+            &[CName::UK as usize, CName::Canada as usize],
+        );
+        let agents = Actors::new(agent.clone(), agent.clone());
+        let mut a = template.clone();
+        Card::Socialist_Governments.event(&mut a, 0);
+        a.resolve_actions(&agents);
+        assert_eq!(a.countries[CName::UK as usize].us, 3);
+        assert_eq!(a.countries[CName::Canada as usize].us, 1);
+        a.defcon = 2;
+        for (x, y) in [(Side::US, 0), (Side::USSR, 2)].into_iter() {
+            let allowed =
+                a.standard_allowed(&Decision::new_no_allowed(*x, Action::Coup(1, false)), &[]);
+            assert_eq!(*y, allowed.unwrap().len());
+        }
+    }
+    #[test]
     fn count_actions() {
-        let map = Map::new();
-        let mut state = GameState::new(&map);
+        let mut state = GameState::new();
         let cards = &[Card::Duck_and_Cover, Card::Arab_Israeli_War, Card::Blockade];
         let sizes = &[7, 5, 4];
         for (&c, &s) in cards.into_iter().zip(sizes.into_iter()) {

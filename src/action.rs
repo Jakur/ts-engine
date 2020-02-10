@@ -47,11 +47,11 @@ pub enum Action<'a> {
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
-    Place(Side, i8, bool), //Side, amount, can place in opponent controlled
-    Remove(Side, i8),      // Side, amount
-    RemoveAll(Side, bool), // Side, can remove in opponent controlled
-    Discard(Side, i8),     // Side, ops minimum
-    Event(Card, Option<usize>),
+    Place(Side, i8, bool),      //Side, amount, can place in opponent controlled
+    Remove(Side, i8),           // Side, amount
+    RemoveAll(Side, bool),      // Side, can remove in opponent controlled
+    Discard(Side, i8),          // Side, ops minimum
+    Event(Card, Option<usize>), // Card, Decision in branching events
     ClearRestriction,
     AfterStates(Vec<Vec<Decision<'a>>>),
     War(Side, bool), // Side, is brush war?

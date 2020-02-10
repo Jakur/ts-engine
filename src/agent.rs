@@ -31,11 +31,58 @@ where
 }
 
 pub trait Agent {
-    fn decide_action(&self, state: &GameState, choices: &[usize], action: Action) -> (usize, f32);
+    fn decide_action(
+        &self,
+        state: &GameState,
+        choices: &[usize],
+        action: Action,
+    ) -> (Option<usize>, f32);
     fn decide_card(&self, state: &GameState, hand: &[Card], china: bool) -> (Card, f32);
 }
 
 #[derive(Clone)]
+pub struct DebugAgent<'a> {
+    pub fav_action: Action<'a>,
+    pub fav_card: Card,
+    pub choices: &'a [usize],
+}
+
+impl<'a> DebugAgent<'a> {
+    pub fn new(fav_action: Action<'a>, fav_card: Card, choices: &'a [usize]) -> Self {
+        DebugAgent {
+            fav_action,
+            fav_card,
+            choices,
+        }
+    }
+}
+
+impl<'a> Agent for DebugAgent<'a> {
+    fn decide_action(&self, _s: &GameState, choices: &[usize], a: Action) -> (Option<usize>, f32) {
+        use std::mem::discriminant;
+        // Todo resolve first?
+        let eval = if discriminant(&a) == discriminant(&self.fav_action) {
+            1.0
+        } else {
+            0.0
+        };
+        for fav in self.choices.iter() {
+            if choices.contains(fav) {
+                return (Some(*fav), eval);
+            }
+        }
+        let choice = if choices.len() != 0 {
+            Some(choices[0])
+        } else {
+            None
+        };
+        (choice, eval)
+    }
+    fn decide_card(&self, _state: &GameState, _hand: &[Card], _china: bool) -> (Card, f32) {
+        todo!()
+    }
+}
+
 pub struct RandAgent {}
 impl RandAgent {
     pub fn new() -> Self {
@@ -44,13 +91,13 @@ impl RandAgent {
 }
 
 impl Agent for RandAgent {
-    fn decide_action(&self, _s: &GameState, choices: &[usize], _a: Action) -> (usize, f32) {
+    fn decide_action(&self, _s: &GameState, choices: &[usize], _a: Action) -> (Option<usize>, f32) {
         if choices.len() == 0 {
-            return (0, 0.0); // Todo detect this earlier?
+            return (None, 0.0); // Todo detect this earlier?
         }
         let mut x = thread_rng();
         let choice = x.gen_range(0, choices.len());
-        (choices[choice], x.gen())
+        (Some(choices[choice]), x.gen())
     }
     fn decide_card(&self, _state: &GameState, hand: &[Card], china: bool) -> (Card, f32) {
         let mut x = thread_rng();

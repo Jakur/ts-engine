@@ -14,8 +14,7 @@ mod tests {
     fn test_scoring() {
         use country::CName::*;
         use country::{Region, Side};
-        let map = country::Map::new();
-        let mut state = state::GameState::new(&map);
+        let mut state = state::GameState::new();
         let us = [
             UK,
             WGermany,
