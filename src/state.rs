@@ -131,11 +131,16 @@ impl<'a> GameState<'a> {
         self.pending_actions
             .push(d(self.side, Action::AfterStates(vec)));
     }
-    pub fn standard_allowed(&self, side: Side, action: &Action) -> Option<Vec<usize>> {
-        let allowed = match action {
-            Action::StandardOps => Some(access(self, side)),
+    fn standard_allowed(&self, dec: &Decision, history: &[usize]) -> Option<Vec<usize>> {
+        let Decision {
+            agent,
+            action,
+            allowed,
+        } = dec;
+        let mut vec = match action {
+            Action::StandardOps => Some(access(self, *agent)),
             Action::ChinaInf => {
-                let vec = access(self, side);
+                let vec = access(self, *agent);
                 Some(
                     vec.into_iter()
                         .filter(|x| Region::Asia.has_country(*x))
@@ -143,7 +148,7 @@ impl<'a> GameState<'a> {
                 )
             }
             Action::VietnamInf => {
-                let vec = access(self, side);
+                let vec = access(self, *agent);
                 Some(
                     vec.into_iter()
                         .filter(|x| Region::SoutheastAsia.has_country(*x))
@@ -152,7 +157,7 @@ impl<'a> GameState<'a> {
             }
             Action::Discard(side, ops_min) => Some(self.cards_above_value(*side, *ops_min)),
             Action::Coup(_, _) | Action::Realignment => {
-                let opp = side.opposite();
+                let opp = agent.opposite();
                 let valid = |v: &'static Vec<usize>| {
                     v.iter().filter_map(|x| {
                         if self.countries[*x].has_influence(opp) {
@@ -176,9 +181,89 @@ impl<'a> GameState<'a> {
                 }
                 Some(vec)
             }
+            Action::Place(side, _, in_opp) if !in_opp => Some(
+                allowed
+                    .iter()
+                    .cloned()
+                    .filter(|x| {
+                        let c = &self.countries[*x];
+                        c.controller() != side.opposite()
+                    })
+                    .collect(),
+            ),
             _ => None,
         };
-        allowed
+        match action {
+            Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
+                let next_op = self.pending_actions.last().map(|x| &x.action);
+                if let Some(op) = next_op {
+                    vec = match op {
+                        Action::StandardOps => vec, // No change
+                        Action::ChinaInf => Some(
+                            vec.unwrap()
+                                .into_iter()
+                                .filter(|&x| {
+                                    let c = &self.countries[x];
+                                    c.controller() != agent.opposite()
+                                        || Region::Asia.has_country(x)
+                                })
+                                .collect(),
+                        ),
+                        Action::VietnamInf => Some(
+                            vec.unwrap()
+                                .into_iter()
+                                .filter(|&x| {
+                                    let c = &self.countries[x];
+                                    c.controller() != agent.opposite()
+                                        || Region::SoutheastAsia.has_country(x)
+                                })
+                                .collect(),
+                        ),
+                        _ => Some(
+                            vec.unwrap()
+                                .into_iter()
+                                .filter(|x| {
+                                    let c = &self.countries[*x];
+                                    c.controller() != agent.opposite()
+                                })
+                                .collect(),
+                        ),
+                    }
+                }
+            }
+            _ => {}
+        }
+        // Todo figure out if restriction is always limit
+        if let Some(restrict) = &self.restrict {
+            match restrict {
+                Restriction::Limit(num) => {
+                    let counter: Counter<_> = history.iter().copied().collect();
+                    let bad: HashSet<_> = counter
+                        .into_map()
+                        .into_iter()
+                        .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
+                        .collect();
+                    if !bad.is_empty() {
+                        if vec.is_some() {
+                            vec = Some(
+                                vec.unwrap()
+                                    .into_iter()
+                                    .filter(|x| !bad.contains(x))
+                                    .collect(),
+                            );
+                        } else {
+                            vec = Some(
+                                allowed
+                                    .iter()
+                                    .filter_map(|x| if bad.contains(x) { None } else { Some(*x) })
+                                    .collect(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        vec
     }
     pub fn resolve_actions<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>) -> f32 {
         let mut eval = 0.0;
@@ -251,96 +336,7 @@ impl<'a> GameState<'a> {
                 }
                 _ => {}
             }
-            let mut computed_allowed = self.standard_allowed(dec.agent, &dec.action);
-            match dec.action {
-                Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
-                    let next_op = self.pending_actions.last().map(|x| &x.action);
-                    if let Some(op) = next_op {
-                        computed_allowed = match op {
-                            Action::StandardOps => computed_allowed, // No change
-                            Action::ChinaInf => Some(
-                                computed_allowed
-                                    .unwrap()
-                                    .into_iter()
-                                    .filter(|&x| {
-                                        let c = &self.countries[x];
-                                        c.controller() != dec.agent.opposite()
-                                            || Region::Asia.has_country(x)
-                                    })
-                                    .collect(),
-                            ),
-                            Action::VietnamInf => Some(
-                                computed_allowed
-                                    .unwrap()
-                                    .into_iter()
-                                    .filter(|&x| {
-                                        let c = &self.countries[x];
-                                        c.controller() != dec.agent.opposite()
-                                            || Region::SoutheastAsia.has_country(x)
-                                    })
-                                    .collect(),
-                            ),
-                            _ => Some(
-                                computed_allowed
-                                    .unwrap()
-                                    .into_iter()
-                                    .filter(|x| {
-                                        let c = &self.countries[*x];
-                                        c.controller() != dec.agent.opposite()
-                                    })
-                                    .collect(),
-                            ),
-                        }
-                    }
-                }
-                Action::Place(side, _, in_opp) if !in_opp => {
-                    computed_allowed = Some(
-                        dec.allowed
-                            .iter()
-                            .cloned()
-                            .filter(|x| {
-                                let c = &self.countries[*x];
-                                c.controller() != side.opposite()
-                            })
-                            .collect(),
-                    )
-                }
-                _ => {}
-            }
-            // Todo figure out if restriction is always limit
-            if let Some(restrict) = &self.restrict {
-                match restrict {
-                    Restriction::Limit(num) => {
-                        let counter: Counter<_> = history.iter().copied().collect();
-                        let bad: HashSet<_> = counter
-                            .into_map()
-                            .into_iter()
-                            .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
-                            .collect();
-                        if !bad.is_empty() {
-                            if computed_allowed.is_some() {
-                                computed_allowed = Some(
-                                    computed_allowed
-                                        .unwrap()
-                                        .into_iter()
-                                        .filter(|x| !bad.contains(x))
-                                        .collect(),
-                                );
-                            } else {
-                                computed_allowed = Some(
-                                    dec.allowed
-                                        .iter()
-                                        .filter_map(
-                                            |x| if bad.contains(x) { None } else { Some(*x) },
-                                        )
-                                        .collect(),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
+            let computed_allowed = self.standard_allowed(&dec, &history);
             let agent = actors.get(dec.agent);
             let decision = {
                 match computed_allowed {
@@ -358,6 +354,7 @@ impl<'a> GameState<'a> {
                     if cost == 2 {
                         self.pending_actions.pop(); // The earlier check should apply
                     }
+                    // See if we cancel China or Vietnam Revolts bonuses
                     if !Region::Asia.has_country(choice) && china_active {
                         china_active = false;
                         let index = self.pending_actions.iter().enumerate().find(|(_i, x)| {
