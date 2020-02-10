@@ -1,5 +1,5 @@
 use crate::action::{Action, Decision, Restriction};
-use crate::agent::{Agent, RandAgent};
+use crate::agent::{Actors, Agent};
 use crate::card::*;
 use crate::country::*;
 
@@ -26,8 +26,6 @@ pub struct GameState<'a> {
     pub rng: SmallRng,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
-    pub ussr_agent: RandAgent,
-    pub us_agent: RandAgent,
 }
 
 impl<'a> GameState<'a> {
@@ -48,8 +46,6 @@ impl<'a> GameState<'a> {
             rng: SmallRng::from_entropy(),
             deck: Deck::new(),
             restrict: None,
-            ussr_agent: RandAgent::new(),
-            us_agent: RandAgent::new(),
         }
     }
     pub fn side(&self) -> &Side {
@@ -62,12 +58,8 @@ impl<'a> GameState<'a> {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
-    pub fn choose_card(&mut self) -> Card {
-        let agent = match self.side {
-            Side::US => &self.us_agent,
-            Side::USSR => &self.ussr_agent,
-            Side::Neutral => unimplemented!(),
-        };
+    pub fn choose_card<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>) -> Card {
+        let agent = actors.get(self.side);
         let hand = self.deck.hand(self.side);
         let china = self.deck.china() == self.side;
         let (card, _eval) = agent.decide_card(&self, &hand[..], china);
@@ -188,7 +180,7 @@ impl<'a> GameState<'a> {
         };
         allowed
     }
-    pub fn resolve_actions(&mut self) -> f32 {
+    pub fn resolve_actions<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>) -> f32 {
         let mut eval = 0.0;
         // Todo figure out how to get history out of local
         let mut history = Vec::new();
@@ -349,11 +341,7 @@ impl<'a> GameState<'a> {
                 }
             }
 
-            let agent = match dec.agent {
-                Side::US => &self.us_agent,
-                Side::USSR => &self.ussr_agent,
-                Side::Neutral => todo!(), // Events with no agency?
-            };
+            let agent = actors.get(dec.agent);
             let decision = {
                 match computed_allowed {
                     Some(vec) => agent.decide_action(&self, &vec[..], dec.action.clone()),
@@ -435,7 +423,7 @@ impl<'a> GameState<'a> {
                     for (i, v) in acts.iter().enumerate() {
                         let mut x = self.clone();
                         x.pending_actions.extend_from_slice(&v[..]);
-                        let value = x.resolve_actions();
+                        let value = x.resolve_actions(actors);
                         if value > max_val {
                             max_val = value;
                             max_index = i;

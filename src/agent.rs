@@ -1,8 +1,34 @@
 use crate::action::Action;
 use crate::card::Card;
+use crate::country::Side;
 use crate::state::GameState;
 
 use rand::prelude::*;
+
+pub struct Actors<A: Agent, B: Agent> {
+    pub ussr_agent: A,
+    pub us_agent: B,
+}
+
+impl<A, B> Actors<A, B>
+where
+    A: Agent,
+    B: Agent,
+{
+    pub fn new(ussr_agent: A, us_agent: B) -> Actors<A, B> {
+        Actors {
+            ussr_agent,
+            us_agent,
+        }
+    }
+    pub fn get(&self, side: Side) -> &dyn Agent {
+        match side {
+            Side::USSR => &self.ussr_agent,
+            Side::US => &self.us_agent,
+            _ => unimplemented!(),
+        }
+    }
+}
 
 pub trait Agent {
     fn decide_action(&self, state: &GameState, choices: &[usize], action: Action) -> (usize, f32);
