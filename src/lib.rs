@@ -5,6 +5,7 @@ pub mod action;
 pub mod agent;
 pub mod card;
 pub mod country;
+pub mod game;
 pub mod state;
 
 #[cfg(test)]

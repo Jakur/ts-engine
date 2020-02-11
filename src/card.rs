@@ -125,6 +125,9 @@ impl Deck {
             self.discard_pile.push(card);
         }
     }
+    pub fn china_available(&self, side: Side) -> bool {
+        self.china == side && self.china_up
+    }
     pub fn china(&self) -> Side {
         self.china
     }

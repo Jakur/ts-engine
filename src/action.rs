@@ -16,6 +16,9 @@ impl<'a> Decision<'a> {
             allowed,
         }
     }
+    pub fn new_event(card: Card) -> Self {
+        Decision::new(card.side(), Action::Event(card, None), &[])
+    }
     pub fn new_no_allowed(agent: Side, action: Action<'a>) -> Decision<'a> {
         Decision {
             agent,

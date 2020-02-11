@@ -15,8 +15,8 @@ pub struct GameState {
     pub vp: i8,
     pub defcon: i8,
     pub turn: i8,
-    ar: i8,
-    side: Side,
+    pub ar: i8,
+    pub side: Side,
     space: [i8; 2],
     mil_ops: [i8; 2],
     space_attempts: [i8; 2],
@@ -46,6 +46,25 @@ impl GameState {
             restrict: None,
         }
     }
+    pub fn advance_ply(&mut self) -> Option<Side> {
+        let win = self.check_win();
+        if let Side::US = self.side {
+            self.ar += 1;
+        }
+        self.side = self.side.opposite();
+        win
+    }
+    pub fn check_win(&self) -> Option<Side> {
+        if self.defcon < 2 {
+            return Some(self.side.opposite());
+        }
+        if self.vp >= 20 {
+            return Some(Side::US);
+        } else if self.vp <= -20 {
+            return Some(Side::USSR);
+        }
+        None
+    }
     pub fn side(&self) -> &Side {
         &self.side
     }
@@ -56,10 +75,10 @@ impl GameState {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
-    pub fn choose_card<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>) -> Card {
+    pub fn choose_card<A: Agent, B: Agent>(&self, actors: &Actors<A, B>) -> Card {
         let agent = actors.get(self.side);
         let hand = self.deck.hand(self.side);
-        let china = self.deck.china() == self.side;
+        let china = self.deck.china_available(self.side);
         let (card, _eval) = agent.decide_card(&self, &hand[..], china);
         card
     }
