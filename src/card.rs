@@ -326,7 +326,12 @@ impl Card {
             _ => None,
         }
     }
-    pub fn event(&self, state: &mut GameState, choice: usize) -> bool {
+    pub fn event(
+        &self,
+        state: &mut GameState,
+        choice: usize,
+        pending_actions: &mut Vec<Decision>,
+    ) -> bool {
         use Card::*;
         // let att = self.att();
         if !self.can_event(state) {
@@ -351,7 +356,7 @@ impl Card {
                 let card = state.deck.ussr_hand()[index];
                 if card.att().side == Side::US {
                     let x = Decision::new(Side::US, Action::Event(card, None), &[]);
-                    state.pending_actions.push(x);
+                    pending_actions.push(x);
                     state.deck.play_card(Side::USSR, index, true);
                 } else {
                     state.discard_card(Side::USSR, index);
@@ -363,10 +368,10 @@ impl Card {
                     Action::Remove(Side::US, 1),
                     &country::WESTERN_EUROPE,
                 );
-                state.set_limit(2);
-                state.pending_actions.push(x.clone());
-                state.pending_actions.push(x.clone());
-                state.pending_actions.push(x);
+                state.set_limit(2, pending_actions);
+                pending_actions.push(x.clone());
+                pending_actions.push(x.clone());
+                pending_actions.push(x);
             }
             Fidel => {
                 state.remove_all(Side::US, CName::Cuba);
@@ -377,11 +382,7 @@ impl Card {
                 if choice == 0 {
                     state.remove_all(Side::US, CName::WGermany);
                 } else {
-                    state.pending_actions.push(Decision::new(
-                        Side::US,
-                        Action::Discard(Side::US, 3),
-                        &[],
-                    ))
+                    pending_actions.push(Decision::new(Side::US, Action::Discard(Side::US, 3), &[]))
                 }
             }
             Korean_War => {
@@ -414,11 +415,11 @@ impl Card {
                     Action::Place(Side::USSR, 1, false),
                     &country::EASTERN_EUROPE,
                 );
-                state.set_limit(1);
-                state.pending_actions.push(x.clone());
-                state.pending_actions.push(x.clone());
-                state.pending_actions.push(x.clone());
-                state.pending_actions.push(x);
+                state.set_limit(1, pending_actions);
+                pending_actions.push(x.clone());
+                pending_actions.push(x.clone());
+                pending_actions.push(x.clone());
+                pending_actions.push(x);
             }
             Nasser => {
                 let c = &mut state.countries[CName::Egypt as usize];
@@ -431,16 +432,16 @@ impl Card {
                 }
                 if choice == 0 {
                     for _ in 0..4 {
-                        state.pending_actions.push(Decision::new(
+                        pending_actions.push(Decision::new(
                             Side::USSR,
                             Action::RemoveAll(Side::US, true),
                             &country::EASTERN_EUROPE[..],
                         ));
                     }
                 } else {
-                    state.set_limit(2);
+                    state.set_limit(2, pending_actions);
                     for _ in 0..5 {
-                        state.pending_actions.push(Decision::new(
+                        pending_actions.push(Decision::new(
                             Side::USSR,
                             Action::Place(Side::USSR, 1, true),
                             &country::EASTERN_EUROPE[..],
@@ -458,7 +459,7 @@ impl Card {
             Captured_Nazi_Scientist => {
                 state.space_card(*state.side(), 1); // Todo ensure state.side is accurate
             }
-            Truman_Doctrine => state.pending_actions.push(Decision::new(
+            Truman_Doctrine => pending_actions.push(Decision::new(
                 Side::US,
                 Action::RemoveAll(Side::USSR, false),
                 &country::EUROPE[..],
@@ -484,7 +485,7 @@ impl Card {
                 } else {
                     state.defcon -= 1;
                     let x = Decision::conduct_ops(*state.side(), 4);
-                    state.pending_actions.push(x);
+                    pending_actions.push(x);
                 }
             }
             NATO => {
@@ -511,27 +512,25 @@ impl Card {
                 if !state.us_effects.contains(&Effect::AllowNato) {
                     state.us_effects.push(Effect::AllowNato);
                 }
-                state.set_limit(1);
+                state.set_limit(1, pending_actions);
                 for _ in 0..7 {
-                    state.pending_actions.push(Decision::new(
+                    pending_actions.push(Decision::new(
                         Side::US,
                         Action::Place(Side::US, 1, false),
                         &country::WESTERN_EUROPE[..],
                     ));
                 }
             }
-            Indo_Pakistani_War => state.pending_actions.push(Decision::new(
+            Indo_Pakistani_War => pending_actions.push(Decision::new(
                 *state.side(),
                 Action::War(*state.side(), false),
                 &country::INDIA_PAKISTAN[..],
             )),
             Containment => state.us_effects.push(Effect::Containment),
             CIA_Created => {
+                let offset = std::cmp::max(0, state.base_ops_offset(Side::US));
                 state.us_effects.push(Effect::USSR_Hand_Revealed);
-                // Todo see what affects ops value
-                state
-                    .pending_actions
-                    .push(Decision::conduct_ops(Side::US, 1));
+                pending_actions.push(Decision::conduct_ops(Side::US, 1 + offset));
             }
             US_Japan_Mutual_Defense_Pact => {
                 state.control(Side::US, CName::Japan);
@@ -539,9 +538,9 @@ impl Card {
                 state.us_effects.push(Effect::US_Japan);
             }
             Suez_Crisis => {
-                state.set_limit(2);
+                state.set_limit(2, pending_actions);
                 for _ in 0..4 {
-                    state.pending_actions.push(Decision::new(
+                    pending_actions.push(Decision::new(
                         Side::USSR,
                         Action::Remove(Side::US, 1),
                         &country::SUEZ,
@@ -550,9 +549,9 @@ impl Card {
             }
             East_European_Unrest => {
                 let value = if state.turn <= 7 { 1 } else { 2 };
-                state.set_limit(1);
+                state.set_limit(1, pending_actions);
                 for _ in 0..3 {
-                    state.pending_actions.push(Decision::new(
+                    pending_actions.push(Decision::new(
                         Side::US,
                         Action::Remove(Side::USSR, value),
                         &country::EASTERN_EUROPE,
@@ -560,9 +559,9 @@ impl Card {
                 }
             }
             Decolonization => {
-                state.set_limit(1);
+                state.set_limit(1, pending_actions);
                 for _ in 0..4 {
-                    state.pending_actions.push(Decision::new(
+                    pending_actions.push(Decision::new(
                         Side::USSR,
                         Action::Place(Side::USSR, 1, true),
                         &country::DECOL,
@@ -574,24 +573,22 @@ impl Card {
                 let card = state.deck.grab_card(*state.side(), choice);
                 state.deck.discard_pile.push(card);
                 let ops = card.ops();
-                state
-                    .pending_actions
-                    .push(Decision::conduct_ops(*state.side(), ops));
+                pending_actions.push(Decision::conduct_ops(*state.side(), ops));
             }
             De_Stalinization => {
-                state.pending_actions.push(Decision::restriction_clear());
+                pending_actions.push(Decision::restriction_clear());
                 // Todo fix &[] for place to be world
                 for _ in 0..4 {
-                    state.pending_actions.push(Decision::new(
+                    pending_actions.push(Decision::new(
                         Side::USSR,
                         Action::Place(Side::USSR, 1, false),
                         &[],
                     ))
                 }
                 // Limit only applies to placement. This may be a singular case
-                state.pending_actions.push(Decision::limit_set(2));
+                pending_actions.push(Decision::limit_set(2));
                 for _ in 0..4 {
-                    state.pending_actions.push(Decision::new(
+                    pending_actions.push(Decision::new(
                         Side::USSR,
                         Action::Remove(Side::USSR, 1),
                         &[],
