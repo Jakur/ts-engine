@@ -41,6 +41,10 @@ impl Deck {
             Side::Neutral => unimplemented!(),
         }
     }
+    pub fn held_scoring(&self, side: Side) -> bool {
+        let hand = self.hand(side);
+        hand.iter().any(|x| x.is_scoring())
+    }
     pub fn draw_cards(&mut self, target: usize) {
         let mut pick_ussr = true;
         // Oscillating is relevant when reshuffles do occur

@@ -20,7 +20,12 @@ impl<A: Agent, B: Agent> Game<A, B> {
             };
         }
         if let Some(winner) = instant_win {
-            (winner, self.state.vp)
+            // Always make instant wins 20 point victories
+            if let Side::USSR = winner {
+                (winner, -20)
+            } else {
+                (winner, 20)
+            }
         } else {
             self.final_scoring()
         }
@@ -40,6 +45,16 @@ impl<A: Agent, B: Agent> Game<A, B> {
             if win.is_some() {
                 return win;
             }
+        }
+        let us_held = self.state.deck.held_scoring(Side::US);
+        let ussr_held = self.state.deck.held_scoring(Side::USSR);
+        // Holding cards is illegal, but it's possible in the physical game
+        if us_held && ussr_held {
+            return Some(Side::US); // US wins if both players cheat
+        } else if us_held {
+            return Some(Side::USSR);
+        } else if ussr_held {
+            return Some(Side::US);
         }
         self.state.turn += 1;
         None
