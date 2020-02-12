@@ -79,8 +79,8 @@ impl GameState {
         let agent = actors.get(self.side);
         let hand = self.deck.hand(self.side);
         let china = self.deck.china_available(self.side);
-        let (card, _eval) = agent.decide_card(&self, &hand[..], china);
-        card
+        let (card, _eval) = agent.decide_card(&self, &hand[..], china, true);
+        card.unwrap() // Todo manage the pass case
     }
     pub fn use_card(&mut self, card: Card, pending_actions: &mut Vec<Decision>) {
         use std::iter::repeat;
@@ -146,6 +146,8 @@ impl GameState {
             }
         }
         pending_actions.push(d(self.side, Action::AfterStates(vec)));
+        // Todo make sure agent knows which card is being used
+        self.deck.play_card(self.side, card);
     }
     /// Returns the standard allowed actions if they differ from the decision
     /// slice, or else None.
@@ -178,7 +180,6 @@ impl GameState {
                         .collect(),
                 )
             }
-            Action::Discard(side, ops_min) => Some(self.cards_above_value(*side, *ops_min)),
             Action::Coup(_, _) | Action::Realignment => {
                 let opp = agent.opposite();
                 let valid = |v: &'static Vec<usize>| {
@@ -361,8 +362,25 @@ impl GameState {
                 }
                 _ => {}
             }
-            let computed_allowed = self.standard_allowed(&dec, &history, &pending_actions);
             let agent = actors.get(dec.agent);
+            match dec.action {
+                Action::Space => {
+                    let roll = self.roll();
+                    self.space_card(dec.agent, roll);
+                    // No decision necessary, just get eval
+                    return agent.get_eval(&self);
+                }
+                Action::Discard(side, ops) => {
+                    let allowed = self.cards_at_least(side, ops);
+                    let (choice, eval) = agent.decide_card(&self, &allowed, false, false);
+                    if let Some(c) = choice {
+                        self.discard_card(side, c);
+                    }
+                    return eval;
+                }
+                _ => {}
+            }
+            let computed_allowed = self.standard_allowed(&dec, &history, &pending_actions);
             let decision = {
                 match computed_allowed {
                     Some(vec) => agent.decide_action(&self, &vec[..], dec.action.clone()),
@@ -418,20 +436,10 @@ impl GameState {
                         self.take_coup(dec.agent, choice, ops, roll, free);
                     }
                 }
-                Action::Space => {
-                    // Todo don't need choice?
-                    let roll = self.roll();
-                    self.space_card(dec.agent, roll);
-                }
                 Action::Event(card, num) => {
                     let went_off = card.event(self, num.unwrap_or(0), &mut pending_actions);
                     if card.is_starred() && went_off {
                         self.deck.remove_card(card);
-                    }
-                }
-                Action::Discard(side, _ops) => {
-                    if let Some(choice) = choice {
-                        self.discard_card(side, choice);
                     }
                 }
                 Action::Remove(side, num) => {
@@ -481,7 +489,10 @@ impl GameState {
                     }
                     self.war_target(side, choice.unwrap(), roll);
                 }
-                Action::ClearRestriction | Action::SetLimit(_) => unreachable!(), // We should remove this earlier
+                Action::ClearRestriction
+                | Action::SetLimit(_)
+                | Action::Space
+                | Action::Discard(_, _) => unreachable!(), // We should remove these earlier
             }
         }
         // self.pending_actions = Vec::new();
@@ -667,38 +678,25 @@ impl GameState {
             self.mil_ops[x] = std::cmp::max(5, self.mil_ops[x] + ops);
         }
     }
-    pub fn random_card(&mut self, side: Side) -> usize {
-        // Todo figure out if this should end up in the Deck struct
-        let end = match side {
-            Side::US => self.deck.us_hand().len(),
-            Side::USSR => self.deck.ussr_hand().len(),
-            _ => unimplemented!(),
-        };
-        self.rng.gen_range(0, end)
+    pub fn discard_card(&mut self, side: Side, card: Card) {
+        self.deck.play_card(side, card);
     }
-    pub fn discard_card(&mut self, side: Side, index: usize) {
-        self.deck.play_card(side, index, false);
-    }
-    /// Filters cards above a certain value, as could be relevant to discarding
-    /// or spacing.
-    pub fn cards_above_value(&self, side: Side, val: i8) -> Vec<usize> {
+    /// Filters cards greater than or equal to a certain value, as could be relevant
+    /// to discarding or spacing.
+    pub fn cards_at_least(&self, side: Side, val: i8) -> Vec<Card> {
         let cards = self.deck.hand(side);
         let offset = self.base_ops_offset(side);
         cards
             .iter()
-            .enumerate()
-            .filter_map(|(i, c)| {
+            .copied()
+            .filter(|c| {
                 let mut x = c.ops() + offset;
                 if x < 1 {
                     x = 1;
                 } else if x > 4 {
                     x = 4;
                 }
-                if x > val {
-                    Some(i)
-                } else {
-                    None
-                }
+                x >= val
             })
             .collect()
     }
@@ -885,6 +883,8 @@ mod tests {
         let cards = &[Card::Duck_and_Cover, Card::Arab_Israeli_War, Card::Blockade];
         let sizes = &[7, 5, 4];
         for (&c, &s) in cards.into_iter().zip(sizes.into_iter()) {
+            // Todo allow for play where we only simulate one side
+            state.deck.ussr_hand_mut().push(c);
             let mut pending = Vec::new();
             state.use_card(c, &mut pending);
             let x = &pending.pop().unwrap();

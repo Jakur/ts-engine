@@ -31,13 +31,26 @@ where
 }
 
 pub trait Agent {
+    /// Decides a country to act upon, or None if there is no legal option. Also
+    /// includes a numerical evaluation of the position from the agent's perspective.
     fn decide_action(
         &self,
         state: &GameState,
         choices: &[usize],
         action: Action,
     ) -> (Option<usize>, f32);
-    fn decide_card(&self, state: &GameState, hand: &[Card], china: bool) -> (Card, f32);
+    /// Picks a card among valid options for an action, either picking a card
+    /// to play or else to discard. Also includes a numerical evaluation of the
+    /// position from the agent's perspective.
+    fn decide_card(
+        &self,
+        state: &GameState,
+        hand: &[Card],
+        china: bool,
+        play: bool,
+    ) -> (Option<Card>, f32);
+    /// Returns just the evaluation of the given position
+    fn get_eval(&self, state: &GameState) -> f32;
 }
 
 #[derive(Clone)]
@@ -78,7 +91,16 @@ impl<'a> Agent for DebugAgent<'a> {
         };
         (choice, eval)
     }
-    fn decide_card(&self, _state: &GameState, _hand: &[Card], _china: bool) -> (Card, f32) {
+    fn decide_card(
+        &self,
+        _state: &GameState,
+        _hand: &[Card],
+        _china: bool,
+        _play: bool,
+    ) -> (Option<Card>, f32) {
+        todo!()
+    }
+    fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
 }
@@ -99,7 +121,13 @@ impl Agent for RandAgent {
         let choice = x.gen_range(0, choices.len());
         (Some(choices[choice]), x.gen())
     }
-    fn decide_card(&self, _state: &GameState, hand: &[Card], china: bool) -> (Card, f32) {
+    fn decide_card(
+        &self,
+        _state: &GameState,
+        hand: &[Card],
+        china: bool,
+        _play: bool,
+    ) -> (Option<Card>, f32) {
         let mut x = thread_rng();
         if hand.len() > 0 {
             let choice = if china {
@@ -112,15 +140,18 @@ impl Agent for RandAgent {
             } else {
                 hand[choice]
             };
-            (card, x.gen())
+            (Some(card), x.gen())
         } else {
-            let choices = &[Card::Pass, Card::The_China_Card];
+            let choices = &[None, Some(Card::The_China_Card)];
             // A player cannot be forced to play the China card
             if china {
                 (choices[x.gen_range(0, 2)], x.gen())
             } else {
-                (Card::Pass, x.gen())
+                (None, x.gen())
             }
         }
+    }
+    fn get_eval(&self, _state: &GameState) -> f32 {
+        todo!()
     }
 }

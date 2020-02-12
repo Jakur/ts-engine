@@ -10,6 +10,7 @@ pub struct Game<A: Agent, B: Agent> {
 
 impl<A: Agent, B: Agent> Game<A, B> {
     pub fn play(&mut self) -> (Side, i8) {
+        self.state.initial_placement(&self.actors);
         let mut instant_win = None;
         while instant_win.is_none() && self.state.turn <= 10 {
             // Todo add mid war / late war cards to deck
@@ -66,13 +67,18 @@ impl<A: Agent, B: Agent> Game<A, B> {
             &self.state,
             self.state.deck.ussr_hand(),
             self.state.deck.china_available(Side::USSR),
+            true,
         );
         let us = &self.actors.us_agent;
         let (us_card, _us_eval) = us.decide_card(
             &self.state,
             self.state.deck.us_hand(),
             self.state.deck.china_available(Side::US),
+            true,
         );
+        // Hands cannot be empty at the HL phase
+        let us_card = us_card.unwrap();
+        let ussr_card = ussr_card.unwrap();
         // Headline order
         let pending = if us_card.ops() >= ussr_card.ops() {
             vec![Decision::new_event(ussr_card), Decision::new_event(us_card)]

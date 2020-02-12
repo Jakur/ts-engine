@@ -77,6 +77,11 @@ impl Deck {
             false
         }
     }
+    pub fn random_card(&self, side: Side) -> Option<&Card> {
+        let hand = self.hand(side);
+        let mut rng = thread_rng();
+        hand.choose(&mut rng)
+    }
     /// Draws the next card from the draw pile, reshuffling if necessary.
     fn draw_card(&mut self) -> Card {
         match self.draw_pile.pop() {
@@ -97,8 +102,14 @@ impl Deck {
             _ => unimplemented!(),
         }
     }
+    pub fn us_hand_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.us_hand
+    }
     pub fn us_hand(&self) -> &Vec<Card> {
         &self.us_hand
+    }
+    pub fn ussr_hand_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.ussr_hand
     }
     pub fn ussr_hand(&self) -> &Vec<Card> {
         &self.ussr_hand
@@ -116,16 +127,20 @@ impl Deck {
         self.china = self.china.opposite();
         self.china_up = false;
     }
-    pub fn play_card(&mut self, side: Side, index: usize, evented: bool) {
+    pub fn play_card(&mut self, side: Side, card: Card) {
         let hand = match side {
             Side::US => &mut self.us_hand,
             Side::USSR => &mut self.ussr_hand,
             Side::Neutral => unimplemented!(),
         };
-        let card = hand.swap_remove(index);
-        if evented && card.att().starred {
-            self.removed.push(card);
+        if let Card::The_China_Card = card {
+            self.play_china();
         } else {
+            let index = hand
+                .iter()
+                .position(|&c| c == card)
+                .expect("Valid card in hand");
+            let card = hand.swap_remove(index);
             self.discard_pile.push(card);
         }
     }
@@ -232,7 +247,6 @@ fn init_cards() -> Vec<Attributes> {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Card {
-    Pass = 0,
     Asia_Scoring = 1,
     Europe_Scoring,
     Middle_East_Scoring,
@@ -278,7 +292,7 @@ impl Card {
         use Card::*;
         match self {
             Blockade => {
-                if !state.cards_above_value(Side::US, 3).is_empty() {
+                if !state.cards_at_least(Side::US, 3).is_empty() {
                     Some(vec![0, 1])
                 } else {
                     None
@@ -359,14 +373,13 @@ impl Card {
                 state.vp += 5 - state.defcon;
             }
             Five_Year_Plan => {
-                let index = state.random_card(Side::USSR);
-                let card = state.deck.ussr_hand()[index];
-                if card.att().side == Side::US {
-                    let x = Decision::new(Side::US, Action::Event(card, None), &[]);
-                    pending_actions.push(x);
-                    state.deck.play_card(Side::USSR, index, true);
-                } else {
-                    state.discard_card(Side::USSR, index);
+                let card = state.deck.random_card(Side::USSR);
+                if let Some(&card) = card {
+                    if card.att().side == Side::US {
+                        let x = Decision::new(Side::US, Action::Event(card, None), &[]);
+                        pending_actions.push(x);
+                    }
+                    state.discard_card(Side::USSR, card);
                 }
             }
             Socialist_Governments => {
