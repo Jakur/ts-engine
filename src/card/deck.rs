@@ -34,6 +34,16 @@ impl Deck {
         let hand = self.hand(side);
         hand.iter().any(|x| x.is_scoring())
     }
+    /// Determines if the side has a position where the requirement to play
+    /// scoring cards overwhelms other effect obligations, e.g. Bear Trap and
+    /// Missile Envy.
+    pub fn must_play_scoring(&self, side: Side, ar_left: i8) -> bool {
+        let scoring_count =
+            self.hand(side)
+                .iter()
+                .fold(0, |acc, x| if x.is_scoring() { acc + 1 } else { acc });
+        scoring_count >= ar_left
+    }
     pub fn draw_cards(&mut self, target: usize) {
         let mut pick_ussr = true;
         // Oscillating is relevant when reshuffles do occur
@@ -79,16 +89,6 @@ impl Deck {
                 self.reshuffle();
                 self.draw_card()
             }
-        }
-    }
-    /// Removes and returns the card from the given index.
-    /// # Panics
-    /// If the index is out of bounds for the hand
-    pub fn grab_card(&mut self, side: Side, index: usize) -> Card {
-        match side {
-            Side::US => self.us_hand.swap_remove(index),
-            Side::USSR => self.ussr_hand.swap_remove(index),
-            _ => unimplemented!(),
         }
     }
     pub fn us_hand_mut(&mut self) -> &mut Vec<Card> {

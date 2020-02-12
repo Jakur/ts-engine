@@ -32,12 +32,24 @@ impl<A: Agent, B: Agent> Game<A, B> {
         }
     }
     fn do_turn(&mut self, goal_ar: i8) -> Option<Side> {
+        use std::cmp::max;
         self.state.ar = 0;
         self.state.side = Side::USSR;
         self.headline();
         self.state.ar = 1;
         while self.state.ar <= goal_ar {
-            // Todo AR 8 space power
+            // AR 8 space power
+            // Todo North Sea Oil
+            if self.state.ar == 8 {
+                let space = self.state.space[self.state.side as usize];
+                if space < 8 {
+                    let win = self.state.advance_ply();
+                    if win.is_some() {
+                        return win;
+                    }
+                    continue;
+                }
+            }
             let mut pending = Vec::new();
             let card = self.state.choose_card(&self.actors);
             self.state.use_card(card, &mut pending);
@@ -57,6 +69,13 @@ impl<A: Agent, B: Agent> Game<A, B> {
         } else if ussr_held {
             return Some(Side::US);
         }
+        // Mil ops
+        let defcon = self.state.defcon;
+        let us_pen = max(defcon - self.state.mil_ops[Side::US as usize], 0);
+        let ussr_pen = max(defcon - self.state.mil_ops[Side::USSR as usize], 0);
+        // These are penalties, so the signs are reversed from usual
+        self.state.vp -= us_pen;
+        self.state.vp += ussr_pen;
         self.state.turn += 1;
         None
     }
@@ -94,7 +113,24 @@ impl<A: Agent, B: Agent> Game<A, B> {
             self.state.resolve_actions(&self.actors, vec![decisions.1]);
         }
     }
-    fn final_scoring(&self) -> (Side, i8) {
-        todo!()
+    fn final_scoring(&mut self) -> (Side, i8) {
+        use crate::country::Region::*;
+        // Score Europe last, to let autoset to +20 vp
+        let order = [
+            Asia,
+            MiddleEast,
+            Africa,
+            CentralAmerica,
+            SouthAmerica,
+            Europe,
+        ];
+        for r in order.into_iter() {
+            r.score(&mut self.state);
+        }
+        if self.state.vp >= 0 {
+            (Side::US, self.state.vp)
+        } else {
+            (Side::USSR, self.state.vp)
+        }
     }
 }

@@ -17,8 +17,8 @@ pub struct GameState {
     pub turn: i8,
     pub ar: i8,
     pub side: Side,
-    space: [i8; 2],
-    mil_ops: [i8; 2],
+    pub space: [i8; 2],
+    pub mil_ops: [i8; 2],
     space_attempts: [i8; 2],
     pub us_effects: Vec<Effect>,
     pub ussr_effects: Vec<Effect>,
@@ -729,6 +729,9 @@ impl GameState {
         let me = side as usize;
         let opp = side.opposite() as usize;
         let my_space = self.space[me];
+        if my_space >= 8 {
+            return false; // Space race completed!
+        }
         let space_allowed = self.space_attempts[me] < 1
             || self.space_attempts[me] < 2 && my_space >= 2 && self.space[opp] < 2;
         if my_space <= 3 {
