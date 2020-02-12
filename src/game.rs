@@ -79,13 +79,20 @@ impl<A: Agent, B: Agent> Game<A, B> {
         // Hands cannot be empty at the HL phase
         let us_card = us_card.unwrap();
         let ussr_card = ussr_card.unwrap();
+        let decisions = (Decision::new_event(ussr_card), Decision::new_event(us_card));
+
         // Headline order
-        let pending = if us_card.ops() >= ussr_card.ops() {
-            vec![Decision::new_event(ussr_card), Decision::new_event(us_card)]
+        if us_card.ops() >= ussr_card.ops() {
+            self.state.side = Side::US;
+            self.state.resolve_actions(&self.actors, vec![decisions.1]);
+            self.state.side = Side::USSR;
+            self.state.resolve_actions(&self.actors, vec![decisions.0]);
         } else {
-            vec![Decision::new_event(us_card), Decision::new_event(ussr_card)]
-        };
-        self.state.resolve_actions(&self.actors, pending);
+            self.state.side = Side::USSR;
+            self.state.resolve_actions(&self.actors, vec![decisions.0]);
+            self.state.side = Side::US;
+            self.state.resolve_actions(&self.actors, vec![decisions.1]);
+        }
     }
     fn final_scoring(&self) -> (Side, i8) {
         todo!()
