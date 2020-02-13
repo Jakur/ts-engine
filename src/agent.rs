@@ -45,9 +45,10 @@ pub trait Agent {
     fn decide_card(
         &self,
         state: &GameState,
-        hand: &[Card],
+        cards: &[Card],
         china: bool,
         play: bool,
+        can_pass: bool,
     ) -> (Option<Card>, f32);
     /// Returns just the evaluation of the given position
     fn get_eval(&self, state: &GameState) -> f32;
@@ -94,9 +95,10 @@ impl<'a> Agent for DebugAgent<'a> {
     fn decide_card(
         &self,
         _state: &GameState,
-        _hand: &[Card],
+        _cards: &[Card],
         _china: bool,
         _play: bool,
+        _can_pass: bool,
     ) -> (Option<Card>, f32) {
         todo!()
     }
@@ -127,6 +129,7 @@ impl Agent for RandAgent {
         hand: &[Card],
         china: bool,
         _play: bool,
+        _can_pass: bool,
     ) -> (Option<Card>, f32) {
         let mut x = thread_rng();
         if hand.len() > 0 {
@@ -152,6 +155,6 @@ impl Agent for RandAgent {
         }
     }
     fn get_eval(&self, _state: &GameState) -> f32 {
-        todo!()
+        thread_rng().gen()
     }
 }

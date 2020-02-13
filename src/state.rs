@@ -75,12 +75,16 @@ impl GameState {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
-    pub fn choose_card<A: Agent, B: Agent>(&self, actors: &Actors<A, B>) -> Card {
+    pub fn choose_card<A: Agent, B: Agent>(
+        &self,
+        actors: &Actors<A, B>,
+        can_pass: bool,
+    ) -> Option<Card> {
         let agent = actors.get(self.side);
         let hand = self.deck.hand(self.side);
         let china = self.deck.china_available(self.side);
-        let (card, _eval) = agent.decide_card(&self, &hand[..], china, true);
-        card.unwrap() // Todo manage the pass case
+        let (card, _eval) = agent.decide_card(&self, &hand[..], china, true, can_pass);
+        card
     }
     pub fn use_card(&mut self, card: Card, pending_actions: &mut Vec<Decision>) {
         use std::iter::repeat;
@@ -411,7 +415,7 @@ impl GameState {
                 }
                 Action::Discard(side, ops) => {
                     let allowed = self.cards_at_least(side, ops);
-                    let (choice, eval) = agent.decide_card(&self, &allowed, false, false);
+                    let (choice, eval) = agent.decide_card(&self, &allowed, false, false, false);
                     if let Some(c) = choice {
                         self.discard_card(side, c);
                     }

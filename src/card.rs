@@ -483,6 +483,10 @@ impl Card {
             _ => true, // todo make this accurate
         }
     }
+    pub fn can_headline(&self, state: &GameState) -> bool {
+        // Todo make sure this is right
+        self.can_event(state) && *self != Card::UN_Intervention
+    }
     pub fn is_starred(&self) -> bool {
         self.att().starred
     }

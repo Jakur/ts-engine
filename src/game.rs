@@ -1,5 +1,6 @@
 use crate::action::Decision;
 use crate::agent::{Actors, Agent};
+use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
 
@@ -40,6 +41,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         while self.state.ar <= goal_ar {
             // AR 8 space power
             // Todo North Sea Oil
+            let mut can_pass = false;
             if self.state.ar == 8 {
                 let space = self.state.space[self.state.side as usize];
                 if space < 8 {
@@ -49,10 +51,13 @@ impl<A: Agent, B: Agent> Game<A, B> {
                     }
                     continue;
                 }
+                can_pass = true;
             }
             let mut pending = Vec::new();
-            let card = self.state.choose_card(&self.actors);
-            self.state.use_card(card, &mut pending);
+            let card = self.state.choose_card(&self.actors, can_pass);
+            if let Some(c) = card {
+                self.state.use_card(c, &mut pending);
+            }
             self.state.resolve_actions(&self.actors, pending);
             let win = self.state.advance_ply();
             if win.is_some() {
@@ -82,18 +87,26 @@ impl<A: Agent, B: Agent> Game<A, B> {
     fn headline(&mut self) {
         // Todo see headline ability, can event card
         let ussr = &self.actors.ussr_agent;
+        let hl = |vec: &Vec<Card>| -> Vec<Card> {
+            vec.iter()
+                .copied()
+                .filter(|c| c.can_headline(&self.state))
+                .collect()
+        };
         let (ussr_card, _ussr_eval) = ussr.decide_card(
             &self.state,
-            self.state.deck.ussr_hand(),
-            self.state.deck.china_available(Side::USSR),
+            &hl(self.state.deck.ussr_hand()),
+            false,
             true,
+            false,
         );
         let us = &self.actors.us_agent;
         let (us_card, _us_eval) = us.decide_card(
             &self.state,
-            self.state.deck.us_hand(),
-            self.state.deck.china_available(Side::US),
+            &hl(self.state.deck.us_hand()),
+            false,
             true,
+            false,
         );
         // Hands cannot be empty at the HL phase
         let us_card = us_card.unwrap();
