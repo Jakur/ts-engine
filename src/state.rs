@@ -201,7 +201,30 @@ impl GameState {
                     vec.extend(valid(&ASIA));
                 }
                 if self.defcon >= 5 {
-                    vec.extend(valid(&EUROPE));
+                    if dec.agent == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some()
+                    {
+                        let mut set: HashSet<usize> = EUROPE
+                            .iter()
+                            .filter_map(|&x| {
+                                let c = &self.countries[x];
+                                if c.has_influence(opp) && c.controller() != Side::US {
+                                    Some(x)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        // Todo other NATO exceptions
+                        let france = &self.countries[CName::France as usize];
+                        if france.controller() == Side::US {
+                            if self.has_effect(Side::USSR, Effect::DeGaulle).is_some() {
+                                set.insert(CName::France as usize);
+                            }
+                        }
+                        vec.extend(set.iter());
+                    } else {
+                        vec.extend(valid(&EUROPE));
+                    }
                 }
                 Some(vec)
             }
@@ -215,6 +238,22 @@ impl GameState {
                     })
                     .collect(),
             ),
+            Action::War(side, brush) if *brush => {
+                if *side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some() {
+                    Some(
+                        BRUSH_TARGETS
+                            .iter()
+                            .copied()
+                            .filter(|&i| {
+                                !(Region::Europe.has_country(i)
+                                    && self.countries[i].controller() == Side::US)
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None // Default
+                }
+            }
             _ => None,
         };
         match action {

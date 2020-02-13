@@ -29,6 +29,17 @@ lazy_static! {
         .cloned()
         .chain(SOUTHEAST_ASIA.iter().cloned())
         .collect();
+    pub static ref BRUSH_TARGETS: Vec<usize> = countries()
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            if c.stability <= 2 {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect();
     pub static ref EDGES: Vec<Vec<usize>> = adjacency_list();
 }
 
