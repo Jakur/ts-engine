@@ -6,6 +6,7 @@ pub struct Decision<'a> {
     pub agent: Side,
     pub action: Action<'a>,
     pub allowed: &'a [usize],
+    pub quantity: i8,
 }
 
 impl<'a> Decision<'a> {
@@ -14,6 +15,7 @@ impl<'a> Decision<'a> {
             agent,
             action,
             allowed,
+            quantity: 1, // Todo fix
         }
     }
     pub fn new_event(card: Card) -> Self {
@@ -24,6 +26,7 @@ impl<'a> Decision<'a> {
             agent,
             action,
             allowed: &[],
+            quantity: 1, // Todo fix
         }
     }
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision<'a> {

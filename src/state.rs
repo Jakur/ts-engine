@@ -25,6 +25,7 @@ pub struct GameState {
     pub rng: SmallRng,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
+    pub last_card: Option<Card>,
 }
 
 impl GameState {
@@ -44,6 +45,7 @@ impl GameState {
             rng: SmallRng::from_entropy(),
             deck: Deck::new(),
             restrict: None,
+            last_card: None,
         }
     }
     pub fn advance_ply(&mut self) -> Option<Side> {
@@ -165,6 +167,7 @@ impl GameState {
             agent,
             action,
             allowed,
+            quantity,
         } = dec;
         let mut vec = match action {
             Action::StandardOps => Some(access(self, *agent)),
@@ -331,6 +334,76 @@ impl GameState {
             }
         }
         vec
+    }
+    pub fn resolve_action(
+        &mut self,
+        pending: &mut Vec<Decision>,
+        choice: usize,
+        history: &Vec<usize>,
+    ) {
+        let mut decision = pending.pop().unwrap();
+        let china_active = match self.last_card {
+            Some(c) if c == Card::The_China_Card => {
+                history.iter().all(|c| Region::Asia.has_country(*c))
+            }
+            _ => false,
+        };
+        let vietnam_active = {
+            if decision.agent == Side::USSR
+                && self
+                    .has_effect(Side::USSR, Effect::VietnamRevolts)
+                    .is_some()
+            {
+                history
+                    .iter()
+                    .all(|c| Region::SoutheastAsia.has_country(*c))
+            } else {
+                false
+            }
+        };
+        let side = decision.agent;
+        match decision.action {
+            Action::Event(card, _trash) => {
+                card.event(self, choice, pending);
+            }
+            Action::Coup(ops, free_coup) => {
+                let roll = self.roll(); // Todo more flexible entropy source
+                self.take_coup(side, choice, ops, roll, free_coup);
+            }
+            Action::Place(side, amount, _allow) => {
+                for _ in 0..amount {
+                    self.add_influence(side, choice);
+                }
+            }
+            Action::StandardOps => {
+                let cost = self.add_influence(side, choice);
+                if cost == 2 {
+                    decision.quantity -= 1; // Additional 1
+                }
+            }
+            Action::Remove(s, q) => {
+                self.remove_influence(s, choice, q);
+            }
+            Action::RemoveAll(s, _allowed) => {
+                self.remove_all(s, choice);
+            }
+            Action::War(s, brush) => {
+                let mut roll = self.roll();
+                if brush {
+                    roll += 1;
+                }
+                self.war_target(s, choice, roll);
+            }
+            Action::Realignment => {
+                let (us_roll, ussr_roll) = (self.roll(), self.roll());
+                self.take_realign(choice, us_roll, ussr_roll);
+            }
+            _ => todo!(),
+        }
+        decision.quantity -= 1;
+        if decision.quantity > 0 {
+            pending.push(decision);
+        }
     }
     pub fn resolve_actions<A: Agent, B: Agent>(
         &mut self,

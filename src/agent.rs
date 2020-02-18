@@ -31,6 +31,14 @@ where
 }
 
 pub trait Agent {
+    fn step(&self, state: &mut GameState) {
+        // Get v hat of current state, this could be cached as a field
+        // Compute forward pass of network for state w/ pending actions
+        // Use method on state to find all legal actions to mask our network
+        // Choose action using some policy, send it to be resolved
+        // Get the reward and compute v hat of the resulting state
+        // Eventually compute the losses of the two "heads" and do a backward pass
+    }
     /// Decides a country to act upon, or None if there is no legal option. Also
     /// includes a numerical evaluation of the position from the agent's perspective.
     fn decide_action(
