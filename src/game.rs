@@ -114,7 +114,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         let decisions = (Decision::new_event(ussr_card), Decision::new_event(us_card));
 
         // Headline order
-        if us_card.ops() >= ussr_card.ops() {
+        if us_card.base_ops() >= ussr_card.base_ops() {
             self.state.side = Side::US;
             self.state.resolve_actions(&self.actors, vec![decisions.1]);
             self.state.side = Side::USSR;

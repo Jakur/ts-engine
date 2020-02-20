@@ -52,7 +52,7 @@ pub enum Action {
     ConductOps,
     StandardOps,
     Coup(i8, bool), // Ops, Free
-    Space,
+    Space(Card),
     Realignment,
     Place(Side, i8, bool),      //Side, amount, can place in opponent controlled
     Remove(Side, i8),           // Side, amount

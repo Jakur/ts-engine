@@ -217,6 +217,8 @@ impl Card {
                 let card = state.deck.random_card(Side::USSR);
                 if let Some(&card) = card {
                     if card.att().side == Side::US {
+                        // Todo find out of the US really has agency in these decisions?
+                        // Just Chernobyl?
                         let x = Decision::new(Side::US, Action::Event(card, None), &[]);
                         pending_actions.push(x);
                     }
@@ -432,7 +434,7 @@ impl Card {
             Red_Scare_Purge => state.add_effect(*state.side(), Effect::RedScarePurge),
             UN_Intervention => {
                 let card = state.deck.hand(*state.side())[choice];
-                let ops = card.ops();
+                let ops = card.modified_ops(*state.side(), state);
                 state.deck.play_card(*state.side(), card);
                 pending_actions.push(Decision::conduct_ops(*state.side(), ops));
             }
@@ -493,7 +495,18 @@ impl Card {
     pub fn is_scoring(&self) -> bool {
         self.att().scoring
     }
-    pub fn ops(&self) -> i8 {
+    pub fn modified_ops(&self, side: Side, state: &GameState) -> i8 {
+        let base_ops = self.base_ops();
+        let offset = state.base_ops_offset(side);
+        if offset == 0 {
+            base_ops
+        } else if offset == -1 {
+            std::cmp::max(1, base_ops + offset)
+        } else { // +1
+            std::cmp::min(4, base_ops + offset)
+        }
+    }
+    pub fn base_ops(&self) -> i8 {
         self.att().ops
     }
     pub fn side(&self) -> Side {

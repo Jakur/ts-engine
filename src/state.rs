@@ -1,4 +1,4 @@
-use crate::action::{Action, Decision, Restriction};
+use crate::action::{Action, Decision, Restriction, EventTime};
 use crate::agent::{Actors, Agent};
 use crate::card::*;
 use crate::country::*;
@@ -105,7 +105,7 @@ impl GameState {
         }
         if !card.is_scoring() {
             let op_event = card.side() == self.side.opposite() && card.can_event(&self);
-            let ops = card.ops() + self.base_ops_offset(self.side);
+            let ops = card.modified_ops(self.side, self);
             if op_event {
                 // Standard Influence Placement
                 let event = d(self.side.opposite(), Action::Event(card, None));
@@ -147,14 +147,59 @@ impl GameState {
             }
 
             // Space
-            if self.can_space(self.side, card.ops()) {
-                vec.push(vec![d(self.side, Action::Space)])
+            if self.can_space(self.side, card.modified_ops(self.side, self)) {
+                vec.push(vec![d(self.side, Action::Space(card))])
             }
         }
         todo!();
         // pending_actions.push(d(self.side, Action::AfterStates(vec)));
         // Todo make sure agent knows which card is being used
         self.deck.play_card(self.side, card);
+    }
+    pub fn card_uses(&self) -> Vec<Action> {
+        let hand = self.deck.hand(self.side);
+        let mut vec = Vec::new();
+        let ops_offset = self.base_ops_offset(self.side);
+        for &c in hand.iter() {
+            let can_event = c.can_event(self);
+            if c.side() == self.side.opposite() {
+                if can_event {
+                    vec.push(Action::PlayCard(c, EventTime::Before));
+                    vec.push(Action::PlayCard(c, EventTime::After));
+                } else { 
+                    // Basically free ops in this case
+                    vec.push(Action::PlayCard(c, EventTime::Never));
+                }
+            } else {
+                if c.is_scoring() {
+                    vec.push(Action::Event(c, Some(0)));
+                    continue;
+                }
+                // Play for ops
+                vec.push(Action::PlayCard(c, EventTime::Never));
+                // Event
+                if can_event {
+                    if let Some(chs) = c.e_choices(self) {
+                        for x in chs {
+                            vec.push(Action::Event(c, Some(x)));
+                        }
+                    } else {
+                        vec.push(Action::Event(c, Some(0)));
+                    }
+                }
+            }
+            if self.can_space(self.side, c.base_ops() + ops_offset) {
+                vec.push(Action::Space(c));
+            }
+        }
+        if self.deck.china_available(self.side) {
+            let china = Card::The_China_Card;
+            vec.push(Action::PlayCard(china, EventTime::Never));
+            if self.can_space(self.side, china.base_ops() + ops_offset) {
+                vec.push(Action::Space(china)) // Legal if not advisable
+            }
+        }
+        vec
     }
     /// Returns the standard allowed actions if they differ from the decision
     /// slice, or else None.
@@ -349,11 +394,9 @@ impl GameState {
         }
         vec
     }
-    pub fn resolve_card(&mut self, decision: Decision, choice: usize) {
-        use num_traits::FromPrimitive;
-        let card = Card::from_usize(choice).unwrap();
+    pub fn resolve_card(&mut self, decision: Decision, card: Card) {
         match decision.action {
-            Action::Space => {
+            Action::Space(_c) => {
                 let roll = self.roll();
                 self.space_card(decision.agent, roll);
                 self.discard_card(decision.agent, card);
@@ -608,7 +651,7 @@ impl GameState {
             .iter()
             .copied()
             .filter(|c| {
-                let mut x = c.ops() + offset;
+                let mut x = c.base_ops() + offset;
                 if x < 1 {
                     x = 1;
                 } else if x > 4 {

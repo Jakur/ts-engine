@@ -1,4 +1,4 @@
-use crate::action::Action;
+use crate::action::{Decision, Action};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
@@ -31,7 +31,7 @@ where
 }
 
 pub trait Agent {
-    fn step(&self, state: &mut GameState);
+    fn step(&self, state: &mut GameState, pending: &mut Vec<Decision>);
     /// Decides a country to act upon, or None if there is no legal option. Also
     /// includes a numerical evaluation of the position from the agent's perspective.
     fn decide_action(
@@ -106,7 +106,7 @@ impl<'a> Agent for DebugAgent<'a> {
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
-    fn step(&self, _: &mut GameState) { 
+    fn step(&self, _: &mut GameState, pending: &mut Vec<Decision>) { 
         unimplemented!() 
     }
 }
@@ -161,7 +161,9 @@ impl Agent for RandAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
     }
-    fn step(&self, state: &mut GameState) { 
-        todo!()
+    fn step(&self, state: &mut GameState, pending: &mut Vec<Decision>) { 
+        if pending.is_empty() {
+
+        }
     }
 }
