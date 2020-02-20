@@ -162,8 +162,27 @@ impl Agent for RandAgent {
         thread_rng().gen()
     }
     fn step(&self, state: &mut GameState, pending: &mut Vec<Decision>) { 
-        if pending.is_empty() {
-
+        let mut rng = thread_rng();
+        if let Some(dec) = pending.pop() {
+            todo!();
+        } else {
+            let uses = state.card_uses();
+            let select = uses.choose(&mut rng).unwrap();
+            let d = Decision::use_card(*state.side(), select.clone());
+            match select {
+                Action::Pass => todo!(),
+                Action::Space(_) => state.resolve_card(d),
+                Action::Event(card, choice) => {
+                    let choice = choice.unwrap(); // Safe from use_card()
+                    card.event(state, choice, pending);
+                }
+                Action::PlayCard(_, _) => pending.push(d),
+                _ => unreachable!(),
+            }
+            if let Action::Pass = select {
+                todo!();
+            }
         }
+
     }
 }

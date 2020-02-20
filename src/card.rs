@@ -245,7 +245,8 @@ impl Card {
                 if choice == 0 {
                     state.remove_all(Side::US, CName::WGermany);
                 } else {
-                    pending_actions.push(Decision::new(Side::US, Action::Discard(Side::US, 3), &[]))
+                    todo!()
+                    // pending_actions.push(Decision::new(Side::US, Action::Discard(Side::US, 3), &[]))
                 }
             }
             Korean_War => {

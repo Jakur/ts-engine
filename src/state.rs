@@ -199,6 +199,9 @@ impl GameState {
                 vec.push(Action::Space(china)) // Legal if not advisable
             }
         }
+        if hand.is_empty() || self.ar == 8 {
+            vec.push(Action::Pass);
+        }
         vec
     }
     /// Returns the standard allowed actions if they differ from the decision
@@ -394,14 +397,14 @@ impl GameState {
         }
         vec
     }
-    pub fn resolve_card(&mut self, decision: Decision, card: Card) {
+    pub fn resolve_card(&mut self, decision: Decision) {
         match decision.action {
-            Action::Space(_c) => {
+            Action::Space(card) => {
                 let roll = self.roll();
                 self.space_card(decision.agent, roll);
                 self.discard_card(decision.agent, card);
             },
-            Action::Discard(side, _min) => {
+            Action::Discard(side, card) => {
                 self.discard_card(side, card);
             }
             _ => unimplemented!(),
