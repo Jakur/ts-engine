@@ -149,7 +149,7 @@ impl Region {
         // Special cases
         match self {
             Europe => {
-                for c in [CName::Finland, CName::Poland, CName::Romania].into_iter() {
+                for c in [CName::Finland, CName::Poland, CName::Romania].iter() {
                     if state.is_controlled(Side::US, *c) {
                         vp_change += 1;
                     }
@@ -167,7 +167,7 @@ impl Region {
                 }
             }
             Asia => {
-                for c in [CName::Afghanistan, CName::NKorea].into_iter() {
+                for c in [CName::Afghanistan, CName::NKorea].iter() {
                     if state.is_controlled(Side::US, *c) {
                         vp_change += 1;
                     }
@@ -189,7 +189,7 @@ impl Region {
                 }
             }
             CentralAmerica => {
-                for c in [CName::Mexico, CName::Cuba].into_iter() {
+                for c in [CName::Mexico, CName::Cuba].iter() {
                     if state.is_controlled(Side::USSR, *c) {
                         vp_change -= 1;
                     }
@@ -461,10 +461,10 @@ pub fn standard_start() -> Vec<Country> {
         (1, SouthAfrica),
         (5, UK),
     ];
-    for (x, y) in ussr.into_iter() {
+    for (x, y) in ussr.iter() {
         c[*y as usize].ussr += x;
     }
-    for (x, y) in us.into_iter() {
+    for (x, y) in us.iter() {
         c[*y as usize].us += x;
     }
     c
@@ -563,11 +563,11 @@ fn countries() -> Vec<Country> {
         (US, 6),
         (USSR, 6),
     ];
-    for (n, s) in bgs.into_iter() {
+    for (n, s) in bgs.iter() {
         let c = Country::new_bg(*s);
         countries[*n as usize] = c;
     }
-    for (n, s) in non.into_iter() {
+    for (n, s) in non.iter() {
         let c = Country::new_non(*s);
         countries[*n as usize] = c;
     }

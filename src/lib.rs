@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
+#[macro_use]
+extern crate num_derive;
+
 pub mod action;
 pub mod agent;
 pub mod card;

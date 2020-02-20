@@ -4,13 +4,13 @@ use crate::country::Side;
 #[derive(Clone)]
 pub struct Decision<'a> {
     pub agent: Side,
-    pub action: Action<'a>,
+    pub action: Action,
     pub allowed: &'a [usize],
     pub quantity: i8,
 }
 
 impl<'a> Decision<'a> {
-    pub fn new(agent: Side, action: Action<'a>, allowed: &'a [usize]) -> Decision<'a> {
+    pub fn new(agent: Side, action: Action, allowed: &'a [usize]) -> Decision<'a> {
         Decision {
             agent,
             action,
@@ -21,7 +21,7 @@ impl<'a> Decision<'a> {
     pub fn new_event(card: Card) -> Self {
         Decision::new(card.side(), Action::Event(card, None), &[])
     }
-    pub fn new_no_allowed(agent: Side, action: Action<'a>) -> Decision<'a> {
+    pub fn new_no_allowed(agent: Side, action: Action) -> Decision<'a> {
         Decision {
             agent,
             action,
@@ -35,21 +35,22 @@ impl<'a> Decision<'a> {
         let coup = vec![d(agent, Action::Coup(ops, false), &[])];
         let realign = vec![d(agent, Action::Realignment, &[]); ops as usize];
         let vec = vec![inf, coup, realign];
-        d(agent, Action::AfterStates(vec), &[])
+        //d(agent, Action::AfterStates(vec), &[])
+        todo!()
     }
     pub fn restriction_clear() -> Decision<'a> {
-        Decision::new(Side::Neutral, Action::ClearRestriction, &[])
+        unimplemented!()
     }
     pub fn limit_set(num: usize) -> Decision<'a> {
-        Decision::new(Side::Neutral, Action::SetLimit(num), &[])
+        unimplemented!()
     }
 }
 
 #[derive(Clone)]
-pub enum Action<'a> {
+pub enum Action {
+    PlayCard(Card, EventTime),
+    ConductOps,
     StandardOps,
-    ChinaInf,
-    VietnamInf,
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
@@ -58,10 +59,14 @@ pub enum Action<'a> {
     RemoveAll(Side, bool),      // Side, can remove in opponent controlled
     Discard(Side, i8),          // Side, ops minimum
     Event(Card, Option<usize>), // Card, Decision in branching events
-    ClearRestriction,
-    AfterStates(Vec<Vec<Decision<'a>>>),
     War(Side, bool), // Side, is brush war?
-    SetLimit(usize),
+}
+
+#[derive(Clone)]
+pub enum EventTime {
+    Before,
+    After,
+    Never
 }
 
 #[derive(Clone)]

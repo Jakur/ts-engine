@@ -31,14 +31,7 @@ where
 }
 
 pub trait Agent {
-    fn step(&self, state: &mut GameState) {
-        // Get v hat of current state, this could be cached as a field
-        // Compute forward pass of network for state w/ pending actions
-        // Use method on state to find all legal actions to mask our network
-        // Choose action using some policy, send it to be resolved
-        // Get the reward and compute v hat of the resulting state
-        // Eventually compute the losses of the two "heads" and do a backward pass
-    }
+    fn step(&self, state: &mut GameState);
     /// Decides a country to act upon, or None if there is no legal option. Also
     /// includes a numerical evaluation of the position from the agent's perspective.
     fn decide_action(
@@ -64,13 +57,13 @@ pub trait Agent {
 
 #[derive(Clone)]
 pub struct DebugAgent<'a> {
-    pub fav_action: Action<'a>,
+    pub fav_action: Action,
     pub fav_card: Card,
     pub choices: &'a [usize],
 }
 
 impl<'a> DebugAgent<'a> {
-    pub fn new(fav_action: Action<'a>, fav_card: Card, choices: &'a [usize]) -> Self {
+    pub fn new(fav_action: Action, fav_card: Card, choices: &'a [usize]) -> Self {
         DebugAgent {
             fav_action,
             fav_card,
@@ -112,6 +105,9 @@ impl<'a> Agent for DebugAgent<'a> {
     }
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
+    }
+    fn step(&self, _: &mut GameState) { 
+        unimplemented!() 
     }
 }
 
@@ -164,5 +160,8 @@ impl Agent for RandAgent {
     }
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
+    }
+    fn step(&self, state: &mut GameState) { 
+        todo!()
     }
 }

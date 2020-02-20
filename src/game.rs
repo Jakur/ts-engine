@@ -137,7 +137,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
             SouthAmerica,
             Europe,
         ];
-        for r in order.into_iter() {
+        for r in order.iter() {
             r.score(&mut self.state);
         }
         if self.state.vp >= 0 {

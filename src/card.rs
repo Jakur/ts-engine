@@ -86,7 +86,7 @@ fn init_cards() -> Vec<Attributes> {
     x
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, FromPrimitive)]
 pub enum Card {
     Asia_Scoring = 1,
     Europe_Scoring,
@@ -507,9 +507,15 @@ impl Card {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use num_traits::FromPrimitive;
     #[test]
     fn check_cards() {
-        let cards = super::init_cards();
-        assert_eq!(cards.len(), 36);
+        let atts = init_cards();
+        assert_eq!(atts.len(), 36);
+        let cards: Vec<_> = (1..36).map(|x| Card::from_u8(x)).collect();
+        for c in cards {
+            assert!(c.is_some());
+        }
     }
 }
