@@ -60,9 +60,11 @@ pub enum Action {
     Place(Side, i8, bool),      //Side, amount, can place in opponent controlled
     Remove(Side, i8),           // Side, amount
     RemoveAll(Side, bool),      // Side, can remove in opponent controlled
-    Discard(Side, Card),          // Side, card
+    Discard(Side),          // Side
     Event(Card, Option<usize>), // Card, Decision in branching events
     War(Side, bool), // Side, is brush war?
+    IndependentReds, // No other event works like this 
+    Destal, // Another special case
     Pass,
 }
 

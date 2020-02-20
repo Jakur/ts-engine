@@ -171,7 +171,7 @@ impl Agent for RandAgent {
             let d = Decision::use_card(*state.side(), select.clone());
             match select {
                 Action::Pass => todo!(),
-                Action::Space(_) => state.resolve_card(d),
+                Action::Space(c) => state.resolve_card(d, *c),
                 Action::Event(card, choice) => {
                     let choice = choice.unwrap(); // Safe from use_card()
                     card.event(state, choice, pending);

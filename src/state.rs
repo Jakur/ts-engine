@@ -398,14 +398,15 @@ impl GameState {
         }
         vec
     }
-    pub fn resolve_card(&mut self, decision: Decision) {
+    pub fn resolve_card(&mut self, decision: Decision, card: Card) {
         match decision.action {
-            Action::Space(card) => {
+            Action::Space(_card) => {
+                // Todo see if space should not have a card parameter? 
                 let roll = self.roll();
                 self.space_card(decision.agent, roll);
                 self.discard_card(decision.agent, card);
             },
-            Action::Discard(side, card) => {
+            Action::Discard(side) => {
                 self.discard_card(side, card);
             }
             _ => unimplemented!(),
