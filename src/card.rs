@@ -133,11 +133,12 @@ impl Card {
         use Card::*;
         match self {
             Blockade => {
-                if !state.cards_at_least(Side::US, 3).is_empty() {
-                    Some(vec![0, 1])
-                } else {
-                    None
-                }
+                let mut discards: Vec<_> = state.cards_at_least(Side::US, 3).into_iter().map(|i| {
+                    let card_id = state.deck.us_hand()[i] as usize;
+                    card_id
+                }).collect();
+                discards.push(0); // Do not discard
+                Some(discards)
             }
             Olympic_Games => Some(vec![0, 1]),
             Independent_Reds => {
@@ -150,40 +151,31 @@ impl Card {
                 ];
                 let vec: Vec<_> = list
                     .into_iter()
-                    .enumerate()
-                    .filter_map(|(i, c)| {
-                        if state.countries[*c as usize].has_influence(Side::USSR) {
+                    .filter_map(|c| {
+                        let i = *c as usize;
+                        if state.countries[i].has_influence(Side::USSR) {
                             Some(i)
                         } else {
                             None
                         }
                     })
                     .collect();
-                if vec.is_empty() {
-                    None
-                } else {
-                    Some(vec)
-                }
+                Some(vec)
             }
             UN_Intervention => {
                 let side = *state.side();
                 let hand = state.deck.hand(side);
                 let vec: Vec<_> = hand
                     .iter()
-                    .enumerate()
-                    .filter_map(|(i, c)| {
+                    .filter_map(|c| {
                         if c.side() == side.opposite() {
-                            Some(i)
+                            Some(*c as usize)
                         } else {
                             None
                         }
                     })
                     .collect();
-                if vec.is_empty() {
-                    None
-                } else {
-                    Some(vec)
-                }
+                Some(vec)
             }
             _ => None,
         }
@@ -195,6 +187,7 @@ impl Card {
         pending_actions: &mut Vec<Decision>,
     ) -> bool {
         use Card::*;
+        use num_traits::FromPrimitive;
         // let att = self.att();
         if !self.can_event(state) {
             return false;
@@ -244,11 +237,8 @@ impl Card {
                 if choice == 0 {
                     state.remove_all(Side::US, CName::WGermany);
                 } else {
-                    let choices: Vec<_> = state.cards_at_least(Side::US, 3).into_iter().map(|c| {
-                        c as usize
-                    }).collect();
-                    let x = Decision::new(Side::US, Action::Discard(Side::US), choices);
-                    pending_actions.push(x);
+                    let card = Card::from_usize(choice).expect("Already checked");
+                    state.deck.play_card(Side::US, card);
                 }
             }
             Korean_War => {

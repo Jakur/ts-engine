@@ -32,6 +32,7 @@ where
 
 pub trait Agent {
     fn step(&self, state: &mut GameState, pending: &mut Vec<Decision>);
+    fn side(&self) -> Side;
     /// Decides a country to act upon, or None if there is no legal option. Also
     /// includes a numerical evaluation of the position from the agent's perspective.
     fn decide_action(
@@ -106,8 +107,11 @@ impl<'a> Agent for DebugAgent<'a> {
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
-    fn step(&self, _: &mut GameState, pending: &mut Vec<Decision>) { 
+    fn step(&self, _: &mut GameState, _pending: &mut Vec<Decision>) { 
         unimplemented!() 
+    }
+    fn side(&self) -> Side {
+        unimplemented!()
     }
 }
 
@@ -164,11 +168,26 @@ impl Agent for RandAgent {
     fn step(&self, state: &mut GameState, pending: &mut Vec<Decision>) { 
         let mut rng = thread_rng();
         if let Some(dec) = pending.pop() {
-            todo!();
+            match dec.action {
+                Action::Discard(_) => todo!(),
+                Action::Event(c, ch) => {
+                    assert!(ch.is_none()); // This should be caught before otherwise, I think
+                    let e_options = c.e_choices(state).unwrap();
+                    let choice = e_options.choose(&mut rng).unwrap_or(&0);
+                    c.event(state, *choice, pending);
+                },
+                Action::IndependentReds => {
+                    let e_options = Card::Independent_Reds.e_choices(state).unwrap();
+                    let choice = e_options.choose(&mut rng).unwrap_or(&0);
+                    Card::Independent_Reds.event(state, *choice, pending);
+                },
+                Action::Pass => {},
+                _ => todo!(),
+            }
         } else {
             let uses = state.card_uses();
             let select = uses.choose(&mut rng).unwrap();
-            let d = Decision::use_card(*state.side(), select.clone());
+            let d = Decision::use_card(self.side(), select.clone());
             match select {
                 Action::Pass => todo!(),
                 Action::Space(c) => state.resolve_card(d, *c),
@@ -184,5 +203,8 @@ impl Agent for RandAgent {
             }
         }
 
+    }
+    fn side(&self) -> Side {
+        unimplemented!()
     }
 }

@@ -647,22 +647,26 @@ impl GameState {
     pub fn discard_card(&mut self, side: Side, card: Card) {
         self.deck.play_card(side, card);
     }
-    /// Filters cards greater than or equal to a certain value, as could be relevant
-    /// to discarding or spacing.
-    pub fn cards_at_least(&self, side: Side, val: i8) -> Vec<Card> {
+    /// Returns hand indices for cards at least the given value. China is never
+    /// included.
+    pub fn cards_at_least(&self, side: Side, val: i8) -> Vec<usize> {
         let cards = self.deck.hand(side);
         let offset = self.base_ops_offset(side);
         cards
             .iter()
-            .copied()
-            .filter(|c| {
+            .enumerate()
+            .filter_map(|(i, c)| {
                 let mut x = c.base_ops() + offset;
                 if x < 1 {
                     x = 1;
                 } else if x > 4 {
                     x = 4;
                 }
-                x >= val
+                if x >= val {
+                    Some(i)
+                } else {
+                    None
+                }
             })
             .collect()
     }
