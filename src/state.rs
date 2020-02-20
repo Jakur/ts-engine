@@ -218,6 +218,7 @@ impl GameState {
             allowed,
             quantity,
         } = dec;
+        let allowed = allowed.slice();
         let china_active = || {match self.last_card {
             Some(c) if c == Card::The_China_Card => {
                 history.iter().all(|c| Region::Asia.has_country(*c))
@@ -776,7 +777,7 @@ impl GameState {
             let x = Decision::new(
                 Side::USSR,
                 Action::Place(Side::USSR, 1, false),
-                &EASTERN_EUROPE,
+                &EASTERN_EUROPE[..],
             );
             pending_actions.push(x);
         }
@@ -784,7 +785,7 @@ impl GameState {
         // US
         pending_actions = Vec::new();
         for _ in 0..7 {
-            let x = Decision::new(Side::US, Action::Place(Side::US, 1, false), &WESTERN_EUROPE);
+            let x = Decision::new(Side::US, Action::Place(Side::US, 1, false), &WESTERN_EUROPE[..]);
             pending_actions.push(x);
         }
         self.resolve_actions(&actors, pending_actions);
@@ -804,7 +805,7 @@ impl GameState {
                     }
                 })
                 .collect();
-            let dec = Decision::new(Side::US, Action::Place(Side::US, 1, false), &mem);
+            let dec = Decision::new(Side::US, Action::Place(Side::US, 1, false), mem);
             pa.push(dec);
             self.resolve_actions(&actors, pa);
         }

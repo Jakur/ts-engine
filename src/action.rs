@@ -2,40 +2,37 @@ use crate::card::Card;
 use crate::country::Side;
 
 #[derive(Clone)]
-pub struct Decision<'a> {
+pub struct Decision {
     pub agent: Side,
     pub action: Action,
-    pub allowed: &'a [usize],
+    pub allowed: Allowed,
     pub quantity: i8,
 }
 
-impl<'a> Decision<'a> {
-    pub fn new(agent: Side, action: Action, allowed: &'a [usize]) -> Decision<'a> {
+impl Decision {
+    pub fn new<T>(agent: Side, action: Action, allowed: T) -> Decision 
+        where T: Into<Allowed> {
         Decision::with_quantity(agent, action, allowed, 1)
     }
-    pub fn with_quantity(agent: Side, action: Action, allowed: &'a [usize], q: i8) -> Decision<'a> {
+    pub fn with_quantity<T>(agent: Side, action: Action, allowed: T, q: i8) -> Decision
+        where T: Into<Allowed> {
         Decision {
             agent,
             action,
-            allowed,
+            allowed: allowed.into(),
             quantity: q,
         }
     }
-    pub fn use_card(agent: Side, action: Action) -> Decision<'a> {
+    pub fn use_card(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
     }
     pub fn new_event(card: Card) -> Self {
         Decision::new(card.side(), Action::Event(card, None), &[])
     }
-    pub fn new_no_allowed(agent: Side, action: Action) -> Decision<'a> {
-        Decision {
-            agent,
-            action,
-            allowed: &[],
-            quantity: 1, // Todo fix
-        }
+    pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
+        Decision::new(agent, action, &[])
     }
-    pub fn conduct_ops(agent: Side, ops: i8) -> Decision<'a> {
+    pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
         // let d = Decision::new;
         // let inf = vec![d(agent, Action::StandardOps, &[]); ops as usize];
         // let coup = vec![d(agent, Action::Coup(ops, false), &[])];
@@ -44,10 +41,10 @@ impl<'a> Decision<'a> {
         //d(agent, Action::AfterStates(vec), &[])
         todo!()
     }
-    pub fn restriction_clear() -> Decision<'a> {
+    pub fn restriction_clear() -> Decision {
         unimplemented!()
     }
-    pub fn limit_set(num: usize) -> Decision<'a> {
+    pub fn limit_set(num: usize) -> Decision {
         unimplemented!()
     }
 }
@@ -81,6 +78,9 @@ pub enum Restriction {
     Limit(usize),
 }
 
+#[derive(Clone)]
+/// Abstraction across data which is known at compile time and data that must be
+/// computed on the fly.
 pub struct Allowed {
     allowed: AllowedType
 }
@@ -98,11 +98,33 @@ impl Allowed {
         match &self.allowed {
             AllowedType::Slice(s) => s,
             AllowedType::Owned(s) => &s,
+            AllowedType::Empty => &[]
         }
     }
 }
 
+#[derive(Clone)]
 enum AllowedType {
     Slice(&'static [usize]),
-    Owned(Vec<usize>)
+    Owned(Vec<usize>),
+    Empty,
+}
+
+impl From<Vec<usize>> for Allowed {
+    fn from(vec: Vec<usize>) -> Self {
+        Allowed::new_owned(vec)
+    }
+}
+
+impl From<&'static [usize]> for Allowed {
+    fn from(slice: &'static [usize]) -> Self {
+        Allowed::new_slice(slice)
+    }
+}
+
+impl From<&[usize; 0]> for Allowed {
+    fn from(_empty: &[usize; 0]) -> Self {
+        let allowed = AllowedType::Empty;
+        Allowed {allowed}
+    }
 }

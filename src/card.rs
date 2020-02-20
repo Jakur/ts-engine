@@ -229,7 +229,7 @@ impl Card {
                 let x = Decision::new(
                     Side::USSR,
                     Action::Remove(Side::US, 1),
-                    &country::WESTERN_EUROPE,
+                    &country::WESTERN_EUROPE[..],
                 );
                 state.set_limit(2, pending_actions);
                 pending_actions.push(x.clone());
@@ -277,7 +277,7 @@ impl Card {
                 let x = Decision::new(
                     Side::USSR,
                     Action::Place(Side::USSR, 1, false),
-                    &country::EASTERN_EUROPE,
+                    &country::EASTERN_EUROPE[..],
                 );
                 state.set_limit(1, pending_actions);
                 pending_actions.push(x.clone());
@@ -407,7 +407,7 @@ impl Card {
                     pending_actions.push(Decision::new(
                         Side::USSR,
                         Action::Remove(Side::US, 1),
-                        &country::SUEZ,
+                        &country::SUEZ[..],
                     ));
                 }
             }
@@ -418,7 +418,7 @@ impl Card {
                     pending_actions.push(Decision::new(
                         Side::US,
                         Action::Remove(Side::USSR, value),
-                        &country::EASTERN_EUROPE,
+                        &country::EASTERN_EUROPE[..],
                     ));
                 }
             }
@@ -428,7 +428,7 @@ impl Card {
                     pending_actions.push(Decision::new(
                         Side::USSR,
                         Action::Place(Side::USSR, 1, true),
-                        &country::DECOL,
+                        &country::DECOL[..],
                     ));
                 }
             }
