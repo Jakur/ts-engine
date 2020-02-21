@@ -5,6 +5,18 @@ use crate::state::GameState;
 
 use rand::prelude::*;
 
+lazy_static!{
+    static ref OFFSETS: Vec<usize> = {
+        let mut vec = vec![0];
+        let actions = Action::dummy_actions();
+        for a in actions {
+            let last = *vec.last().unwrap();
+            vec.push(a.legal_choices() + last);
+        }
+        vec
+    };
+}
+
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
     pub us_agent: B,
@@ -167,7 +179,7 @@ impl Agent for RandAgent {
     }
     fn step(&self, state: &mut GameState, pending: &mut Vec<Decision>) { 
         let mut rng = thread_rng();
-        if let Some(dec) = pending.pop() {
+        if let Some(dec) = pending.last() {
             match dec.action {
                 Action::Discard(_) => todo!(),
                 Action::Event(c, ch) => {
@@ -182,7 +194,9 @@ impl Agent for RandAgent {
                     Card::Independent_Reds.event(state, *choice, pending);
                 },
                 Action::Pass => {},
-                _ => todo!(),
+                _ => {
+                    todo!()
+                },
             }
         } else {
             let uses = state.card_uses();
@@ -207,4 +221,19 @@ impl Agent for RandAgent {
     fn side(&self) -> Side {
         unimplemented!()
     }
+}
+
+fn all_legal_moves(agent: Side, state: &GameState, d: Decision) -> Vec<(Action, usize)> {
+    // match d.action {
+    //     Action::Event(c, ch) => {
+    //         assert!(ch.is_none()); // This should be caught before otherwise, I think
+    //         let e_options = c.e_choices(state).unwrap();
+    //         e_options.into_iter().map(|e| (d.action.clone(), e)).collect()
+    //     },
+    //     Action::IndependentReds => {
+    //         let e_options = Card::Independent_Reds.e_choices(state).unwrap();
+    //     }
+    //     _ => unimplemented!(),
+    // }
+    unimplemented!()
 }

@@ -126,6 +126,9 @@ pub enum Card {
 }
 
 impl Card {
+    pub fn total() -> usize {
+        todo!() // Until we add in the last card
+    }
     /// Returns the list of event options an agent can select from this given
     /// card. If the return is None, the default behavior of just picking
     /// option 0 is sufficient.

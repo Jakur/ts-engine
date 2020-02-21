@@ -68,6 +68,58 @@ pub enum Action {
     Pass,
 }
 
+impl Action {
+    pub fn dummy_actions() -> Vec<Action> {
+        use Action::*;
+        let c = Card::NATO;
+        let s = Side::USSR;
+        let mut vec = vec![PlayCard(c, EventTime::After), ConductOps, StandardOps, Coup(0, false), Space(c),
+            Realignment, Place(s, 0, false), Remove(s, 0), RemoveAll(s, true), Discard(s),
+            Event(c, None), War(s, false), IndependentReds, Destal, Pass];
+        vec.sort_by_key(|a| a.index());
+        vec
+    }
+    pub fn legal_choices(&self) -> usize {
+        use Action::*;
+        let countries = crate::country::NUM_COUNTRIES - 2;
+        let cards = Card::total();
+        match self {
+            PlayCard(_, _) => {
+                // Todo if you really want to be precise you can make neutral special
+                // For now we won't
+                cards * 3
+            },
+            ConductOps | RemoveAll(_, _) | Destal => 0, // meta action or dummy
+            StandardOps | Coup(_, _) | Realignment | Place(_, _, _) | Remove(_, _) => countries,
+            Space(_) | Discard(_) => cards,
+            War(_, _) => countries, // You can cut this down quite a bit as well
+            Event(_, _) => todo!(),
+            IndependentReds => 5,
+            Pass => 1,
+        }
+    }
+    pub fn index(&self) -> usize {
+        use Action::*;
+        match self {
+            PlayCard(_, _) => 0,
+            ConductOps => 1,
+            StandardOps => 2,
+            Coup(_, _) => 3,
+            Space(_) => 4,
+            Realignment => 5,
+            Place(_, _, _) => 6,
+            Remove(_, _) => 7, 
+            RemoveAll(_, _) => 8,    
+            Discard(_) => 9, 
+            Event(_, _) => 10,
+            War(_, _) => 11,
+            IndependentReds => 12,
+            Destal => 13,
+            Pass => 14,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum EventTime {
     Before,
