@@ -197,7 +197,7 @@ impl Agent for RandAgent {
                     let choice = choice.unwrap(); // Safe from use_card()
                     card.event(state, choice, pending);
                 }
-                Action::PlayCard(_, _) => pending.push(d),
+                Action::PlayCard => pending.push(d),
                 _ => unreachable!(),
             }
             if let Action::Pass = select {
@@ -212,10 +212,9 @@ impl Agent for RandAgent {
 }
 
 fn all_legal_moves(agent: Side, state: &GameState, action: &Action) -> Vec<usize> {
+    use crate::action::play_card_indices;
     match action {
-        // Action::PlayCard => {
-
-        // }
+        Action::PlayCard => play_card_indices(state),
         Action::ConductOps => {
             let mut vec = Vec::new();
             for x in [Action::StandardOps, Action::Coup(1, false), Action::Realignment].iter() {

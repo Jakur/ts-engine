@@ -78,7 +78,7 @@ fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
 
 #[derive(Clone)]
 pub enum Action {
-    PlayCard(Card, EventTime),
+    PlayCard,
     ConductOps,
     StandardOps,
     Coup(i8, bool), // Ops, Free
@@ -95,12 +95,71 @@ pub enum Action {
     Pass,
 }
 
+pub fn play_card_indices(state: &GameState) -> Vec<usize> {
+    let f = play_card_index;
+    let space_offset = OFFSETS[Action::Space(Card::NATO).index()];
+    let hand = state.deck.hand(state.side);
+    let mut vec = Vec::new();
+    let ops_offset = state.base_ops_offset(state.side);
+    for &c in hand.iter() {
+        let can_event = c.can_event(state);
+        if c.side() == state.side.opposite() {
+            if can_event {
+                vec.push(f(c, EventTime::Before));
+                vec.push(f(c, EventTime::After));
+            } else { 
+                // Basically free ops in this case
+                vec.push(f(c, EventTime::Never));
+            }
+        } else {
+            if c.is_scoring() {
+                todo!();
+                // vec.push(f(c, Some(0)));
+                // continue;
+            }
+            // Play for ops
+            vec.push(f(c, EventTime::Never));
+            // Event
+            if can_event {
+                if let Some(chs) = c.e_choices(state) {
+                    for x in chs {
+                        todo!();
+                        // vec.push(Action::Event(c, Some(x)));
+                    }
+                } else {
+                    todo!();
+                    // vec.push(Action::Event(c, Some(0)));
+                }
+            }
+        }
+        if state.can_space(state.side, c.base_ops() + ops_offset) {
+            vec.push(space_offset + c as usize);
+        }
+    }
+    if state.deck.china_available(state.side) {
+        let china = Card::The_China_Card;
+        vec.push(f(china, EventTime::Never));
+        if state.can_space(state.side, china.base_ops() + ops_offset) {
+            vec.push(space_offset + china as usize) // Legal, if not advisable
+        }
+    }
+    if hand.is_empty() || state.ar == 8 {
+        // vec.push(Action::Pass);
+        vec.push(*OFFSETS.last().unwrap()); // Pass
+    }
+    vec
+}
+
+fn play_card_index(card: Card, resolve: EventTime) -> usize {
+    (card as usize) * 3 + resolve as usize
+}
+
 impl Action {
     fn dummy_actions() -> Vec<Action> {
         use Action::*;
         let c = Card::NATO;
         let s = Side::USSR;
-        let mut vec = vec![PlayCard(c, EventTime::After), ConductOps, StandardOps, Coup(0, false), Space(c),
+        let mut vec = vec![PlayCard, ConductOps, StandardOps, Coup(0, false), Space(c),
             Realignment, Place(s, 0, false), Remove(s, 0), RemoveAll(s, true), Discard(s),
             Event(c, None), War(s, false), IndependentReds, Destal, Pass];
         vec.sort_by_key(|a| a.index());
@@ -111,7 +170,7 @@ impl Action {
         let countries = crate::country::NUM_COUNTRIES - 2;
         let cards = Card::total();
         match self {
-            PlayCard(_, _) => {
+            PlayCard => {
                 // Todo if you really want to be precise you can make neutral special
                 // For now we won't
                 cards * 3
@@ -128,7 +187,7 @@ impl Action {
     pub fn index(&self) -> usize {
         use Action::*;
         match self {
-            PlayCard(_, _) => 0,
+            PlayCard => 0,
             ConductOps => 1,
             StandardOps => 2,
             Coup(_, _) => 3,
@@ -149,9 +208,9 @@ impl Action {
 
 #[derive(Clone)]
 pub enum EventTime {
-    Before,
-    After,
-    Never
+    Before = 0,
+    After = 1,
+    Never = 2,
 }
 
 #[derive(Clone)]

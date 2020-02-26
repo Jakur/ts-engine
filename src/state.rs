@@ -157,52 +157,7 @@ impl GameState {
         self.deck.play_card(self.side, card);
     }
     pub fn card_uses(&self) -> Vec<Action> {
-        let hand = self.deck.hand(self.side);
-        let mut vec = Vec::new();
-        let ops_offset = self.base_ops_offset(self.side);
-        for &c in hand.iter() {
-            let can_event = c.can_event(self);
-            if c.side() == self.side.opposite() {
-                if can_event {
-                    vec.push(Action::PlayCard(c, EventTime::Before));
-                    vec.push(Action::PlayCard(c, EventTime::After));
-                } else { 
-                    // Basically free ops in this case
-                    vec.push(Action::PlayCard(c, EventTime::Never));
-                }
-            } else {
-                if c.is_scoring() {
-                    vec.push(Action::Event(c, Some(0)));
-                    continue;
-                }
-                // Play for ops
-                vec.push(Action::PlayCard(c, EventTime::Never));
-                // Event
-                if can_event {
-                    if let Some(chs) = c.e_choices(self) {
-                        for x in chs {
-                            vec.push(Action::Event(c, Some(x)));
-                        }
-                    } else {
-                        vec.push(Action::Event(c, Some(0)));
-                    }
-                }
-            }
-            if self.can_space(self.side, c.base_ops() + ops_offset) {
-                vec.push(Action::Space(c));
-            }
-        }
-        if self.deck.china_available(self.side) {
-            let china = Card::The_China_Card;
-            vec.push(Action::PlayCard(china, EventTime::Never));
-            if self.can_space(self.side, china.base_ops() + ops_offset) {
-                vec.push(Action::Space(china)) // Legal if not advisable
-            }
-        }
-        if hand.is_empty() || self.ar == 8 {
-            vec.push(Action::Pass);
-        }
-        vec
+        unimplemented!()
     }
     /// Returns the standard allowed actions if they differ from the decision
     /// slice, or else None.
