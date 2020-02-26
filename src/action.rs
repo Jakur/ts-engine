@@ -1,5 +1,18 @@
 use crate::card::Card;
 use crate::country::Side;
+use crate::state::GameState;
+
+lazy_static!{
+    static ref OFFSETS: Vec<usize> = {
+        let mut vec = vec![0];
+        let actions = Action::dummy_actions();
+        for a in actions {
+            let last = *vec.last().unwrap();
+            vec.push(a.legal_choices() + last);
+        }
+        vec
+    };
+}
 
 #[derive(Clone)]
 pub struct Decision {
@@ -47,6 +60,20 @@ impl Decision {
     pub fn limit_set(num: usize) -> Decision {
         unimplemented!()
     }
+    pub fn tensor_indices(&self, state: &GameState) -> Vec<usize> {
+        match &self.action {
+            Action::Event(_c, _d) => todo!(),
+            Action::ConductOps => unimplemented!(), // Convert earlier
+            _ => standard_convert(&self.action, self.allowed.slice()),
+        }
+    }
+}
+
+fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
+    let offset = OFFSETS[action.index()];
+    slice.iter().map(|x| {
+        offset + x
+    }).collect()
 }
 
 #[derive(Clone)]
@@ -69,7 +96,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn dummy_actions() -> Vec<Action> {
+    fn dummy_actions() -> Vec<Action> {
         use Action::*;
         let c = Card::NATO;
         let s = Side::USSR;

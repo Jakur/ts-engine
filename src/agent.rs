@@ -5,18 +5,6 @@ use crate::state::GameState;
 
 use rand::prelude::*;
 
-lazy_static!{
-    static ref OFFSETS: Vec<usize> = {
-        let mut vec = vec![0];
-        let actions = Action::dummy_actions();
-        for a in actions {
-            let last = *vec.last().unwrap();
-            vec.push(a.legal_choices() + last);
-        }
-        vec
-    };
-}
-
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
     pub us_agent: B,
