@@ -206,11 +206,10 @@ impl GameState {
     }
     /// Returns the standard allowed actions if they differ from the decision
     /// slice, or else None.
-    fn standard_allowed(
+    pub fn standard_allowed(
         &self,
         dec: &Decision,
         history: &[usize],
-        pending_actions: &Vec<Decision>,
     ) -> Option<Vec<usize>> {
         let Decision {
             agent,

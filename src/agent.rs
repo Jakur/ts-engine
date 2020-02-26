@@ -1,4 +1,4 @@
-use crate::action::{Decision, Action};
+use crate::action::{Decision, Action, Allowed};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
@@ -211,17 +211,21 @@ impl Agent for RandAgent {
     }
 }
 
-fn all_legal_moves(agent: Side, state: &GameState, d: Decision) -> Vec<(Action, usize)> {
-    // match d.action {
-    //     Action::Event(c, ch) => {
-    //         assert!(ch.is_none()); // This should be caught before otherwise, I think
-    //         let e_options = c.e_choices(state).unwrap();
-    //         e_options.into_iter().map(|e| (d.action.clone(), e)).collect()
-    //     },
-    //     Action::IndependentReds => {
-    //         let e_options = Card::Independent_Reds.e_choices(state).unwrap();
-    //     }
-    //     _ => unimplemented!(),
-    // }
-    unimplemented!()
+fn all_legal_moves(agent: Side, state: &GameState, action: &Action) -> Vec<usize> {
+    match action {
+        // Action::PlayCard => {
+
+        // }
+        Action::ConductOps => {
+            let mut vec = Vec::new();
+            for x in [Action::StandardOps, Action::Coup(1, false), Action::Realignment].iter() {
+                let mut d = Decision::new(agent, x.clone(), &[]);
+                let allowed = state.standard_allowed(&d, &[]).unwrap(); // Todo always return Some
+                d.allowed = Allowed::new_owned(allowed);
+                vec.append(&mut d.tensor_indices(state))
+            }
+            vec
+        },
+        _ => todo!(),
+    }
 }
