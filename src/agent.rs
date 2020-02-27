@@ -2,6 +2,7 @@ use crate::action::{Decision, Action, Allowed};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
+use crate::tensor::{TensorOutput, OutputVec};
 
 use rand::prelude::*;
 
@@ -211,19 +212,17 @@ impl Agent for RandAgent {
     }
 }
 
-fn all_legal_moves(agent: Side, state: &GameState, action: &Action) -> Vec<usize> {
+fn all_legal_moves(agent: Side, state: &GameState, action: &Action) -> OutputVec {
     use crate::action::play_card_indices;
     match action {
         Action::PlayCard => play_card_indices(state),
-        Action::ConductOps => {
-            let mut vec = Vec::new();
-            for x in [Action::StandardOps, Action::Coup(1, false), Action::Realignment].iter() {
-                let mut d = Decision::new(agent, x.clone(), &[]);
-                let allowed = state.standard_allowed(&d, &[]).unwrap(); // Todo always return Some
-                d.allowed = Allowed::new_owned(allowed);
-                vec.append(&mut d.tensor_indices(state))
+        Action::ConductOps(q) => {
+            let mut out = OutputVec::new(Vec::new());
+            for x in [Action::StandardOps(*q), Action::Coup(1, false), Action::Realignment].iter() {
+                let d = Decision::new_standard(state, agent, x.clone(), *q);
+                out.extend(d.encode());
             }
-            vec
+            out
         },
         _ => todo!(),
     }

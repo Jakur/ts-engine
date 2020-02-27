@@ -89,72 +89,7 @@ impl GameState {
         card
     }
     pub fn use_card(&mut self, card: Card, pending_actions: &mut Vec<Decision>) {
-        use std::iter::repeat;
-        // Todo unusual actions, discards, etc.
-        let d = Decision::new_no_allowed;
-        let mut vec = Vec::new();
-        // Event
-        if card.side() != self.side.opposite() && card.can_event(&self) {
-            let side = if card == Card::Olympic_Games {
-                // Todo more special cases?
-                self.side.opposite()
-            } else {
-                self.side
-            };
-            vec.push(vec![d(side, Action::Event(card, None))]);
-        }
-        if !card.is_scoring() {
-            let op_event = card.side() == self.side.opposite() && card.can_event(&self);
-            let ops = card.modified_ops(self.side, self);
-            if op_event {
-                // Standard Influence Placement
-                let event = d(self.side.opposite(), Action::Event(card, None));
-                let inf = repeat(d(self.side, Action::StandardOps)).take(ops as usize);
-                let mut x: Vec<_> = inf.clone().collect();
-                x.push(event.clone());
-                let mut y = vec![event.clone()];
-                y.extend(inf);
-                vec.push(x);
-                vec.push(y);
-                // Coup
-                // Todo cuban missile
-                vec.push(vec![d(self.side, Action::Coup(ops, false)), event.clone()]);
-                vec.push(vec![event.clone(), d(self.side, Action::Coup(ops, false))]);
-                // Realignment
-                let realign = repeat(d(self.side, Action::Realignment)).take(ops as usize);
-                x = realign.clone().collect();
-                x.push(event.clone());
-                let mut y = vec![event];
-                y.extend(realign);
-                vec.push(x);
-                vec.push(y);
-            } else {
-                // Standard Influence Placement
-                vec.push(
-                    repeat(d(self.side, Action::StandardOps))
-                        .take(ops as usize)
-                        .collect(),
-                );
-                // Coup
-                vec.push(vec![d(self.side, Action::Coup(ops, false))]); // Todo Cuban Missile
-
-                // Realignment
-                vec.push(
-                    repeat(d(self.side, Action::Realignment))
-                        .take(ops as usize)
-                        .collect(),
-                );
-            }
-
-            // Space
-            if self.can_space(self.side, card.modified_ops(self.side, self)) {
-                vec.push(vec![d(self.side, Action::Space(card))])
-            }
-        }
-        todo!();
-        // pending_actions.push(d(self.side, Action::AfterStates(vec)));
-        // Todo make sure agent knows which card is being used
-        self.deck.play_card(self.side, card);
+        unimplemented!()
     }
     pub fn card_uses(&self) -> Vec<Action> {
         unimplemented!()
@@ -195,7 +130,7 @@ impl GameState {
         let mut china = china_active();
         let mut vietnam = vietnam_active();
         let mut vec = match action {
-            Action::StandardOps => {
+            Action::StandardOps(num) => {
                 if *quantity > 1 {
                     Some(access(self, *agent))
                 } else if china || vietnam {
@@ -387,9 +322,10 @@ impl GameState {
                     self.add_influence(side, choice);
                 }
             }
-            Action::StandardOps => {
+            Action::StandardOps(num) => {
                 let cost = self.add_influence(side, choice);
                 if cost == 2 {
+                    // Todo update decision action properly
                     decision.quantity -= 1; // Additional 1
                 }
             }

@@ -1,6 +1,7 @@
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
+use crate::tensor::OutputVec;
 
 lazy_static!{
     static ref OFFSETS: Vec<usize> = {
@@ -45,6 +46,12 @@ impl Decision {
     pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
     }
+    pub fn new_standard(state: &GameState, agent: Side, action: Action, q: i8) -> Decision {
+        let mut d = Decision::with_quantity(agent, action, &[], q);
+        let allowed = state.standard_allowed(&d, &[]).expect("Make this always work");
+        d.allowed = Allowed::new_owned(allowed);
+        d
+    }
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
         // let d = Decision::new;
         // let inf = vec![d(agent, Action::StandardOps, &[]); ops as usize];
@@ -63,9 +70,13 @@ impl Decision {
     pub fn tensor_indices(&self, state: &GameState) -> Vec<usize> {
         match &self.action {
             Action::Event(_c, _d) => todo!(),
-            Action::ConductOps => unimplemented!(), // Convert earlier
+            Action::ConductOps(_) => unimplemented!(), // Convert earlier
             _ => standard_convert(&self.action, self.allowed.slice()),
         }
+    }
+    pub fn next_decision(self) -> Option<Decision> {
+        todo!()
+        // If return none, reset limit in state
     }
 }
 
@@ -79,8 +90,8 @@ fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
 #[derive(Clone)]
 pub enum Action {
     PlayCard,
-    ConductOps,
-    StandardOps,
+    ConductOps(i8),
+    StandardOps(i8),
     Coup(i8, bool), // Ops, Free
     Space(Card),
     Realignment,
@@ -95,7 +106,7 @@ pub enum Action {
     Pass,
 }
 
-pub fn play_card_indices(state: &GameState) -> Vec<usize> {
+pub fn play_card_indices(state: &GameState) -> OutputVec {
     let f = play_card_index;
     let space_offset = OFFSETS[Action::Space(Card::NATO).index()];
     let hand = state.deck.hand(state.side);
@@ -147,7 +158,7 @@ pub fn play_card_indices(state: &GameState) -> Vec<usize> {
         // vec.push(Action::Pass);
         vec.push(*OFFSETS.last().unwrap()); // Pass
     }
-    vec
+    OutputVec::new(vec)
 }
 
 fn play_card_index(card: Card, resolve: EventTime) -> usize {
@@ -155,11 +166,11 @@ fn play_card_index(card: Card, resolve: EventTime) -> usize {
 }
 
 impl Action {
-    fn dummy_actions() -> Vec<Action> {
+    pub fn dummy_actions() -> Vec<Action> {
         use Action::*;
         let c = Card::NATO;
         let s = Side::USSR;
-        let mut vec = vec![PlayCard, ConductOps, StandardOps, Coup(0, false), Space(c),
+        let mut vec = vec![PlayCard, ConductOps(2), StandardOps(2), Coup(0, false), Space(c),
             Realignment, Place(s, 0, false), Remove(s, 0), RemoveAll(s, true), Discard(s),
             Event(c, None), War(s, false), IndependentReds, Destal, Pass];
         vec.sort_by_key(|a| a.index());
@@ -175,8 +186,8 @@ impl Action {
                 // For now we won't
                 cards * 3
             },
-            ConductOps | RemoveAll(_, _) | Destal => 0, // meta action or dummy
-            StandardOps | Coup(_, _) | Realignment | Place(_, _, _) | Remove(_, _) => countries,
+            ConductOps(_) | RemoveAll(_, _) | Destal => 0, // meta action or dummy
+            StandardOps(_) | Coup(_, _) | Realignment | Place(_, _, _) | Remove(_, _) => countries,
             Space(_) | Discard(_) => cards,
             War(_, _) => countries, // You can cut this down quite a bit as well
             Event(_, _) => todo!(),
@@ -184,12 +195,18 @@ impl Action {
             Pass => 1,
         }
     }
-    pub fn index(&self) -> usize {
+    pub fn offset(&self) -> usize {
+        if let Action::Event(_, _) = self {
+            todo!()
+        }
+        OFFSETS[self.index()]
+    }
+    fn index(&self) -> usize {
         use Action::*;
         match self {
             PlayCard => 0,
-            ConductOps => 1,
-            StandardOps => 2,
+            ConductOps(_) => 1,
+            StandardOps(_) => 2,
             Coup(_, _) => 3,
             Space(_) => 4,
             Realignment => 5,
