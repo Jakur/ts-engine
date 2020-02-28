@@ -40,8 +40,24 @@ impl Decision {
     pub fn use_card(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
     }
-    pub fn new_event(card: Card) -> Self {
-        Decision::new(card.side(), Action::Event(card, None), &[])
+    pub fn new_event(card: Card, state: &GameState) -> Self {
+        let e_choices = card.e_choices(state);
+        if let Some(choices) = e_choices {
+            Decision::new(card.side(), Action::Event(Some(card)), choices)
+        } else {
+            Decision::new(card.side(), Action::Event(Some(card)), &[])
+        }
+    }
+    pub fn headline(agent: Side, state: &GameState) -> Self {
+        let hand = state.deck.hand(agent);
+        let vec: Vec<_> = hand.iter().filter_map(|c| {
+            if c.can_headline(state) {
+                Some(*c as usize)
+            } else {
+                None
+            }
+        }).collect();
+        Decision::new(agent, Action::Event(None), vec)
     }
     pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
@@ -67,16 +83,12 @@ impl Decision {
     pub fn limit_set(num: usize) -> Decision {
         unimplemented!()
     }
-    pub fn tensor_indices(&self, state: &GameState) -> Vec<usize> {
-        match &self.action {
-            Action::Event(_c, _d) => todo!(),
-            Action::ConductOps(_) => unimplemented!(), // Convert earlier
-            _ => standard_convert(&self.action, self.allowed.slice()),
-        }
-    }
     pub fn next_decision(self) -> Option<Decision> {
         todo!()
         // If return none, reset limit in state
+    }
+    pub fn is_trivial(&self) -> bool {
+        self.allowed.slice().len() <= 1
     }
 }
 
@@ -93,13 +105,13 @@ pub enum Action {
     ConductOps(i8),
     StandardOps(i8),
     Coup(i8, bool), // Ops, Free
-    Space(Card),
+    Space,
     Realignment,
     Place(Side, i8, bool),      //Side, amount, can place in opponent controlled
     Remove(Side, i8),           // Side, amount
     RemoveAll(Side, bool),      // Side, can remove in opponent controlled
     Discard(Side),          // Side
-    Event(Card, Option<usize>), // Card, Decision in branching events
+    Event(Option<Card>), // Card, Decision in branching events
     War(Side, bool), // Side, is brush war?
     IndependentReds, // No other event works like this 
     Destal, // Another special case
@@ -108,7 +120,7 @@ pub enum Action {
 
 pub fn play_card_indices(state: &GameState) -> OutputVec {
     let f = play_card_index;
-    let space_offset = OFFSETS[Action::Space(Card::NATO).index()];
+    let space_offset = OFFSETS[Action::Space.index()];
     let hand = state.deck.hand(state.side);
     let mut vec = Vec::new();
     let ops_offset = state.base_ops_offset(state.side);
@@ -170,9 +182,9 @@ impl Action {
         use Action::*;
         let c = Card::NATO;
         let s = Side::USSR;
-        let mut vec = vec![PlayCard, ConductOps(2), StandardOps(2), Coup(0, false), Space(c),
+        let mut vec = vec![PlayCard, ConductOps(2), StandardOps(2), Coup(0, false), Space,
             Realignment, Place(s, 0, false), Remove(s, 0), RemoveAll(s, true), Discard(s),
-            Event(c, None), War(s, false), IndependentReds, Destal, Pass];
+            Event(None), War(s, false), IndependentReds, Destal, Pass];
         vec.sort_by_key(|a| a.index());
         vec
     }
@@ -188,15 +200,15 @@ impl Action {
             },
             ConductOps(_) | RemoveAll(_, _) | Destal => 0, // meta action or dummy
             StandardOps(_) | Coup(_, _) | Realignment | Place(_, _, _) | Remove(_, _) => countries,
-            Space(_) | Discard(_) => cards,
+            Space | Discard(_) => cards,
             War(_, _) => countries, // You can cut this down quite a bit as well
-            Event(_, _) => todo!(),
+            Event(_) => todo!(),
             IndependentReds => 5,
             Pass => 1,
         }
     }
     pub fn offset(&self) -> usize {
-        if let Action::Event(_, _) = self {
+        if let Action::Event(_) = self {
             todo!()
         }
         OFFSETS[self.index()]
@@ -208,13 +220,13 @@ impl Action {
             ConductOps(_) => 1,
             StandardOps(_) => 2,
             Coup(_, _) => 3,
-            Space(_) => 4,
+            Space => 4,
             Realignment => 5,
             Place(_, _, _) => 6,
             Remove(_, _) => 7, 
             RemoveAll(_, _) => 8,    
             Discard(_) => 9, 
-            Event(_, _) => 10,
+            Event(_) => 10,
             War(_, _) => 11,
             IndependentReds => 12,
             Destal => 13,

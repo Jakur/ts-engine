@@ -1,4 +1,4 @@
-use crate::action::Decision;
+use crate::action::{Action, Decision};
 use crate::agent::{Actors, Agent};
 use crate::card::Card;
 use crate::country::Side;
@@ -85,33 +85,28 @@ impl<A: Agent, B: Agent> Game<A, B> {
         None
     }
     fn headline(&mut self) {
+        use crate::agent::legal_headline;
         // Todo see headline ability, can event card
-        let ussr = &self.actors.ussr_agent;
-        let hl = |vec: &Vec<Card>| -> Vec<Card> {
-            vec.iter()
-                .copied()
-                .filter(|c| c.can_headline(&self.state))
-                .collect()
+        let get_card = |a: Action| {
+            if let Action::Event(c) = a {
+                c.expect("Works")
+            } else {
+                unreachable!()
+            }
         };
-        let (ussr_card, _ussr_eval) = ussr.decide_card(
-            &self.state,
-            &hl(self.state.deck.ussr_hand()),
-            false,
-            true,
-            false,
-        );
         let us = &self.actors.us_agent;
-        let (us_card, _us_eval) = us.decide_card(
-            &self.state,
-            &hl(self.state.deck.us_hand()),
-            false,
-            true,
-            false,
-        );
+        let us_legal = legal_headline(Side::US, &self.state);
+        let (us_act, us_choice) = us.decide(&self.state, us_legal);
+        let us_card = get_card(us_act);
+
+        let ussr = &self.actors.ussr_agent;
+        let ussr_legal = legal_headline(Side::USSR, &self.state);
+        let (ussr_act, ussr_choice) = ussr.decide(&self.state, ussr_legal);
+        let ussr_card = get_card(ussr_act); 
+
         // Hands cannot be empty at the HL phase
-        let us_card = us_card.unwrap();
-        let ussr_card = ussr_card.unwrap();
-        let decisions = (Decision::new_event(ussr_card), Decision::new_event(us_card));
+        let decisions = (Decision::new_event(ussr_card, &self.state), 
+            Decision::new_event(us_card, &self.state));
 
         // Headline order
         if us_card.base_ops() >= ussr_card.base_ops() {

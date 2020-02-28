@@ -1,6 +1,7 @@
 use crate::action::{Action, Decision};
 use crate::card::Card;
 use num_traits::FromPrimitive;
+use std::convert::TryFrom;
 
 pub struct OutputVec {
     data: Vec<OutputIndex>
@@ -9,6 +10,9 @@ pub struct OutputVec {
 impl OutputVec {
     pub fn new(data: Vec<usize>) -> OutputVec {
         OutputVec{data: data.into_iter().map(|x| OutputIndex::new(x)).collect()}
+    }
+    pub fn data(&self) -> &Vec<OutputIndex> {
+        &self.data
     }
     pub fn extend(&mut self, mut new_data: OutputVec) {
         for x in new_data.data.into_iter() {
@@ -24,7 +28,7 @@ pub(crate) trait TensorOutput {
 impl TensorOutput for Decision {
     fn encode(&self) -> OutputVec {
         let vec = match self.action {
-            Action::Event(_, _) => todo!(),
+            Action::Event(_) => todo!(),
             Action::PlayCard => unimplemented!(),
             _ => todo!()
         };
@@ -43,10 +47,22 @@ impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
         OutputIndex {data}
     }
-    pub fn decode(self) -> (Action, usize) {
+    pub fn decode(&self) -> (Action, usize) {
         todo!()
     }
 }
+
+// impl TryFrom<Action> for OutputIndex {
+//     type Error = &'static str;
+//     fn try_from(action: Action) -> Result<Self, Self::Error> { 
+//         match action {
+//             Action::Event(c, choice) if choice.is_none() => {
+//                 Ok(OutputIndex::new(action.offset() + c as usize))
+//             }
+//             _ => Err("Cannot convert without more information")
+//         }
+//     }
+// }
 
 
 

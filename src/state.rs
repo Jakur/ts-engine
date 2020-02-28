@@ -289,7 +289,7 @@ impl GameState {
     }
     pub fn resolve_card(&mut self, decision: Decision, card: Card) {
         match decision.action {
-            Action::Space(_card) => {
+            Action::Space => {
                 // Todo see if space should not have a card parameter? 
                 let roll = self.roll();
                 self.space_card(decision.agent, roll);
@@ -310,8 +310,8 @@ impl GameState {
         let mut decision = pending.pop().unwrap();
         let side = decision.agent;
         match decision.action {
-            Action::Event(card, _trash) => {
-                card.event(self, choice, pending);
+            Action::Event(card) => {
+                card.unwrap().event(self, choice, pending);
             }
             Action::Coup(ops, free_coup) => {
                 let roll = self.roll(); // Todo more flexible entropy source

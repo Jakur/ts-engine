@@ -215,7 +215,7 @@ impl Card {
                     if card.att().side == Side::US {
                         // Todo find out of the US really has agency in these decisions?
                         // Just Chernobyl?
-                        let x = Decision::new(Side::US, Action::Event(card, None), &[]);
+                        let x = Decision::new(Side::US, Action::Event(Some(card)), &[]);
                         pending_actions.push(x);
                     }
                     state.discard_card(Side::USSR, card);
