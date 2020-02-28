@@ -12,7 +12,7 @@ pub struct Game<A: Agent, B: Agent> {
 
 impl<A: Agent, B: Agent> Game<A, B> {
     pub fn play(&mut self) -> (Side, i8) {
-        self.state.initial_placement(&self.actors);
+        self.initial_placement();
         let mut instant_win = None;
         while instant_win.is_none() && self.state.turn <= 10 {
             // Todo add mid war / late war cards to deck
@@ -31,6 +31,50 @@ impl<A: Agent, B: Agent> Game<A, B> {
             }
         } else {
             self.final_scoring()
+        }
+    }
+    fn initial_placement(&mut self) {
+        use crate::country::{WESTERN_EUROPE, EASTERN_EUROPE};
+        let mut pending_actions = Vec::new();
+        // USSR
+        let x = Decision::with_quantity(
+            Side::USSR,
+            Action::Place(Side::USSR, 1, false),
+            &EASTERN_EUROPE[..],
+            6
+        );
+        pending_actions.push(x);
+        self.resolve_actions(pending_actions);
+        // US
+        pending_actions = Vec::new();
+        let x = Decision::with_quantity(
+            Side::US, 
+            Action::Place(Side::US, 1, false), 
+            &WESTERN_EUROPE[..], 
+            7
+        );
+        pending_actions.push(x);
+        self.resolve_actions(pending_actions);
+        // US Bonus + 2
+        for _ in 0..2 {
+            let mut pa = Vec::new();
+            let mem: Vec<_> = self
+                .state
+                .valid_countries()
+                .iter()
+                .enumerate()
+                .filter_map(|(i, x)| {
+                    // Apparently bonus influence cannot exceed stab + 2
+                    if x.us > 0 && x.us < x.stability + 2 {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let dec = Decision::new(Side::US, Action::Place(Side::US, 1, false), mem);
+            pa.push(dec);
+            self.resolve_actions(pa);
         }
     }
     fn do_turn(&mut self, goal_ar: i8) -> Option<Side> {

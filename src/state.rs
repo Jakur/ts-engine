@@ -664,47 +664,6 @@ impl GameState {
     pub fn resolve_actions<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>, pending: Vec<Decision>) {
         unimplemented!();
     }
-    /// Creates and resolves the initial USSR and US influence placements.
-    pub fn initial_placement<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>) {
-        // USSR
-        let mut pending_actions = Vec::new();
-        for _ in 0..6 {
-            let x = Decision::new(
-                Side::USSR,
-                Action::Place(Side::USSR, 1, false),
-                &EASTERN_EUROPE[..],
-            );
-            pending_actions.push(x);
-        }
-        self.resolve_actions(&actors, pending_actions);
-        // US
-        pending_actions = Vec::new();
-        for _ in 0..7 {
-            let x = Decision::new(Side::US, Action::Place(Side::US, 1, false), &WESTERN_EUROPE[..]);
-            pending_actions.push(x);
-        }
-        self.resolve_actions(&actors, pending_actions);
-        // US Bonus + 2
-        for _ in 0..2 {
-            let mut pa = Vec::new();
-            let mem: Vec<_> = self
-                .valid_countries()
-                .iter()
-                .enumerate()
-                .filter_map(|(i, x)| {
-                    // Apparently bonus influence cannot exceed stab + 2
-                    if x.us > 0 && x.us < x.stability + 2 {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let dec = Decision::new(Side::US, Action::Place(Side::US, 1, false), mem);
-            pa.push(dec);
-            self.resolve_actions(&actors, pa);
-        }
-    }
     pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
         self.restrict = Some(Restriction::Limit(limit));
         // Todo restriction clear more nicely
