@@ -3,6 +3,7 @@ use crate::agent::{Actors, Agent};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
+use crate::tensor::TensorOutput;
 
 pub struct Game<A: Agent, B: Agent> {
     pub actors: Actors<A, B>,
@@ -111,14 +112,23 @@ impl<A: Agent, B: Agent> Game<A, B> {
         // Headline order
         if us_card.base_ops() >= ussr_card.base_ops() {
             self.state.side = Side::US;
-            self.state.resolve_actions(&self.actors, vec![decisions.1]);
+            self.resolve_actions(vec![decisions.1]);
             self.state.side = Side::USSR;
-            self.state.resolve_actions(&self.actors, vec![decisions.0]);
+            self.resolve_actions(vec![decisions.0]);
         } else {
             self.state.side = Side::USSR;
-            self.state.resolve_actions(&self.actors, vec![decisions.0]);
+            self.resolve_actions(vec![decisions.0]);
             self.state.side = Side::US;
-            self.state.resolve_actions(&self.actors, vec![decisions.1]);
+            self.resolve_actions(vec![decisions.1]);
+        }
+    }
+    fn resolve_actions(&mut self, mut pending: Vec<Decision>) {
+        let mut history = Vec::new(); // Todo figure out how to handle this
+        while let Some(d) = pending.pop() {
+            let agent = self.actors.get(d.agent);
+            let legal = d.encode();
+            let (action, choice) = agent.decide(&self.state, legal);
+            self.state.resolve_action(d, choice, &mut pending, &mut history);
         }
     }
     fn final_scoring(&mut self) -> (Side, i8) {

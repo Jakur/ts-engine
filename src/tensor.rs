@@ -1,7 +1,4 @@
 use crate::action::{Action, Decision};
-use crate::card::Card;
-use num_traits::FromPrimitive;
-use std::convert::TryFrom;
 
 pub struct OutputVec {
     data: Vec<OutputIndex>
@@ -14,7 +11,7 @@ impl OutputVec {
     pub fn data(&self) -> &Vec<OutputIndex> {
         &self.data
     }
-    pub fn extend(&mut self, mut new_data: OutputVec) {
+    pub fn extend(&mut self, new_data: OutputVec) {
         for x in new_data.data.into_iter() {
             self.data.push(x);
         }
@@ -51,18 +48,3 @@ impl OutputIndex {
         todo!()
     }
 }
-
-// impl TryFrom<Action> for OutputIndex {
-//     type Error = &'static str;
-//     fn try_from(action: Action) -> Result<Self, Self::Error> { 
-//         match action {
-//             Action::Event(c, choice) if choice.is_none() => {
-//                 Ok(OutputIndex::new(action.offset() + c as usize))
-//             }
-//             _ => Err("Cannot convert without more information")
-//         }
-//     }
-// }
-
-
-

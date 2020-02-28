@@ -303,11 +303,11 @@ impl GameState {
     }
     pub fn resolve_action(
         &mut self,
-        pending: &mut Vec<Decision>,
+        mut decision: Decision,
         choice: usize,
+        pending: &mut Vec<Decision>,
         history: &mut Vec<usize>,
     ) {
-        let mut decision = pending.pop().unwrap();
         let side = decision.agent;
         match decision.action {
             Action::Event(card) => {
