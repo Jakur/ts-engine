@@ -5,6 +5,8 @@ use crate::country::Side;
 use crate::state::GameState;
 use crate::tensor::TensorOutput;
 
+use std::mem;
+
 pub struct Game<A: Agent, B: Agent> {
     pub actors: Actors<A, B>,
     pub state: GameState,
@@ -169,9 +171,16 @@ impl<A: Agent, B: Agent> Game<A, B> {
     fn resolve_actions(&mut self, mut pending: Vec<Decision>) {
         let mut history = Vec::new(); // Todo figure out how to handle this
         while let Some(d) = pending.pop() {
-            let agent = self.actors.get(d.agent);
-            let legal = d.encode();
-            let (action, choice) = agent.decide(&self.state, legal);
+            // Do not call eval if there are only 0 or 1 decisions
+            let choice = if d.is_trivial() {
+                d.allowed.slice().iter().cloned().next()
+            } else {
+                let agent = self.actors.get(d.agent);
+                let legal = d.encode();
+                let (action, choice) = agent.decide(&self.state, legal);
+                assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action));
+                Some(choice)
+            };
             self.state.resolve_action(d, choice, &mut pending, &mut history);
         }
     }

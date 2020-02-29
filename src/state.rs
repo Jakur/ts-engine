@@ -304,10 +304,15 @@ impl GameState {
     pub fn resolve_action(
         &mut self,
         mut decision: Decision,
-        choice: usize,
+        choice: Option<usize>,
         pending: &mut Vec<Decision>,
         history: &mut Vec<usize>,
     ) {
+        let choice = if choice.is_some() {
+            choice.unwrap()
+        } else {
+            return; // Pass?
+        };
         let side = decision.agent;
         match decision.action {
             Action::Event(card) => {

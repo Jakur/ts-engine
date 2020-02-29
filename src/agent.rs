@@ -5,6 +5,7 @@ use crate::state::GameState;
 use crate::tensor::{TensorOutput, OutputVec};
 
 use rand::prelude::*;
+use std::mem;
 
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
@@ -76,9 +77,8 @@ impl<'a> DebugAgent<'a> {
 
 impl<'a> Agent for DebugAgent<'a> {
     fn decide_action(&self, _s: &GameState, choices: &[usize], a: Action) -> (Option<usize>, f32) {
-        use std::mem::discriminant;
         // Todo resolve first?
-        let eval = if discriminant(&a) == discriminant(&self.fav_action) {
+        let eval = if mem::discriminant(&a) == mem::discriminant(&self.fav_action) {
             1.0
         } else {
             0.0
