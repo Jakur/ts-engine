@@ -103,7 +103,7 @@ fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
 pub enum Action {
     PlayCard,
     ConductOps(i8),
-    StandardOps(i8),
+    StandardOps(bool, bool), // China, Vietnam
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
@@ -179,7 +179,7 @@ impl Action {
         use Action::*;
         let c = Card::NATO;
         let s = Side::USSR;
-        let mut vec = vec![PlayCard, ConductOps(2), StandardOps(2), Coup(0, false), Space,
+        let mut vec = vec![PlayCard, ConductOps(2), StandardOps(false, false), Coup(0, false), Space,
             Realignment, Place(s), Remove(s, false), Discard(s),
             Event(None), War(s, false), Pass];
         vec.sort_by_key(|a| a.index());
@@ -196,7 +196,7 @@ impl Action {
                 cards * 3
             },
             ConductOps(_) => 0, // meta action or dummy
-            StandardOps(_) | Coup(_, _) | Realignment | Place(_) | Remove(_, _) => countries,
+            StandardOps(_, _) | Coup(_, _) | Realignment | Place(_) | Remove(_, _) => countries,
             Space | Discard(_) => cards,
             War(_, _) => countries, // You can cut this down quite a bit as well
             Event(_) => todo!(),
@@ -214,7 +214,7 @@ impl Action {
         match self {
             PlayCard => 0,
             ConductOps(_) => 1,
-            StandardOps(_) => 2,
+            StandardOps(_, _) => 2,
             Coup(_, _) => 3,
             Space => 4,
             Realignment => 5,

@@ -108,35 +108,53 @@ impl GameState {
             quantity,
         } = dec;
         let allowed = allowed.slice();
-        let china_active = || {match self.current_event {
-            Some(c) if c == Card::The_China_Card => {
-                history.iter().all(|c| Region::Asia.has_country(*c))
-            }
-            _ => false,
-        }};
-        let vietnam_active = || {
-            if *agent == Side::USSR
-                && self
-                    .has_effect(Side::USSR, Effect::VietnamRevolts)
-                    .is_some()
-            {
-                history
-                    .iter()
-                    .all(|c| Region::SoutheastAsia.has_country(*c))
-            } else {
-                false
-            }
-        };
-        let mut china = china_active();
-        let mut vietnam = vietnam_active();
         let mut vec = match action {
-            Action::StandardOps(num) => {
-                if *quantity > 1 {
-                    Some(access(self, *agent))
-                } else if china || vietnam {
-                    todo!()
+            Action::StandardOps(china, vietnam) => {
+                let china = *china;
+                let vietnam = *vietnam;
+                let real_ops = dec.quantity - (china as i8) - (vietnam as i8);
+                let a = access(self, *agent);
+                if real_ops > 1 { // Doesn't need to tap into bonus influence
+                    Some(a)
+                } else if *quantity <= 1 { // Cannot break control anywhere
+                    assert!(*quantity > 0);
+                    Some(a.into_iter().filter(|x| {
+                        let c = &self.countries[*x];
+                        c.controller() != agent.opposite()
+                    }).collect())
+                } else if china {
+                    // If China is in play, vietnam revolts is irrelevant for legality
+                    // since no action costs more than 2 ops and Southeast Asia
+                    // is a subset of Asia
+                    if *quantity >= 2 {
+                        // Can break across Asia, but cannot elsewhere
+                        Some(a.into_iter().filter(|x| {
+                            let c = &self.countries[*x];
+                            c.controller() != agent.opposite() || Region::Asia.has_country(*x)
+                        }).collect())
+                    } else {
+                        // Can only place in uncontrolled Asia
+                        Some(a.into_iter().filter(|x| {
+                            let c = &self.countries[*x];
+                            c.controller() != agent.opposite() && Region::Asia.has_country(*x)
+                        }).collect())
+                    }
+                } else if vietnam {
+                    if *quantity >= 2 {
+                        // Can break in SE Asia, but cannot elsewhere
+                        Some(a.into_iter().filter(|x| {
+                            let c = &self.countries[*x];
+                            c.controller() != agent.opposite() || Region::SoutheastAsia.has_country(*x)
+                        }).collect())
+                    } else {
+                        // Can only place in uncontrolled SE Asia
+                        Some(a.into_iter().filter(|x| {
+                            let c = &self.countries[*x];
+                            c.controller() != agent.opposite() && Region::SoutheastAsia.has_country(*x)
+                        }).collect())
+                    }
                 } else {
-                    todo!()
+                    unreachable!() // Todo figure out if this is actually unreachable
                 }
             },
             Action::Coup(_, _) | Action::Realignment => {
@@ -294,10 +312,18 @@ impl GameState {
                     self.add_influence(side, choice);
                 }
             }
-            Action::StandardOps(num) => {
+            Action::StandardOps(mut china, mut viet) => {
                 let cost = self.add_influence(side, choice);
+                if china && !Region::Asia.has_country(choice) {
+                    decision.quantity -= 1;
+                    china = false;
+                }
+                if viet && !Region::SoutheastAsia.has_country(choice) {
+                    decision.quantity -= 1;
+                    viet = false;
+                }
+                decision.action = Action::StandardOps(china, viet);
                 if cost == 2 {
-                    // Todo update decision action properly
                     decision.quantity -= 1; // Additional 1
                 }
             }

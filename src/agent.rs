@@ -191,7 +191,8 @@ fn all_legal_moves(agent: Side, state: &GameState, action: &Action) -> OutputVec
         Action::PlayCard => play_card_indices(state),
         Action::ConductOps(q) => {
             let mut out = OutputVec::new(Vec::new());
-            for x in [Action::StandardOps(*q), Action::Coup(1, false), Action::Realignment].iter() {
+            // Todo fix vietnam / china if I ever use this fn
+            for x in [Action::StandardOps(false, false), Action::Coup(1, false), Action::Realignment].iter() {
                 let d = Decision::new_standard(state, agent, x.clone(), *q);
                 out.extend(d.encode());
             }
