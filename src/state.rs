@@ -561,7 +561,7 @@ impl GameState {
             .collect()
     }
     /// Calculates the base offset to card ops, as influenced by Containment,
-    /// Brezhnez, and RSP.
+    /// Brezhnev, and RSP.
     pub fn base_ops_offset(&self, side: Side) -> i8 {
         let mut offset = 0;
         match side {

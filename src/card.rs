@@ -4,6 +4,7 @@ use crate::action::{Action, Decision};
 use crate::country::{self, CName, Region, Side};
 use crate::state::GameState;
 
+use num_traits::FromPrimitive;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -11,6 +12,8 @@ pub mod deck;
 pub mod effect;
 pub use deck::*;
 pub use effect::*;
+
+pub const NUM_CARDS: usize = Card::Formosan_Resolution as usize;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -126,8 +129,18 @@ pub enum Card {
 }
 
 impl Card {
+    pub fn from_index(index: usize) -> Card {
+        Self::from_usize(index).unwrap()
+    }
     pub fn total() -> usize {
         todo!() // Until we add in the last card
+    }
+    pub fn max_e_choices(&self) -> usize {
+        match self {
+            Card::Blockade => 2,
+            Card::Olympic_Games => 2,
+            _ => 1,
+        }
     }
     /// Returns the list of event options an agent can select from this given
     /// card. If the return is None, the default behavior of just picking
@@ -530,6 +543,10 @@ fn not_opp_cont(slice: &[usize], side: Side, state: &GameState) -> Vec<usize> {
     slice.iter().copied().filter(|&x| {
         !state.is_controlled(side.opposite(), x)
     }).collect()
+}
+
+impl From<Card> for usize {
+    fn from(c: Card) -> Self { c as usize }
 }
 
 #[cfg(test)]
