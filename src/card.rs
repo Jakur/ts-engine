@@ -183,6 +183,29 @@ impl Card {
             _ => None,
         }
     }
+    pub fn influence_quantity(&self, state: &GameState, action: &Action, choice: usize) -> i8 {
+        use Card::*;
+        match self {
+            Independent_Reds => {
+                state.countries[choice].ussr
+            },
+            East_European_Unrest => {
+                if state.ar >= 8 {
+                    2
+                } else {
+                    1
+                }
+            },
+            Warsaw_Pact_Formed => {
+                if let Action::Place(_) = action {
+                    1
+                } else { // Remove all
+                    state.countries[choice].us
+                }
+            }
+            _ => 1,
+        }
+    }
     pub fn event(
         &self,
         state: &mut GameState,
@@ -195,6 +218,10 @@ impl Card {
         if !self.can_event(state) {
             return false;
         }
+        let side = match self.side() {
+            s @ Side::US | s @ Side::USSR => s,
+            Side::Neutral => *state.side()
+        };
         match self {
             Asia_Scoring => {
                 Region::Asia.score(state);
@@ -224,7 +251,7 @@ impl Card {
             Socialist_Governments => {
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Remove(Side::US, 1),
+                    Action::Remove(Side::US, false),
                     &country::WESTERN_EUROPE[..],
                     3
                 );
@@ -271,8 +298,8 @@ impl Card {
             Comecon => {
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Place(Side::USSR, 1, false),
-                    &country::EASTERN_EUROPE[..],
+                    Action::Place(Side::USSR),
+                    not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
                     4
                 );
                 state.set_limit(1, pending_actions);
@@ -290,7 +317,7 @@ impl Card {
                 if choice == 0 {
                     let x = Decision::with_quantity(
                         Side::USSR,
-                        Action::RemoveAll(Side::US, true),
+                        Action::Remove(Side::US, true),
                         &country::EASTERN_EUROPE[..],
                         4
                     );
@@ -299,7 +326,7 @@ impl Card {
                     state.set_limit(2, pending_actions);
                     let x = Decision::with_quantity(
                         Side::USSR,
-                        Action::Place(Side::USSR, 1, true),
+                        Action::Place(Side::USSR),
                         &country::EASTERN_EUROPE[..],
                         4
                     );
@@ -318,7 +345,7 @@ impl Card {
             }
             Truman_Doctrine => pending_actions.push(Decision::new(
                 Side::US,
-                Action::RemoveAll(Side::USSR, false),
+                Action::Remove(Side::USSR, true),
                 &country::EUROPE[..],
             )),
             Olympic_Games => {
@@ -341,15 +368,11 @@ impl Card {
                     }
                 } else {
                     state.defcon -= 1;
-                    let x = Decision::conduct_ops(*state.side(), 4);
+                    let x = Decision::conduct_ops(side, 4);
                     pending_actions.push(x);
                 }
             }
             NATO => {
-                // let index = state
-                //     .has_effect(Side::US, Effect::AllowNato)
-                //     .expect("Already checked");
-                // state.clear_effect(Side::US, index);
                 state.us_effects.push(Effect::Nato);
             }
             Independent_Reds => {
@@ -363,8 +386,8 @@ impl Card {
                 state.set_limit(1, pending_actions);
                 let x = Decision::with_quantity(
                     Side::US,
-                    Action::Place(Side::US, 1, false),
-                    &country::WESTERN_EUROPE[..],
+                    Action::Place(Side::US),
+                    not_opp_cont(&country::WESTERN_EUROPE[..], side, state),
                     7
                 );
                 pending_actions.push(x);
@@ -388,7 +411,7 @@ impl Card {
             Suez_Crisis => {
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Remove(Side::US, 1),
+                    Action::Remove(Side::US, false),
                     &country::SUEZ[..],
                     4
                 );
@@ -396,11 +419,10 @@ impl Card {
                 pending_actions.push(x);
             }
             East_European_Unrest => {
-                let value = if state.turn <= 7 { 1 } else { 2 };
                 state.set_limit(1, pending_actions);
                 let x = Decision::with_quantity(
                     Side::US,
-                    Action::Remove(Side::USSR, value),
+                    Action::Remove(Side::USSR, false),
                     &country::EASTERN_EUROPE[..],
                     3
                 );
@@ -410,7 +432,7 @@ impl Card {
                 state.set_limit(1, pending_actions);
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Place(Side::USSR, 1, true),
+                    Action::Place(Side::USSR),
                     &country::DECOL[..],
                     4
                 );
@@ -425,15 +447,24 @@ impl Card {
             }
             De_Stalinization => {
                 state.set_limit(2, pending_actions);
-                let allowed: Vec<_> = state.valid_countries().iter().enumerate().filter_map(|(i, c)| {
+                let dest: Vec<_> = state.valid_countries().iter().enumerate().filter_map(|(i, c)| {
                     if c.controller() != Side::US {
                         Some(i)
                     } else {
                         None
                     }
                 }).collect();
-                let x = Decision::with_quantity(Side::USSR, Action::Destal, allowed, 4);
+                let x = Decision::with_quantity(Side::USSR, Action::Place(Side::USSR), dest, 4);
+                let source: Vec<_> = state.valid_countries().iter().enumerate().filter_map(|(i, c)| {
+                    if c.has_influence(Side::USSR) {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                }).collect();
+                let y = Decision::with_quantity(Side::USSR, Action::Remove(Side::USSR, false), source, 4);
                 pending_actions.push(x);
+                pending_actions.push(y);
             }
             Nuclear_Test_Ban => {
                 let vps = state.defcon - 2;
@@ -493,6 +524,12 @@ impl Card {
     fn att(&self) -> &'static Attributes {
         &ATT[*self as usize]
     }
+}
+
+fn not_opp_cont(slice: &[usize], side: Side, state: &GameState) -> Vec<usize> {
+    slice.iter().copied().filter(|&x| {
+        !state.is_controlled(side.opposite(), x)
+    }).collect()
 }
 
 #[cfg(test)]

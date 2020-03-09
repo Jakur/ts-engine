@@ -25,7 +25,7 @@ pub struct GameState {
     pub rng: SmallRng,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
-    pub last_card: Option<Card>,
+    pub current_event: Option<Card>,
 }
 
 impl GameState {
@@ -45,7 +45,7 @@ impl GameState {
             rng: SmallRng::from_entropy(),
             deck: Deck::new(),
             restrict: None,
-            last_card: None,
+            current_event: None,
         }
     }
     pub fn advance_ply(&mut self) -> Option<Side> {
@@ -108,7 +108,7 @@ impl GameState {
             quantity,
         } = dec;
         let allowed = allowed.slice();
-        let china_active = || {match self.last_card {
+        let china_active = || {match self.current_event {
             Some(c) if c == Card::The_China_Card => {
                 history.iter().all(|c| Region::Asia.has_country(*c))
             }
@@ -187,16 +187,21 @@ impl GameState {
                 }
                 Some(vec)
             }
-            Action::Place(side, _, in_opp) if !in_opp => Some(
-                allowed
-                    .iter()
-                    .cloned()
-                    .filter(|x| {
-                        let c = &self.countries[*x];
-                        c.controller() != side.opposite()
-                    })
-                    .collect(),
-            ),
+            Action::Remove(side, _) => {
+                Some(dec.allowed.slice().iter().copied().filter(|x| {
+                    self.countries[*x].has_influence(*side)
+                }).collect())
+            }
+            // Action::Place(side, _, in_opp) if !in_opp => Some(
+            //     allowed
+            //         .iter()
+            //         .cloned()
+            //         .filter(|x| {
+            //             let c = &self.countries[*x];
+            //             c.controller() != side.opposite()
+            //         })
+            //         .collect(),
+            // ),
             Action::War(side, brush) if *brush => {
                 if *side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some() {
                     Some(
@@ -215,46 +220,6 @@ impl GameState {
             }
             _ => None,
         };
-        // match action {
-        //     Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
-        //         let next_op = pending_actions.last().map(|x| &x.action);
-        //         if let Some(op) = next_op {
-        //             vec = match op {
-        //                 Action::StandardOps => vec, // No change
-        //                 Action::ChinaInf => Some(
-        //                     vec.unwrap()
-        //                         .into_iter()
-        //                         .filter(|&x| {
-        //                             let c = &self.countries[x];
-        //                             c.controller() != agent.opposite()
-        //                                 || Region::Asia.has_country(x)
-        //                         })
-        //                         .collect(),
-        //                 ),
-        //                 Action::VietnamInf => Some(
-        //                     vec.unwrap()
-        //                         .into_iter()
-        //                         .filter(|&x| {
-        //                             let c = &self.countries[x];
-        //                             c.controller() != agent.opposite()
-        //                                 || Region::SoutheastAsia.has_country(x)
-        //                         })
-        //                         .collect(),
-        //                 ),
-        //                 _ => Some(
-        //                     vec.unwrap()
-        //                         .into_iter()
-        //                         .filter(|x| {
-        //                             let c = &self.countries[*x];
-        //                             c.controller() != agent.opposite()
-        //                         })
-        //                         .collect(),
-        //                 ),
-        //             }
-        //         }
-        //     }
-        //     _ => {}
-        // }
         // Todo figure out if restriction is always limit
         if let Some(restrict) = &self.restrict {
             match restrict {
@@ -322,8 +287,10 @@ impl GameState {
                 let roll = self.roll(); // Todo more flexible entropy source
                 self.take_coup(side, choice, ops, roll, free_coup);
             }
-            Action::Place(side, amount, _allow) => {
-                for _ in 0..amount {
+            Action::Place(side) => {
+                let c = self.current_event.expect("Only place through evnet");
+                let q = c.influence_quantity(&self, &decision.action, choice);
+                for _ in 0..q {
                     self.add_influence(side, choice);
                 }
             }
@@ -334,11 +301,13 @@ impl GameState {
                     decision.quantity -= 1; // Additional 1
                 }
             }
-            Action::Remove(s, q) => {
-                self.remove_influence(s, choice, q);
-            }
-            Action::RemoveAll(s, _allowed) => {
-                self.remove_all(s, choice);
+            Action::Remove(s, all) => {
+                if all {
+                    self.remove_all(s, choice);
+                } else {
+                    let q = self.current_event.unwrap().influence_quantity(&self, &decision.action, choice);
+                    self.remove_influence(s, choice, q);
+                }
             }
             Action::War(s, brush) => {
                 let mut roll = self.roll();

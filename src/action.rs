@@ -107,14 +107,11 @@ pub enum Action {
     Coup(i8, bool), // Ops, Free
     Space,
     Realignment,
-    Place(Side, i8, bool),      //Side, amount, can place in opponent controlled
-    Remove(Side, i8),           // Side, amount
-    RemoveAll(Side, bool),      // Side, can remove in opponent controlled
+    Place(Side),      //Side, amount, can place in opponent controlled
+    Remove(Side, bool),           // Side, remove all
     Discard(Side),          // Side
     Event(Option<Card>), // Card, Decision in branching events
     War(Side, bool), // Side, is brush war?
-    IndependentReds, // No other event works like this 
-    Destal, // Another special case
     Pass,
 }
 
@@ -183,8 +180,8 @@ impl Action {
         let c = Card::NATO;
         let s = Side::USSR;
         let mut vec = vec![PlayCard, ConductOps(2), StandardOps(2), Coup(0, false), Space,
-            Realignment, Place(s, 0, false), Remove(s, 0), RemoveAll(s, true), Discard(s),
-            Event(None), War(s, false), IndependentReds, Destal, Pass];
+            Realignment, Place(s), Remove(s, false), Discard(s),
+            Event(None), War(s, false), Pass];
         vec.sort_by_key(|a| a.index());
         vec
     }
@@ -198,12 +195,11 @@ impl Action {
                 // For now we won't
                 cards * 3
             },
-            ConductOps(_) | RemoveAll(_, _) | Destal => 0, // meta action or dummy
-            StandardOps(_) | Coup(_, _) | Realignment | Place(_, _, _) | Remove(_, _) => countries,
+            ConductOps(_) => 0, // meta action or dummy
+            StandardOps(_) | Coup(_, _) | Realignment | Place(_) | Remove(_, _) => countries,
             Space | Discard(_) => cards,
             War(_, _) => countries, // You can cut this down quite a bit as well
             Event(_) => todo!(),
-            IndependentReds => 5,
             Pass => 1,
         }
     }
@@ -222,15 +218,12 @@ impl Action {
             Coup(_, _) => 3,
             Space => 4,
             Realignment => 5,
-            Place(_, _, _) => 6,
-            Remove(_, _) => 7, 
-            RemoveAll(_, _) => 8,    
-            Discard(_) => 9, 
-            Event(_) => 10,
-            War(_, _) => 11,
-            IndependentReds => 12,
-            Destal => 13,
-            Pass => 14,
+            Place(_) => 6,
+            Remove(_, _) => 7,  
+            Discard(_) => 8, 
+            Event(_) => 9,
+            War(_, _) => 10,
+            Pass => 11,
         }
     }
 }

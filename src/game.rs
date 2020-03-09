@@ -41,7 +41,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         // USSR
         let x = Decision::with_quantity(
             Side::USSR,
-            Action::Place(Side::USSR, 1, false),
+            Action::Place(Side::USSR),
             &EASTERN_EUROPE[..],
             6
         );
@@ -51,7 +51,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         pending_actions = Vec::new();
         let x = Decision::with_quantity(
             Side::US, 
-            Action::Place(Side::US, 1, false), 
+            Action::Place(Side::US), 
             &WESTERN_EUROPE[..], 
             7
         );
@@ -74,7 +74,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
                     }
                 })
                 .collect();
-            let dec = Decision::new(Side::US, Action::Place(Side::US, 1, false), mem);
+            let dec = Decision::new(Side::US, Action::Place(Side::US), mem);
             pa.push(dec);
             self.resolve_actions(pa);
         }
