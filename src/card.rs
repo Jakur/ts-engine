@@ -1,8 +1,8 @@
 #![allow(non_camel_case_types)]
 
 use crate::action::{Action, Decision};
-use crate::country::{self, CName, Region, Side};
-use crate::state::GameState;
+use crate::country::{self, Country, CName, Region, Side};
+use crate::state::{GameState, Period};
 
 use num_traits::FromPrimitive;
 use rand::seq::SliceRandom;
@@ -210,7 +210,7 @@ impl Card {
                 }
             },
             Warsaw_Pact_Formed => {
-                if let Action::Place(_) = action {
+                if let Action::Place = action {
                     1
                 } else { // Remove all
                     state.countries[choice].us
@@ -218,6 +218,30 @@ impl Card {
             }
             _ => 1,
         }
+    }
+    pub fn remove_quantity(&self, agent: Side, target: &Country, p: Period) -> (Side, i8) {
+        use Card::*;
+        let s = match self {
+            De_Stalinization => Side::USSR,
+            _ => agent
+        };
+        let q = match self {
+            Warsaw_Pact_Formed => target.influence(s.opposite()),
+            Truman_Doctrine => target.influence(s.opposite()),
+            East_European_Unrest => {
+                if let Period::Late = p {
+                    2
+                } else {
+                    1
+                }
+            },
+            _ => 1,
+        };
+        let q = std::cmp::max(q, target.influence(s.opposite()));
+        (s, q)
+    }
+    pub fn place_quantity(&self, agent: Side, target: &Country) -> i8 {
+        1
     }
     pub fn event(
         &self,
@@ -255,7 +279,8 @@ impl Card {
                     if card.att().side == Side::US {
                         // Todo find out of the US really has agency in these decisions?
                         // Just Chernobyl?
-                        let x = Decision::new(Side::US, Action::Event(Some(card)), &[]);
+                        let x = Decision::new(Side::US, Action::Event, &[]);
+                        state.set_event(card);
                         pending_actions.push(x);
                     }
                     state.discard_card(Side::USSR, card);
@@ -264,7 +289,7 @@ impl Card {
             Socialist_Governments => {
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Remove(Side::US, false),
+                    Action::Remove,
                     &country::WESTERN_EUROPE[..],
                     3
                 );
@@ -311,7 +336,7 @@ impl Card {
             Comecon => {
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Place(Side::USSR),
+                    Action::Place,
                     not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
                     4
                 );
@@ -330,7 +355,7 @@ impl Card {
                 if choice == 0 {
                     let x = Decision::with_quantity(
                         Side::USSR,
-                        Action::Remove(Side::US, true),
+                        Action::Remove,
                         &country::EASTERN_EUROPE[..],
                         4
                     );
@@ -339,7 +364,7 @@ impl Card {
                     state.set_limit(2, pending_actions);
                     let x = Decision::with_quantity(
                         Side::USSR,
-                        Action::Place(Side::USSR),
+                        Action::Place,
                         &country::EASTERN_EUROPE[..],
                         4
                     );
@@ -358,7 +383,7 @@ impl Card {
             }
             Truman_Doctrine => pending_actions.push(Decision::new(
                 Side::US,
-                Action::Remove(Side::USSR, true),
+                Action::Remove,
                 &country::EUROPE[..],
             )),
             Olympic_Games => {
@@ -399,7 +424,7 @@ impl Card {
                 state.set_limit(1, pending_actions);
                 let x = Decision::with_quantity(
                     Side::US,
-                    Action::Place(Side::US),
+                    Action::Place,
                     not_opp_cont(&country::WESTERN_EUROPE[..], side, state),
                     7
                 );
@@ -407,7 +432,7 @@ impl Card {
             }
             Indo_Pakistani_War => pending_actions.push(Decision::new(
                 *state.side(),
-                Action::War(*state.side(), false),
+                Action::War,
                 &country::INDIA_PAKISTAN[..],
             )),
             Containment => state.us_effects.push(Effect::Containment),
@@ -424,7 +449,7 @@ impl Card {
             Suez_Crisis => {
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Remove(Side::US, false),
+                    Action::Remove,
                     &country::SUEZ[..],
                     4
                 );
@@ -435,7 +460,7 @@ impl Card {
                 state.set_limit(1, pending_actions);
                 let x = Decision::with_quantity(
                     Side::US,
-                    Action::Remove(Side::USSR, false),
+                    Action::Remove,
                     &country::EASTERN_EUROPE[..],
                     3
                 );
@@ -445,7 +470,7 @@ impl Card {
                 state.set_limit(1, pending_actions);
                 let x = Decision::with_quantity(
                     Side::USSR,
-                    Action::Place(Side::USSR),
+                    Action::Place,
                     &country::DECOL[..],
                     4
                 );
@@ -467,7 +492,7 @@ impl Card {
                         None
                     }
                 }).collect();
-                let x = Decision::with_quantity(Side::USSR, Action::Place(Side::USSR), dest, 4);
+                let x = Decision::with_quantity(Side::USSR, Action::Place, dest, 4);
                 let source: Vec<_> = state.valid_countries().iter().enumerate().filter_map(|(i, c)| {
                     if c.has_influence(Side::USSR) {
                         Some(i)
@@ -475,7 +500,7 @@ impl Card {
                         None
                     }
                 }).collect();
-                let y = Decision::with_quantity(Side::USSR, Action::Remove(Side::USSR, false), source, 4);
+                let y = Decision::with_quantity(Side::USSR, Action::Remove, source, 4);
                 pending_actions.push(x);
                 pending_actions.push(y);
             }

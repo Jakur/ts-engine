@@ -3,10 +3,12 @@ use crate::country::Side;
 use crate::state::GameState;
 use crate::tensor::OutputVec;
 
+use num_traits::FromPrimitive;
+
 lazy_static!{
     static ref OFFSETS: Vec<usize> = {
         let mut vec = vec![0];
-        let actions = Action::dummy_actions();
+        let actions = (0..NUM_ACTIONS).into_iter().map(|x| Action::from_usize(x).unwrap());
         for a in actions {
             let last = *vec.last().unwrap();
             vec.push(a.legal_choices() + last);
@@ -14,6 +16,8 @@ lazy_static!{
         vec
     };
 }
+
+pub const NUM_ACTIONS: usize = Action::Pass as usize + 1;
 
 #[derive(Clone)]
 pub struct Decision {
@@ -40,13 +44,8 @@ impl Decision {
     pub fn use_card(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
     }
-    pub fn new_event(card: Card, state: &GameState) -> Self {
-        let e_choices = card.e_choices(state);
-        if let Some(choices) = e_choices {
-            Decision::new(card.side(), Action::Event(Some(card)), choices)
-        } else {
-            Decision::new(card.side(), Action::Event(Some(card)), &[])
-        }
+    pub fn new_event(card: Card) -> Self {
+        Decision::new(card.side(), Action::Event, &[])
     }
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);
@@ -57,7 +56,7 @@ impl Decision {
                 None
             }
         }).collect();
-        Decision::new(agent, Action::Event(None), vec)
+        Decision::new(agent, Action::Event, vec)
     }
     pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
@@ -93,31 +92,32 @@ impl Decision {
 }
 
 fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
-    let offset = OFFSETS[action.index()];
+    let offset = OFFSETS[*action as usize];
     slice.iter().map(|x| {
         offset + x
     }).collect()
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, FromPrimitive)]
 pub enum Action {
-    PlayCard,
-    ConductOps(i8),
-    StandardOps(bool, bool), // China, Vietnam
-    Coup(i8, bool), // Ops, Free
+    PlayCard = 0,
+    ConductOps,
+    StandardOps, 
+    Coup, 
     Space,
     Realignment,
-    Place(Side),      //Side, amount, can place in opponent controlled
-    Remove(Side, bool),           // Side, remove all
-    Discard(Side),          // Side
-    Event(Option<Card>), // Card, Decision in branching events
-    War(Side, bool), // Side, is brush war?
+    Place,      //Side, amount, can place in opponent controlled
+    Remove,           // Side, remove all
+    Discard,          // Side
+    Event, // Card, Decision in branching events
+    SpecialEvent,
+    War, // Side, is brush war?
     Pass,
 }
 
 pub fn play_card_indices(state: &GameState) -> OutputVec {
     let f = play_card_index;
-    let space_offset = OFFSETS[Action::Space.index()];
+    let space_offset = OFFSETS[Action::Space as usize];
     let hand = state.deck.hand(state.side);
     let mut vec = Vec::new();
     let ops_offset = state.base_ops_offset(state.side);
@@ -175,16 +175,6 @@ fn play_card_index(card: Card, resolve: EventTime) -> usize {
 }
 
 impl Action {
-    pub fn dummy_actions() -> Vec<Action> {
-        use Action::*;
-        let c = Card::NATO;
-        let s = Side::USSR;
-        let mut vec = vec![PlayCard, ConductOps(2), StandardOps(false, false), Coup(0, false), Space,
-            Realignment, Place(s), Remove(s, false), Discard(s),
-            Event(None), War(s, false), Pass];
-        vec.sort_by_key(|a| a.index());
-        vec
-    }
     pub fn legal_choices(&self) -> usize {
         use Action::*;
         let countries = crate::country::NUM_COUNTRIES - 2;
@@ -195,36 +185,19 @@ impl Action {
                 // For now we won't
                 cards * 3
             },
-            ConductOps(_) => 0, // meta action or dummy
-            StandardOps(_, _) | Coup(_, _) | Realignment | Place(_) | Remove(_, _) => countries,
-            Space | Discard(_) => cards,
-            War(_, _) => countries, // You can cut this down quite a bit as well
-            Event(_) => todo!(),
+            ConductOps => 0, // meta action or dummy
+            StandardOps | Coup | Realignment | Place | Remove => countries,
+            Space | Discard => cards,
+            War => countries, // You can cut this down quite a bit as well
+            Event | SpecialEvent => todo!(),
             Pass => 1,
         }
     }
     pub fn offset(&self) -> usize {
-        if let Action::Event(_) = self {
+        if let Action::Event = self {
             todo!()
         }
-        OFFSETS[self.index()]
-    }
-    fn index(&self) -> usize {
-        use Action::*;
-        match self {
-            PlayCard => 0,
-            ConductOps(_) => 1,
-            StandardOps(_, _) => 2,
-            Coup(_, _) => 3,
-            Space => 4,
-            Realignment => 5,
-            Place(_) => 6,
-            Remove(_, _) => 7,  
-            Discard(_) => 8, 
-            Event(_) => 9,
-            War(_, _) => 10,
-            Pass => 11,
-        }
+        OFFSETS[*self as usize]
     }
     pub fn action_index(data: usize) -> usize {
         let res = OFFSETS.binary_search(&data);

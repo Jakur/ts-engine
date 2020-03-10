@@ -39,26 +39,26 @@ impl OutputVec {
 }
 
 pub(crate) trait TensorOutput {
-    fn encode(&self) -> OutputVec;
+    fn encode(&self, state: &GameState) -> OutputVec;
 }
 
 impl TensorOutput for Decision {
-    fn encode(&self) -> OutputVec {
+    fn encode(&self, state: &GameState) -> OutputVec {
         let vec = match self.action {
-            Action::Event(c) => {
+            Action::Event => {
                 let begin = self.action.offset();
-                if let Some(card) = c {
-                    // We know what event we're playing, just not precisely how
-                    let off = *CARD_OFFSET.get(card).unwrap() + begin;
-                    self.allowed.slice().iter().copied().map(|x| {
-                        x + off
-                    }).collect()
-                } else {
                     // We just want to enumerate cards we can event
                     self.allowed.slice().iter().copied().map(|x| {
                         x + begin
                     }).collect()
-                }
+            },
+            Action::SpecialEvent => {
+                let begin = self.action.offset();
+                let card = todo!();
+                let off = *CARD_OFFSET.get(card).unwrap() + begin;
+                self.allowed.slice().iter().copied().map(|x| {
+                    x + off
+                }).collect()
             }
             Action::PlayCard => unimplemented!(),
             _ => todo!()

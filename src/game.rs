@@ -41,7 +41,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         // USSR
         let x = Decision::with_quantity(
             Side::USSR,
-            Action::Place(Side::USSR),
+            Action::Place,
             &EASTERN_EUROPE[..],
             6
         );
@@ -51,7 +51,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         pending_actions = Vec::new();
         let x = Decision::with_quantity(
             Side::US, 
-            Action::Place(Side::US), 
+            Action::Place, 
             &WESTERN_EUROPE[..], 
             7
         );
@@ -74,7 +74,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
                     }
                 })
                 .collect();
-            let dec = Decision::new(Side::US, Action::Place(Side::US), mem);
+            let dec = Decision::new(Side::US, Action::Place, mem);
             pa.push(dec);
             self.resolve_actions(pa);
         }
@@ -132,28 +132,20 @@ impl<A: Agent, B: Agent> Game<A, B> {
         None
     }
     fn headline(&mut self) {
-        use crate::agent::legal_headline;
         // Todo see headline ability, can event card
-        let get_card = |a: Action| {
-            if let Action::Event(c) = a {
-                c.expect("Works")
-            } else {
-                unreachable!()
-            }
-        };
         let us = &self.actors.us_agent;
-        let us_legal = legal_headline(Side::US, &self.state);
-        let (us_act, us_choice) = us.decide(&self.state, us_legal);
-        let us_card = get_card(us_act);
+        let us_decision = Decision::headline(Side::US, &self.state);
+        let (_, us_choice) = us.decide(&self.state, us_decision.encode(&self.state));
+        let us_card = Card::from_index(us_choice);
 
         let ussr = &self.actors.ussr_agent;
-        let ussr_legal = legal_headline(Side::USSR, &self.state);
-        let (ussr_act, ussr_choice) = ussr.decide(&self.state, ussr_legal);
-        let ussr_card = get_card(ussr_act); 
+        let ussr_decision = Decision::headline(Side::USSR, &self.state);
+        let (_, ussr_choice) = ussr.decide(&self.state, ussr_decision.encode(&self.state));
+        let ussr_card = Card::from_index(ussr_choice); 
 
         // Hands cannot be empty at the HL phase
-        let decisions = (Decision::new_event(ussr_card, &self.state), 
-            Decision::new_event(us_card, &self.state));
+        let decisions = (Decision::new_event(ussr_card), 
+            Decision::new_event(us_card));
 
         // Headline order
         if us_card.base_ops() >= ussr_card.base_ops() {
@@ -176,7 +168,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
                 d.allowed.slice().iter().cloned().next()
             } else {
                 let agent = self.actors.get(d.agent);
-                let legal = d.encode();
+                let legal = d.encode(&self.state);
                 let (action, choice) = agent.decide(&self.state, legal);
                 assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action));
                 Some(choice)

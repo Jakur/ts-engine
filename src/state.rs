@@ -26,6 +26,8 @@ pub struct GameState {
     pub deck: Deck,
     pub restrict: Option<Restriction>,
     pub current_event: Option<Card>,
+    pub vietnam: bool,
+    pub china: bool,
 }
 
 impl GameState {
@@ -46,6 +48,8 @@ impl GameState {
             deck: Deck::new(),
             restrict: None,
             current_event: None,
+            vietnam: false,
+            china: false,
         }
     }
     pub fn advance_ply(&mut self) -> Option<Side> {
@@ -94,6 +98,9 @@ impl GameState {
     pub fn card_uses(&self) -> Vec<Action> {
         unimplemented!()
     }
+    pub fn set_event(&mut self, card: Card) {
+        self.current_event = Some(card);
+    }
     /// Returns the standard allowed actions if they differ from the decision
     /// slice, or else None.
     pub fn standard_allowed(
@@ -109,9 +116,9 @@ impl GameState {
         } = dec;
         let allowed = allowed.slice();
         let mut vec = match action {
-            Action::StandardOps(china, vietnam) => {
-                let china = *china;
-                let vietnam = *vietnam;
+            Action::StandardOps => {
+                let china = self.china;
+                let vietnam = self.vietnam;
                 let real_ops = dec.quantity - (china as i8) - (vietnam as i8);
                 let a = access(self, *agent);
                 if real_ops > 1 { // Doesn't need to tap into bonus influence
@@ -157,7 +164,7 @@ impl GameState {
                     unreachable!() // Todo figure out if this is actually unreachable
                 }
             },
-            Action::Coup(_, _) | Action::Realignment => {
+            Action::Coup | Action::Realignment => {
                 let opp = agent.opposite();
                 let valid = |v: &'static Vec<usize>| {
                     v.iter().filter_map(|x| {
@@ -205,23 +212,24 @@ impl GameState {
                 }
                 Some(vec)
             }
-            Action::Remove(side, _) => {
+            Action::Remove => {
+                // Destal is the only case where you remove your own influence
+                let side = match self.current_event {
+                    Some(e) if e == Card::De_Stalinization => {
+                        Side::USSR
+                    }
+                    _ => agent.opposite()
+                };
                 Some(dec.allowed.slice().iter().copied().filter(|x| {
-                    self.countries[*x].has_influence(*side)
+                    self.countries[*x].has_influence(side)
                 }).collect())
             }
-            // Action::Place(side, _, in_opp) if !in_opp => Some(
-            //     allowed
-            //         .iter()
-            //         .cloned()
-            //         .filter(|x| {
-            //             let c = &self.countries[*x];
-            //             c.controller() != side.opposite()
-            //         })
-            //         .collect(),
-            // ),
-            Action::War(side, brush) if *brush => {
-                if *side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some() {
+            Action::War => {
+                let (side, brush) = match self.current_event.unwrap() {
+                    // Todo Brush War
+                    _ => (Side::USSR, false)
+                };
+                if side == Side::USSR && brush && self.has_effect(Side::US, Effect::Nato).is_some() {
                     Some(
                         BRUSH_TARGETS
                             .iter()
@@ -273,12 +281,12 @@ impl GameState {
     pub fn resolve_card(&mut self, decision: Decision, card: Card) {
         match decision.action {
             Action::Space => {
-                // Todo see if space should not have a card parameter? 
                 let roll = self.roll();
                 self.space_card(decision.agent, roll);
                 self.discard_card(decision.agent, card);
             },
-            Action::Discard(side) => {
+            Action::Discard => {
+                let side = decision.agent; // Todo Aldrich Ames
                 self.discard_card(side, card);
             }
             _ => unimplemented!(),
@@ -297,50 +305,58 @@ impl GameState {
             return; // Pass?
         };
         let side = decision.agent;
+        let ops = decision.quantity; // Todo figure out if this is wrong
         match decision.action {
-            Action::Event(card) => {
+            Action::Event => {
+                let card = self.current_event;
                 card.unwrap().event(self, choice, pending);
+                // Todo reset current event ? 
             }
-            Action::Coup(ops, free_coup) => {
+            Action::Coup => {
+                let free_coup = false; // Todo free coup
                 let roll = self.roll(); // Todo more flexible entropy source
                 self.take_coup(side, choice, ops, roll, free_coup);
             }
-            Action::Place(side) => {
-                let c = self.current_event.expect("Only place through evnet");
+            Action::Place => {
+                let c = self.current_event.expect("Only place through event");
                 let q = c.influence_quantity(&self, &decision.action, choice);
+                let side = match c.side() {
+                    s @ Side::US | s @ Side::USSR => s,
+                    Side::Neutral => decision.agent,
+                };
                 for _ in 0..q {
                     self.add_influence(side, choice);
                 }
             }
-            Action::StandardOps(mut china, mut viet) => {
+            Action::StandardOps => {
                 let cost = self.add_influence(side, choice);
-                if china && !Region::Asia.has_country(choice) {
+                if self.china && !Region::Asia.has_country(choice) {
                     decision.quantity -= 1;
-                    china = false;
+                    self.china = false;
                 }
-                if viet && !Region::SoutheastAsia.has_country(choice) {
+                if self.vietnam && !Region::SoutheastAsia.has_country(choice) {
                     decision.quantity -= 1;
-                    viet = false;
+                    self.vietnam = false;
                 }
-                decision.action = Action::StandardOps(china, viet);
                 if cost == 2 {
                     decision.quantity -= 1; // Additional 1
                 }
             }
-            Action::Remove(s, all) => {
-                if all {
-                    self.remove_all(s, choice);
-                } else {
-                    let q = self.current_event.unwrap().influence_quantity(&self, &decision.action, choice);
-                    self.remove_influence(s, choice, q);
-                }
+            Action::Remove => {
+                let (s, q) = self.current_event.unwrap()
+                    .remove_quantity(decision.agent, &self.countries[choice], self.period());
+                self.remove_influence(s, choice, q);
             }
-            Action::War(s, brush) => {
+            Action::War => {
+                let brush = match self.current_event.unwrap() {
+                    // Todo Brush War
+                    _ => false,
+                };
                 let mut roll = self.roll();
                 if brush {
                     roll += 1;
                 }
-                self.war_target(s, choice, roll);
+                self.war_target(side, choice, roll);
             }
             Action::Realignment => {
                 let (us_roll, ussr_roll) = (self.roll(), self.roll());
@@ -436,6 +452,16 @@ impl GameState {
                 c.ussr = 0;
             }
             Side::Neutral => unimplemented!(),
+        }
+    }
+    /// Returns which period of the war the game is in
+    pub fn period(&self) -> Period {
+        if self.turn <= 3 {
+            Period::Early
+        } else if self.turn <= 7 {
+            Period::Middle
+        } else {
+            Period::Late
         }
     }
     /// Calculates the number of adjacent controlled countries for use in wars.
@@ -671,6 +697,13 @@ impl GameState {
     pub fn is_final_scoring(&self) -> bool {
         self.turn > 10
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum Period {
+    Early,
+    Middle,
+    Late,
 }
 
 #[cfg(test)]

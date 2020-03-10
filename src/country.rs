@@ -316,6 +316,13 @@ impl Country {
             Side::Neutral => unimplemented!(),
         }
     }
+    pub fn influence(&self, side: Side) -> i8 {
+        match side {
+            Side::US => self.us,
+            Side::USSR => self.ussr,
+            Side::Neutral => unimplemented!(),
+        }
+    }
     pub fn greater_influence(&self) -> Side {
         if self.ussr > self.us {
             Side::USSR
