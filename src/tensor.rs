@@ -1,7 +1,6 @@
 use crate::action::{Action, Decision};
 use crate::card::{self, Card};
-
-use std::marker::PhantomData;
+use crate::state::GameState;
 
 lazy_static! {
     static ref CARD_OFFSET: IndexMap<Card, usize> = {
@@ -76,27 +75,40 @@ impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
         OutputIndex {data}
     }
-    pub fn decode(&self) -> (Action, usize) {
+    pub fn decode(&self, decision: Option<&Decision>, state: &GameState) -> (Action, usize) {
         todo!()
+        // if let Some(dec) = decision {
+        //     let action = decision.action; 
+        //     (action, action.offset() + self.data)
+        // } else {
+        //     let action = match Action::action_index(self.data) {
+        //         0 => Action::PlayCard,
+        //         4 => Action::Space,
+
+        //     }
+        // }
     }
 }
 
 pub struct IndexMap<K, V> {
+    keys: Vec<K>,
     values: Vec<Option<V>>,
-    phantom: PhantomData<K>,
 }
 
-impl<K: Into<usize>, V> IndexMap<K, V> {
-    pub fn new(pairs: Vec<(K, V)>) -> Self {
+impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
+    pub fn new(mut pairs: Vec<(K, V)>) -> Self {
+        pairs.sort_by(|(_x1, y1), (_x2, y2)| y1.cmp(y2));
+        let mut keys = Vec::new();
         let mut values = Vec::new();
         for (k, v) in pairs.into_iter() {
+            keys.push(k);
             let k: usize = k.into();
             while k <= values.len() {
                 values.push(None);
             }
             values[k] = Some(v);
         }
-        IndexMap {values, phantom: PhantomData}
+        IndexMap {keys, values}
     }
     pub fn get(&self, key: K) -> Option<&V> {
         let key = key.into();
@@ -105,5 +117,17 @@ impl<K: Into<usize>, V> IndexMap<K, V> {
         } else {
             self.values[key].as_ref()
         }
+    }
+    pub fn find_key(&self, value: &V) -> K {
+        // let index = self.values.binary_search(value)?;
+        let index = self.keys.binary_search_by_key(value, |k| {
+            let i: usize = (*k).into();
+            let v = self.values[i];
+            v.unwrap()
+        }).unwrap();
+        self.keys[index]
+    }
+    pub fn last_value(&self) -> &V {
+        self.values.last().unwrap().as_ref().unwrap()
     }
 }

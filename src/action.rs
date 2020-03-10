@@ -226,9 +226,16 @@ impl Action {
             Pass => 11,
         }
     }
+    pub fn action_index(data: usize) -> usize {
+        let res = OFFSETS.binary_search(&data);
+        match res {
+            Ok(x) => x,
+            Err(x) => x,
+        }
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, FromPrimitive)]
 pub enum EventTime {
     Before = 0,
     After = 1,
