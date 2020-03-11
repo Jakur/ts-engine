@@ -1,4 +1,4 @@
-use crate::action::{Action, Decision};
+use crate::action::{Action, Decision, play_card_indices};
 use crate::card::{self, Card};
 use crate::state::GameState;
 
@@ -44,26 +44,40 @@ pub(crate) trait TensorOutput {
 
 impl TensorOutput for Decision {
     fn encode(&self, state: &GameState) -> OutputVec {
-        let vec = match self.action {
-            Action::Event => {
-                let begin = self.action.offset();
-                    // We just want to enumerate cards we can event
-                    self.allowed.slice().iter().copied().map(|x| {
-                        x + begin
-                    }).collect()
-            },
+        let begin = self.action.offset();
+        let out = match self.action {
             Action::SpecialEvent => {
-                let begin = self.action.offset();
-                let card = todo!();
-                let off = *CARD_OFFSET.get(card).unwrap() + begin;
-                self.allowed.slice().iter().copied().map(|x| {
-                    x + off
-                }).collect()
+                let legal = state.legal_special_event(self.agent);
+                let mut vec = Vec::new();
+                for card in legal {
+                    let choices = card.e_choices(state);
+                    let card_offset = CARD_OFFSET.get(card).unwrap();
+                    if let Some(v) = choices {
+                        vec.extend(v.into_iter().map(|x| x + card_offset));
+                    }
+                } 
+                OutputVec::new(vec)
             }
-            Action::PlayCard => unimplemented!(),
-            _ => todo!()
+            Action::BeginAr => {
+                let space = state.legal_space(self.agent);
+                let space_d = Decision::new(self.agent, Action::Space, space);
+                let mut out = space_d.encode(state);
+                let play_d = Decision::new(self.agent, Action::PlayCard, &[]);
+                out.extend(play_d.encode(state));
+                // Todo rarer things like discarding
+                out
+            },
+            Action::PlayCard => {
+                play_card_indices(state)
+            }
+            _ => {
+                let v = self.allowed.slice().iter().copied().map(|x|{
+                    x + begin
+                }).collect();
+                OutputVec::new(v)
+            }
         };
-        OutputVec::new(vec)
+        out
     }
 }
 

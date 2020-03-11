@@ -687,6 +687,77 @@ impl GameState {
         }
         success
     }
+    pub fn legal_space(&self, side: Side) -> Vec<usize> {
+        let mut vec = Vec::new();
+        let hand = self.deck.hand(side);
+        let ops_offset = self.base_ops_offset(side);
+        for &c in hand.iter() {
+            if self.can_space(self.side, c.base_ops() + ops_offset) {
+                vec.push(c as usize);
+            }
+        }
+        if self.deck.china_available(side) {
+            let china = Card::The_China_Card;
+            if self.can_space(side, china.base_ops() + ops_offset) {
+                vec.push(china as usize) // Legal, if not advisable
+            }
+        }
+        vec
+    }
+    pub fn legal_coup_realign(&self, side: Side) -> Vec<usize> {
+        let opp = side.opposite();
+        let valid = |v: &'static Vec<usize>| {
+            v.iter().filter_map(|x| {
+                if self.countries[*x].has_influence(opp) {
+                    Some(*x)
+                } else {
+                    None
+                }
+            })
+        };
+        let mut vec: Vec<usize> = valid(&AFRICA).collect();
+        vec.extend(valid(&CENTRAL_AMERICA));
+        vec.extend(valid(&SOUTH_AMERICA));
+        if self.defcon >= 3 {
+            vec.extend(valid(&MIDDLE_EAST));
+        }
+        if self.defcon >= 4 {
+            vec.extend(valid(&ASIA));
+        }
+        if self.defcon >= 5 {
+            if side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some()
+            {
+                let mut set: HashSet<usize> = EUROPE
+                    .iter()
+                    .filter_map(|&x| {
+                        let c = &self.countries[x];
+                        if c.has_influence(opp) && c.controller() != Side::US {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                // Todo other NATO exceptions
+                let france = &self.countries[CName::France as usize];
+                if france.controller() == Side::US {
+                    if self.has_effect(Side::USSR, Effect::DeGaulle).is_some() {
+                        set.insert(CName::France as usize);
+                    }
+                }
+                vec.extend(set.iter());
+            } else {
+                vec.extend(valid(&EUROPE));
+            }
+        }
+        vec
+    }
+    pub fn legal_special_event(&self, side: Side) -> Vec<Card> {
+        let hand = self.deck.hand(side);
+        hand.iter().copied().filter(|x| {
+            x.max_e_choices() > 1
+        }).collect()
+    }
     pub fn resolve_actions<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>, pending: Vec<Decision>) {
         unimplemented!();
     }

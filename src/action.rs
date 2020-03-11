@@ -100,7 +100,8 @@ fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
 
 #[derive(Clone, Copy, FromPrimitive)]
 pub enum Action {
-    PlayCard = 0,
+    BeginAr = 0,
+    PlayCard,
     ConductOps,
     StandardOps, 
     Coup, 
@@ -117,12 +118,12 @@ pub enum Action {
 
 pub fn play_card_indices(state: &GameState) -> OutputVec {
     let f = play_card_index;
-    let space_offset = OFFSETS[Action::Space as usize];
+    let event_offset = Action::Event.offset();
     let hand = state.deck.hand(state.side);
     let mut vec = Vec::new();
-    let ops_offset = state.base_ops_offset(state.side);
     for &c in hand.iter() {
         let can_event = c.can_event(state);
+        // Opponent Card
         if c.side() == state.side.opposite() {
             if can_event {
                 vec.push(f(c, EventTime::Before));
@@ -132,40 +133,22 @@ pub fn play_card_indices(state: &GameState) -> OutputVec {
                 vec.push(f(c, EventTime::Never));
             }
         } else {
-            if c.is_scoring() {
-                todo!();
-                // vec.push(f(c, Some(0)));
-                // continue;
-            }
-            // Play for ops
-            vec.push(f(c, EventTime::Never));
             // Event
             if can_event {
-                if let Some(chs) = c.e_choices(state) {
-                    for x in chs {
-                        todo!();
-                        // vec.push(Action::Event(c, Some(x)));
-                    }
-                } else {
-                    todo!();
-                    // vec.push(Action::Event(c, Some(0)));
-                }
+                vec.push(event_offset + c as usize);
             }
-        }
-        if state.can_space(state.side, c.base_ops() + ops_offset) {
-            vec.push(space_offset + c as usize);
+            // Play for ops
+            if !c.is_scoring() {
+                vec.push(f(c, EventTime::Never));
+            }
         }
     }
     if state.deck.china_available(state.side) {
         let china = Card::The_China_Card;
         vec.push(f(china, EventTime::Never));
-        if state.can_space(state.side, china.base_ops() + ops_offset) {
-            vec.push(space_offset + china as usize) // Legal, if not advisable
-        }
     }
     if hand.is_empty() || state.ar == 8 {
-        // vec.push(Action::Pass);
-        vec.push(*OFFSETS.last().unwrap()); // Pass
+        vec.push(Action::Pass.offset()); // Pass
     }
     OutputVec::new(vec)
 }
@@ -185,7 +168,7 @@ impl Action {
                 // For now we won't
                 cards * 3
             },
-            ConductOps => 0, // meta action or dummy
+            ConductOps | BeginAr => 0, // meta action or dummy
             StandardOps | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
@@ -194,9 +177,6 @@ impl Action {
         }
     }
     pub fn offset(&self) -> usize {
-        if let Action::Event = self {
-            todo!()
-        }
         OFFSETS[*self as usize]
     }
     pub fn action_index(data: usize) -> usize {
