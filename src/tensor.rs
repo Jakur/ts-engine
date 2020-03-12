@@ -73,7 +73,7 @@ impl TensorOutput for Decision {
                 out
             },
             Action::PlayCard => {
-                play_card_indices(state)
+                play_card_indices(self.agent, state)
             },
             Action::ConductOps => {
                 todo!()
@@ -89,6 +89,7 @@ impl TensorOutput for Decision {
     }
 }
 
+#[derive(Debug)]
 pub struct OutputIndex {
     data: usize,
 }
@@ -154,21 +155,46 @@ mod tests {
 
     #[test]
     fn test_index_map() {
-        let pairs: Vec<(usize, usize)> = vec![(5, 2), (10, 6), (25, 1), (30, 1), (64, 4)];
+        let pairs: Vec<(usize, usize)> = vec![(5, 0), (10, 2), (25, 4), (30, 7), (64, 10)];
         let map = IndexMap::new(pairs.clone());
-        for (x, y) in pairs {
+        for (x, y) in pairs.iter().copied() {
             assert_eq!(*map.get(x).unwrap(), y);
+        }
+        let mut ptr = 0;
+        for i in 0..16usize {
+            if let Some((_x, y)) = pairs.get(ptr + 1) {
+                if i >= *y {
+                    ptr += 1;
+                }
+            }
+            let (x, y) = pairs[ptr];
+            assert_eq!(map.find_key(&y), x);
         }
     }
 
     #[test]
     fn begin_ar() {
-        // let state = GameState::new();
-        // let mut hand: Vec<_> = (14..21).map(|x| Card::from_index(x)).collect();
-        // hand.push(Card::Asia_Scoring);
-        // let side = Side::US;
-        // let d = Decision::new(side, Action::BeginAr, &[]);
-        // let output_vec = d.encode(&state);
-        // assert_eq!(output_vec.data.len(), 15 + 4)
+        let mut state = GameState::new();
+        let mut hand: Vec<_> = (14..21).map(|x| Card::from_index(x)).collect();
+        hand.push(Card::Asia_Scoring);
+        state.deck.us_hand_mut().extend(hand);
+        let side = Side::US;
+        let d = Decision::new(side, Action::BeginAr, &[]);
+        let output_vec = d.encode(&state);
+        // dbg!(output_vec.data);
+        assert_eq!(output_vec.data.len(), 15 + 4);
+        dbg!(output_vec.data.len());
+        let mut events = 0;
+        let mut spaces = 0;
+        for out in output_vec.data() {
+            let (action, _num) = out.decode();
+            match action {
+                Action::Event => events += 1,
+                Action::Space => spaces += 1,
+                _ => {},
+            }
+        }
+        assert_eq!(events, 4);
+        assert_eq!(spaces, 4);
     }
 }

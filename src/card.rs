@@ -89,7 +89,7 @@ fn init_cards() -> Vec<Attributes> {
     x
 }
 
-#[derive(Clone, Copy, PartialEq, FromPrimitive)]
+#[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum Card {
     Asia_Scoring = 1,
     Europe_Scoring,

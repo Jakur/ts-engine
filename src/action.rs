@@ -8,7 +8,7 @@ use num_traits::FromPrimitive;
 lazy_static!{
     static ref OFFSETS: Vec<usize> = {
         let mut vec = vec![0];
-        let actions = (0..NUM_ACTIONS).into_iter().map(|x| Action::from_usize(x).unwrap());
+        let actions = (0..NUM_ACTIONS - 1).into_iter().map(|x| Action::from_usize(x).unwrap());
         for a in actions {
             let last = *vec.last().unwrap();
             vec.push(a.legal_choices() + last);
@@ -98,7 +98,7 @@ fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
     }).collect()
 }
 
-#[derive(Clone, Copy, FromPrimitive)]
+#[derive(Clone, Copy, FromPrimitive, Debug)]
 pub enum Action {
     BeginAr = 0,
     PlayCard,
@@ -116,15 +116,15 @@ pub enum Action {
     Pass,
 }
 
-pub fn play_card_indices(state: &GameState) -> OutputVec {
+pub fn play_card_indices(agent: Side, state: &GameState) -> OutputVec {
     let f = play_card_index;
     let event_offset = Action::Event.offset();
-    let hand = state.deck.hand(state.side);
+    let hand = state.deck.hand(agent);
     let mut vec = Vec::new();
     for &c in hand.iter() {
         let can_event = c.can_event(state);
         // Opponent Card
-        if c.side() == state.side.opposite() {
+        if c.side() == agent.opposite() {
             if can_event {
                 vec.push(f(c, EventTime::Before));
                 vec.push(f(c, EventTime::After));
@@ -143,7 +143,7 @@ pub fn play_card_indices(state: &GameState) -> OutputVec {
             }
         }
     }
-    if state.deck.china_available(state.side) {
+    if state.deck.china_available(agent) {
         let china = Card::The_China_Card;
         vec.push(f(china, EventTime::Never));
     }
@@ -168,7 +168,7 @@ impl Action {
                 // For now we won't
                 cards * 3
             },
-            ConductOps | BeginAr => 0, // meta action or dummy
+            ConductOps | BeginAr => 1, // meta action or dummy
             StandardOps | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
@@ -188,7 +188,7 @@ impl Action {
         }
     }
     pub fn action_from_offset(offset: usize) -> (Action, usize) {
-        let index = Self::action_index(offset);
+        let index = Self::action_index(offset) - 1;
         let action = Action::from_usize(index).unwrap();
         let diff = offset - OFFSETS[index]; // Should be >= 0
         (action, diff)
@@ -255,5 +255,24 @@ impl From<&[usize; 0]> for Allowed {
     fn from(_empty: &[usize; 0]) -> Self {
         let allowed = AllowedType::Empty;
         Allowed {allowed}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_action_offsets() {
+        let mut last = 0;
+        for i in 0..NUM_ACTIONS {
+            let action = Action::from_usize(i).unwrap();
+            let next = action.offset();
+            if i == 0 {
+                assert_eq!(next, 0);
+            } else {
+                assert!(next > last);
+                last = next;
+            }
+        }
     }
 }
