@@ -166,14 +166,13 @@ impl Agent for RandAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
     }
-    fn decide(&self, state: &GameState, legal: OutputVec) -> (Action, usize) { 
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> (Action, usize) { 
         let mut rng = thread_rng();
         let x = legal.data().choose(&mut rng);
         if let Some(choice) = x {
-            // choice.decode()
-            todo!()
+            choice.decode()
         } else {
-            todo!()
+            panic!("Nothing to decide!");
         }
     }
     fn side(&self) -> Side {

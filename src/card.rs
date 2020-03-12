@@ -133,7 +133,7 @@ impl Card {
         Self::from_usize(index).unwrap()
     }
     pub fn total() -> usize {
-        todo!() // Until we add in the last card
+        NUM_CARDS
     }
     pub fn max_e_choices(&self) -> usize {
         match self {

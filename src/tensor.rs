@@ -3,9 +3,14 @@ use crate::card::{self, Card};
 use crate::state::GameState;
 
 lazy_static! {
+    pub static ref SPECIAL_TOTAL: usize = {
+        let last = CARD_OFFSET.last_value();
+        let card = CARD_OFFSET.last_key();
+        card.max_e_choices() + last
+    };
     static ref CARD_OFFSET: IndexMap<Card, usize> = {
         let mut sum = 0;
-        let x = (0..card::NUM_CARDS + 1).filter_map(|c| {
+        let x = (1..card::NUM_CARDS + 1).filter_map(|c| {
             let c = Card::from_index(c);
             let choices = c.max_e_choices();
             if choices <= 1 {
@@ -69,6 +74,9 @@ impl TensorOutput for Decision {
             },
             Action::PlayCard => {
                 play_card_indices(state)
+            },
+            Action::ConductOps => {
+                todo!()
             }
             _ => {
                 let v = self.allowed.slice().iter().copied().map(|x|{
@@ -89,18 +97,8 @@ impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
         OutputIndex {data}
     }
-    pub fn decode(&self, decision: Option<&Decision>, state: &GameState) -> (Action, usize) {
-        todo!()
-        // if let Some(dec) = decision {
-        //     let action = decision.action; 
-        //     (action, action.offset() + self.data)
-        // } else {
-        //     let action = match Action::action_index(self.data) {
-        //         0 => Action::PlayCard,
-        //         4 => Action::Space,
-
-        //     }
-        // }
+    pub fn decode(&self) -> (Action, usize) {
+        Action::action_from_offset(self.data)
     }
 }
 
@@ -117,7 +115,7 @@ impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
         for (k, v) in pairs.into_iter() {
             keys.push(k);
             let k: usize = k.into();
-            while k <= values.len() {
+            while values.len() <= k {
                 values.push(None);
             }
             values[k] = Some(v);
@@ -143,5 +141,34 @@ impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
     }
     pub fn last_value(&self) -> &V {
         self.values.last().unwrap().as_ref().unwrap()
+    }
+    pub fn last_key(&self) -> &K {
+        self.keys.last().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::country::Side;
+
+    #[test]
+    fn test_index_map() {
+        let pairs: Vec<(usize, usize)> = vec![(5, 2), (10, 6), (25, 1), (30, 1), (64, 4)];
+        let map = IndexMap::new(pairs.clone());
+        for (x, y) in pairs {
+            assert_eq!(*map.get(x).unwrap(), y);
+        }
+    }
+
+    #[test]
+    fn begin_ar() {
+        // let state = GameState::new();
+        // let mut hand: Vec<_> = (14..21).map(|x| Card::from_index(x)).collect();
+        // hand.push(Card::Asia_Scoring);
+        // let side = Side::US;
+        // let d = Decision::new(side, Action::BeginAr, &[]);
+        // let output_vec = d.encode(&state);
+        // assert_eq!(output_vec.data.len(), 15 + 4)
     }
 }

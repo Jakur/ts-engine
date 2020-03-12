@@ -1,7 +1,7 @@
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
-use crate::tensor::OutputVec;
+use crate::tensor::{self, OutputVec};
 
 use num_traits::FromPrimitive;
 
@@ -172,7 +172,8 @@ impl Action {
             StandardOps | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
-            Event | SpecialEvent => todo!(),
+            Event => cards,
+            SpecialEvent => *tensor::SPECIAL_TOTAL,
             Pass => 1,
         }
     }
@@ -185,6 +186,12 @@ impl Action {
             Ok(x) => x,
             Err(x) => x,
         }
+    }
+    pub fn action_from_offset(offset: usize) -> (Action, usize) {
+        let index = Self::action_index(offset);
+        let action = Action::from_usize(index).unwrap();
+        let diff = offset - OFFSETS[index]; // Should be >= 0
+        (action, diff)
     }
 }
 
