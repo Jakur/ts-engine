@@ -2,6 +2,7 @@ use crate::card::Effect;
 use crate::state::GameState;
 
 use std::collections::HashSet;
+use num_traits::FromPrimitive;
 
 pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
 pub const US_INDEX: usize = CName::US as usize;
@@ -10,7 +11,7 @@ pub const USSR_INDEX: usize = CName::USSR as usize;
 lazy_static! {
     pub static ref EUROPE: Vec<usize> = Region::Europe.all_countries();
     pub static ref ASIA: Vec<usize> = Region::Asia.all_countries();
-    pub static ref MIDDLE_EAST: Vec<usize> = Region::Asia.all_countries();
+    pub static ref MIDDLE_EAST: Vec<usize> = Region::MiddleEast.all_countries();
     pub static ref WESTERN_EUROPE: Vec<usize> = Region::WesternEurope.all_countries();
     pub static ref EASTERN_EUROPE: Vec<usize> = Region::EasternEurope.all_countries();
     pub static ref AFRICA: Vec<usize> = Region::Africa.all_countries();
@@ -350,7 +351,7 @@ impl Country {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, FromPrimitive)]
 pub enum CName {
     Turkey = 0,
     Greece,
@@ -443,6 +444,12 @@ pub enum CName {
 impl From<CName> for usize {
     fn from(item: CName) -> Self {
         item as usize
+    }
+}
+
+impl CName {
+    pub fn from_index(index: usize) -> CName {
+        CName::from_usize(index).unwrap()
     }
 }
 /// Returns countries with their starting influence before players have any agency.

@@ -52,6 +52,18 @@ impl GameState {
             china: false,
         }
     }
+    pub fn four_four_two() -> GameState {
+        use crate::country::CName::*;
+        let mut state = GameState::new();
+        let c = &mut state.countries;
+        c[Italy as usize].us = 4;
+        c[WGermany as usize].us = 4;
+        c[Iran as usize].us = 2;
+        c[EGermany as usize].ussr = 4;
+        c[Poland as usize].ussr = 4;
+        c[Austria as usize].ussr = 1;
+        state
+    }
     pub fn advance_ply(&mut self) -> Option<Side> {
         let win = self.check_win();
         if let Side::US = self.side {
@@ -751,6 +763,54 @@ impl GameState {
             }
         }
         vec
+    }
+    pub fn legal_influence(&self, agent: Side, ops: i8) -> Vec<usize> {
+        let china = self.china;
+        let vietnam = self.vietnam;
+        let real_ops = ops - (china as i8) - (vietnam as i8);
+        let a = access(self, agent);
+        if real_ops > 1 { // Doesn't need to tap into bonus influence
+            a
+        } else if ops <= 1 { // Cannot break control anywhere
+            assert!(ops > 0);
+            a.into_iter().filter(|x| {
+                let c = &self.countries[*x];
+                c.controller() != agent.opposite()
+            }).collect()
+        } else if china {
+            // If China is in play, vietnam revolts is irrelevant for legality
+            // since no action costs more than 2 ops and Southeast Asia
+            // is a subset of Asia
+            if ops >= 2 {
+                // Can break across Asia, but cannot elsewhere
+                a.into_iter().filter(|x| {
+                    let c = &self.countries[*x];
+                    c.controller() != agent.opposite() || Region::Asia.has_country(*x)
+                }).collect()
+            } else {
+                // Can only place in uncontrolled Asia
+                a.into_iter().filter(|x| {
+                    let c = &self.countries[*x];
+                    c.controller() != agent.opposite() && Region::Asia.has_country(*x)
+                }).collect()
+            }
+        } else if vietnam {
+            if ops >= 2 {
+                // Can break in SE Asia, but cannot elsewhere
+                a.into_iter().filter(|x| {
+                    let c = &self.countries[*x];
+                    c.controller() != agent.opposite() || Region::SoutheastAsia.has_country(*x)
+                }).collect()
+            } else {
+                // Can only place in uncontrolled SE Asia
+                a.into_iter().filter(|x| {
+                    let c = &self.countries[*x];
+                    c.controller() != agent.opposite() && Region::SoutheastAsia.has_country(*x)
+                }).collect()
+            }
+        } else {
+            unreachable!() // Todo figure out if this is actually unreachable
+        }
     }
     pub fn legal_special_event(&self, side: Side) -> Vec<Card> {
         let hand = self.deck.hand(side);

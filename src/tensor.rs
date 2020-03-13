@@ -76,7 +76,16 @@ impl TensorOutput for Decision {
                 play_card_indices(self.agent, state)
             },
             Action::ConductOps => {
-                todo!()
+                let inf = state.legal_influence(self.agent, self.quantity);
+                let inf_d = Decision::new(self.agent, Action::StandardOps, inf);
+                let mut out = inf_d.encode(state);
+                // Todo coup restrictions
+                let coup_realign = state.legal_coup_realign(self.agent);
+                let coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
+                let realign_d = Decision::new(self.agent, Action::Realignment, coup_realign);
+                out.extend(coup_d.encode(state));
+                out.extend(realign_d.encode(state));
+                out
             }
             _ => {
                 let v = self.allowed.slice().iter().copied().map(|x|{
@@ -196,5 +205,27 @@ mod tests {
         }
         assert_eq!(events, 4);
         assert_eq!(spaces, 4);
+    }
+
+    #[test]
+    fn conduct_ops() {
+        let state = GameState::four_four_two();
+        let d = Decision::new(Side::USSR, Action::ConductOps, &[]);
+        let output_vec = d.encode(&state);
+        let mut coup = 0;
+        let mut realign = 0;
+        let mut inf = 0;
+        for out in output_vec.data() {
+            let (action, _num) = out.decode();
+            match action {
+                Action::Coup => coup += 1,
+                Action::Realignment => realign += 1,
+                Action::StandardOps => inf += 1,
+                _ => {},
+            }
+        }
+        assert_eq!(coup, 12);
+        assert_eq!(realign, 12);
+        assert_eq!(inf, 16);
     }
 }
