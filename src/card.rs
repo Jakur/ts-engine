@@ -250,7 +250,6 @@ impl Card {
         pending_actions: &mut Vec<Decision>,
     ) -> bool {
         use Card::*;
-        use num_traits::FromPrimitive;
         // let att = self.att();
         if !self.can_event(state) {
             return false;

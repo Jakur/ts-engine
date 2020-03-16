@@ -117,9 +117,9 @@ impl GameState {
     /// slice, or else None.
     pub fn standard_allowed(
         &self,
-        dec: &Decision,
+        dec: &mut Decision,
         history: &[usize],
-    ) -> Option<Vec<usize>> {
+    ) {
         let Decision {
             agent,
             action,
@@ -129,100 +129,10 @@ impl GameState {
         let allowed = allowed.slice();
         let mut vec = match action {
             Action::StandardOps => {
-                let china = self.china;
-                let vietnam = self.vietnam;
-                let real_ops = dec.quantity - (china as i8) - (vietnam as i8);
-                let a = access(self, *agent);
-                if real_ops > 1 { // Doesn't need to tap into bonus influence
-                    Some(a)
-                } else if *quantity <= 1 { // Cannot break control anywhere
-                    assert!(*quantity > 0);
-                    Some(a.into_iter().filter(|x| {
-                        let c = &self.countries[*x];
-                        c.controller() != agent.opposite()
-                    }).collect())
-                } else if china {
-                    // If China is in play, vietnam revolts is irrelevant for legality
-                    // since no action costs more than 2 ops and Southeast Asia
-                    // is a subset of Asia
-                    if *quantity >= 2 {
-                        // Can break across Asia, but cannot elsewhere
-                        Some(a.into_iter().filter(|x| {
-                            let c = &self.countries[*x];
-                            c.controller() != agent.opposite() || Region::Asia.has_country(*x)
-                        }).collect())
-                    } else {
-                        // Can only place in uncontrolled Asia
-                        Some(a.into_iter().filter(|x| {
-                            let c = &self.countries[*x];
-                            c.controller() != agent.opposite() && Region::Asia.has_country(*x)
-                        }).collect())
-                    }
-                } else if vietnam {
-                    if *quantity >= 2 {
-                        // Can break in SE Asia, but cannot elsewhere
-                        Some(a.into_iter().filter(|x| {
-                            let c = &self.countries[*x];
-                            c.controller() != agent.opposite() || Region::SoutheastAsia.has_country(*x)
-                        }).collect())
-                    } else {
-                        // Can only place in uncontrolled SE Asia
-                        Some(a.into_iter().filter(|x| {
-                            let c = &self.countries[*x];
-                            c.controller() != agent.opposite() && Region::SoutheastAsia.has_country(*x)
-                        }).collect())
-                    }
-                } else {
-                    unreachable!() // Todo figure out if this is actually unreachable
-                }
+                Some(self.legal_influence(*agent, *quantity))
             },
             Action::Coup | Action::Realignment => {
-                let opp = agent.opposite();
-                let valid = |v: &'static Vec<usize>| {
-                    v.iter().filter_map(|x| {
-                        if self.countries[*x].has_influence(opp) {
-                            Some(*x)
-                        } else {
-                            None
-                        }
-                    })
-                };
-                let mut vec: Vec<usize> = valid(&AFRICA).collect();
-                vec.extend(valid(&CENTRAL_AMERICA));
-                vec.extend(valid(&SOUTH_AMERICA));
-                if self.defcon >= 3 {
-                    vec.extend(valid(&MIDDLE_EAST));
-                }
-                if self.defcon >= 4 {
-                    vec.extend(valid(&ASIA));
-                }
-                if self.defcon >= 5 {
-                    if dec.agent == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some()
-                    {
-                        let mut set: HashSet<usize> = EUROPE
-                            .iter()
-                            .filter_map(|&x| {
-                                let c = &self.countries[x];
-                                if c.has_influence(opp) && c.controller() != Side::US {
-                                    Some(x)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        // Todo other NATO exceptions
-                        let france = &self.countries[CName::France as usize];
-                        if france.controller() == Side::US {
-                            if self.has_effect(Side::USSR, Effect::DeGaulle).is_some() {
-                                set.insert(CName::France as usize);
-                            }
-                        }
-                        vec.extend(set.iter());
-                    } else {
-                        vec.extend(valid(&EUROPE));
-                    }
-                }
-                Some(vec)
+                Some(self.legal_coup_realign(*agent))
             }
             Action::Remove => {
                 // Destal is the only case where you remove your own influence
@@ -258,7 +168,13 @@ impl GameState {
             }
             _ => None,
         };
+        if let Some(v) = vec {
+            dec.allowed = v.into();
+        }
         // Todo figure out if restriction is always limit
+        self.apply_restriction(history, dec);
+    }
+    fn apply_restriction(&self, history: &[usize], decision: &mut Decision) {
         if let Some(restrict) = &self.restrict {
             match restrict {
                 Restriction::Limit(num) => {
@@ -269,26 +185,13 @@ impl GameState {
                         .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
                         .collect();
                     if !bad.is_empty() {
-                        if vec.is_some() {
-                            vec = Some(
-                                vec.unwrap()
-                                    .into_iter()
-                                    .filter(|x| !bad.contains(x))
-                                    .collect(),
-                            );
-                        } else {
-                            vec = Some(
-                                allowed
-                                    .iter()
-                                    .filter_map(|x| if bad.contains(x) { None } else { Some(*x) })
-                                    .collect(),
-                            );
-                        }
+                        let vec: Vec<_> = decision.allowed.slice().iter().copied()
+                            .filter(|x| !bad.contains(x)).collect();
+                        decision.allowed = vec.into();
                     }
                 }
             }
         }
-        vec
     }
     pub fn resolve_card(&mut self, decision: Decision, card: Card) {
         match decision.action {

@@ -63,24 +63,11 @@ impl Decision {
     }
     pub fn new_standard(state: &GameState, agent: Side, action: Action, q: i8) -> Decision {
         let mut d = Decision::with_quantity(agent, action, &[], q);
-        let allowed = state.standard_allowed(&d, &[]).expect("Make this always work");
-        d.allowed = Allowed::new_owned(allowed);
+        state.standard_allowed(&mut d, &[]);
         d
     }
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
-        // let d = Decision::new;
-        // let inf = vec![d(agent, Action::StandardOps, &[]); ops as usize];
-        // let coup = vec![d(agent, Action::Coup(ops, false), &[])];
-        // let realign = vec![d(agent, Action::Realignment, &[]); ops as usize];
-        // let vec = vec![inf, coup, realign];
-        //d(agent, Action::AfterStates(vec), &[])
-        todo!()
-    }
-    pub fn restriction_clear() -> Decision {
-        unimplemented!()
-    }
-    pub fn limit_set(num: usize) -> Decision {
-        unimplemented!()
+        Decision::with_quantity(agent, Action::ConductOps, &[], ops)
     }
     pub fn next_decision(self) -> Option<Decision> {
         todo!()
@@ -89,13 +76,6 @@ impl Decision {
     pub fn is_trivial(&self) -> bool {
         self.allowed.slice().len() <= 1
     }
-}
-
-fn standard_convert(action: &Action, slice: &[usize]) -> Vec<usize> {
-    let offset = OFFSETS[*action as usize];
-    slice.iter().map(|x| {
-        offset + x
-    }).collect()
 }
 
 #[derive(Clone, Copy, FromPrimitive, Debug)]

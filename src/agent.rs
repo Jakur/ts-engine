@@ -184,20 +184,3 @@ pub fn legal_headline(agent: Side, state: &GameState) -> OutputVec {
     let d = Decision::headline(agent, state);
     d.encode(state)
 }
-
-// fn all_legal_moves(agent: Side, state: &GameState, action: &Action) -> OutputVec {
-//     use crate::action::play_card_indices;
-//     match action {
-//         Action::PlayCard => play_card_indices(state),
-//         Action::ConductOps(q) => {
-//             let mut out = OutputVec::new(Vec::new());
-//             // Todo fix vietnam / china if I ever use this fn
-//             for x in [Action::StandardOps(false, false), Action::Coup(1, false), Action::Realignment].iter() {
-//                 let d = Decision::new_standard(state, agent, x.clone(), *q);
-//                 out.extend(d.encode());
-//             }
-//             out
-//         },
-//         _ => todo!(),
-//     }
-// }
