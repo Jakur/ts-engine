@@ -126,8 +126,7 @@ impl GameState {
             allowed,
             quantity,
         } = dec;
-        let allowed = allowed.slice();
-        let mut vec = match action {
+        let vec = match action {
             Action::StandardOps => {
                 Some(self.legal_influence(*agent, *quantity))
             },
@@ -193,20 +192,6 @@ impl GameState {
             }
         }
     }
-    pub fn resolve_card(&mut self, decision: Decision, card: Card) {
-        match decision.action {
-            Action::Space => {
-                let roll = self.roll();
-                self.space_card(decision.agent, roll);
-                self.discard_card(decision.agent, card);
-            },
-            Action::Discard => {
-                let side = decision.agent; // Todo Aldrich Ames
-                self.discard_card(side, card);
-            }
-            _ => unimplemented!(),
-        }
-    }
     pub fn resolve_action(
         &mut self,
         mut decision: Decision,
@@ -220,8 +205,36 @@ impl GameState {
             return; // Pass?
         };
         let side = decision.agent;
-        let ops = decision.quantity; // Todo figure out if this is wrong
         match decision.action {
+            Action::PlayCard => {
+                let (card, time) = Action::play_card_data(choice);
+                let ops = card.modified_ops(decision.agent, self);
+                let conduct = Decision::conduct_ops(decision.agent, ops);
+                match time {
+                    EventTime::After => {
+                        let event = Decision::new_event(card);
+                        pending.push(event);
+                        pending.push(conduct);
+                    }
+                    EventTime::Before => {
+                        let event = Decision::new_event(card);
+                        pending.push(conduct);
+                        pending.push(event);
+                    }
+                    EventTime::Never => pending.push(conduct),
+                }
+            }
+            Action::Space => {
+                let card = Card::from_index(choice);
+                let roll = self.roll();
+                self.space_card(decision.agent, roll);
+                self.discard_card(decision.agent, card);
+            },
+            Action::Discard => {
+                let card = Card::from_index(choice);
+                let side = decision.agent; // Todo Aldrich Ames
+                self.discard_card(side, card);
+            }
             Action::Event => {
                 let card = self.current_event;
                 card.unwrap().event(self, choice, pending);
@@ -230,7 +243,7 @@ impl GameState {
             Action::Coup => {
                 let free_coup = false; // Todo free coup
                 let roll = self.roll(); // Todo more flexible entropy source
-                self.take_coup(side, choice, ops, roll, free_coup);
+                self.take_coup(side, choice, decision.quantity, roll, free_coup);
             }
             Action::Place => {
                 let c = self.current_event.expect("Only place through event");

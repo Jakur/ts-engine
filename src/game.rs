@@ -170,7 +170,10 @@ impl<A: Agent, B: Agent> Game<A, B> {
                 let agent = self.actors.get(d.agent);
                 let legal = d.encode(&self.state);
                 let (action, choice) = agent.decide(&self.state, legal);
-                assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action));
+                match action {
+                    Action::ConductOps | Action::BeginAr => {},
+                    _ => assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action)),
+                }
                 Some(choice)
             };
             self.state.resolve_action(d, choice, &mut pending, &mut history);

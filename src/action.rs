@@ -160,6 +160,12 @@ impl Action {
     pub fn offset(&self) -> usize {
         OFFSETS[*self as usize]
     }
+    pub fn play_card_data(choice: usize) -> (Card, EventTime) {
+        let rem = choice % 3;
+        let time = EventTime::from_usize(rem).unwrap();
+        let card = Card::from_index(choice / 3);
+        (card, time)
+    }
     pub fn action_index(data: usize) -> usize {
         let res = OFFSETS.binary_search(&data);
         match res {
