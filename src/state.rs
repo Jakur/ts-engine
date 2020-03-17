@@ -93,23 +93,6 @@ impl GameState {
     pub fn roll(&mut self) -> i8 {
         self.rng.gen_range(1, 7)
     }
-    pub fn choose_card<A: Agent, B: Agent>(
-        &self,
-        actors: &Actors<A, B>,
-        can_pass: bool,
-    ) -> Option<Card> {
-        let agent = actors.get(self.side);
-        let hand = self.deck.hand(self.side);
-        let china = self.deck.china_available(self.side);
-        let (card, _eval) = agent.decide_card(&self, &hand[..], china, true, can_pass);
-        card
-    }
-    pub fn use_card(&mut self, card: Card, pending_actions: &mut Vec<Decision>) {
-        unimplemented!()
-    }
-    pub fn card_uses(&self) -> Vec<Action> {
-        unimplemented!()
-    }
     pub fn set_event(&mut self, card: Card) {
         self.current_event = Some(card);
     }
@@ -169,6 +152,12 @@ impl GameState {
         };
         if let Some(v) = vec {
             dec.allowed = v.into();
+        }
+        // Avoid restrictions in special cases
+        if let Some(e) = self.current_event {
+            if e == Card::De_Stalinization && *action == Action::Remove {
+                return
+            }
         }
         // Todo figure out if restriction is always limit
         self.apply_restriction(history, dec);
@@ -733,9 +722,6 @@ impl GameState {
         hand.iter().copied().filter(|x| {
             x.max_e_choices() > 1
         }).collect()
-    }
-    pub fn resolve_actions<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>, pending: Vec<Decision>) {
-        unimplemented!();
     }
     pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
         self.restrict = Some(Restriction::Limit(limit));

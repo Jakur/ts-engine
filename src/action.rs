@@ -41,9 +41,6 @@ impl Decision {
             quantity: q,
         }
     }
-    pub fn use_card(agent: Side, action: Action) -> Decision {
-        Decision::new(agent, action, &[])
-    }
     pub fn new_event(card: Card) -> Self {
         Decision::new(card.side(), Action::Event, &[])
     }
@@ -57,6 +54,9 @@ impl Decision {
             }
         }).collect();
         Decision::new(agent, Action::Event, vec)
+    }
+    pub fn begin_ar(agent: Side) -> Decision {
+        Decision::new(agent, Action::BeginAr, &[])
     }
     pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
@@ -78,7 +78,7 @@ impl Decision {
     }
 }
 
-#[derive(Clone, Copy, FromPrimitive, Debug)]
+#[derive(Clone, Copy, FromPrimitive, Debug, PartialEq)]
 pub enum Action {
     BeginAr = 0,
     PlayCard,

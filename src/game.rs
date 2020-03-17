@@ -88,7 +88,6 @@ impl<A: Agent, B: Agent> Game<A, B> {
         while self.state.ar <= goal_ar {
             // AR 8 space power
             // Todo North Sea Oil
-            let mut can_pass = false;
             if self.state.ar == 8 {
                 let space = self.state.space[self.state.side as usize];
                 if space < 8 {
@@ -98,14 +97,9 @@ impl<A: Agent, B: Agent> Game<A, B> {
                     }
                     continue;
                 }
-                can_pass = true;
             }
-            let mut pending = Vec::new();
-            let card = self.state.choose_card(&self.actors, can_pass);
-            if let Some(c) = card {
-                self.state.use_card(c, &mut pending);
-            }
-            self.state.resolve_actions(&self.actors, pending);
+            let pending = vec![Decision::begin_ar(self.state.side)];
+            self.resolve_actions(pending);
             let win = self.state.advance_ply();
             if win.is_some() {
                 return win;
@@ -129,7 +123,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
         self.state.vp -= us_pen;
         self.state.vp += ussr_pen;
         self.state.turn += 1;
-        None
+        self.state.check_win()
     }
     fn headline(&mut self) {
         // Todo see headline ability, can event card
