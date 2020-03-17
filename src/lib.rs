@@ -73,10 +73,10 @@ mod tests {
             Chile,
             Uruguay,
         ];
-        for c in us.into_iter() {
+        for c in us.iter() {
             state.control(Side::US, *c);
         }
-        for c in ussr.into_iter() {
+        for c in ussr.iter() {
             state.control(Side::USSR, *c);
         }
         // Use two copies of Shuttle, so order of scoring doesn't matter
@@ -95,7 +95,7 @@ mod tests {
             (Region::MiddleEast, -3), // Without Shuttle
             (Region::Asia, 8),        // Without Shuttle
         ];
-        for (r, delta) in scores.into_iter() {
+        for (r, delta) in scores.iter() {
             assert_eq!(Region::score(r, &mut state), *delta);
         }
     }

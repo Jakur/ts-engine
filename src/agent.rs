@@ -1,11 +1,11 @@
-use crate::action::{Decision, Action, Allowed};
+use crate::action::{Decision, Action};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::GameState;
-use crate::tensor::{TensorOutput, OutputVec};
+use crate::tensor::{TensorOutput, OutputVec, OutputIndex};
 
 use rand::prelude::*;
-use std::mem;
+use std::sync::{Arc, Mutex};
 
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
@@ -33,83 +33,40 @@ where
 }
 
 pub trait Agent {
+    /// Given a game state and encoding of all legal actions, decide which
+    /// action to take and return the action the desired index
     fn decide(&self, state: &GameState, legal: OutputVec) -> (Action, usize);
+    /// Returns which side the agent is playing
     fn side(&self) -> Side;
-    /// Decides a country to act upon, or None if there is no legal option. Also
-    /// includes a numerical evaluation of the position from the agent's perspective.
-    fn decide_action(
-        &self,
-        state: &GameState,
-        choices: &[usize],
-        action: Action,
-    ) -> (Option<usize>, f32);
-    /// Picks a card among valid options for an action, either picking a card
-    /// to play or else to discard. Also includes a numerical evaluation of the
-    /// position from the agent's perspective.
-    fn decide_card(
-        &self,
-        state: &GameState,
-        cards: &[Card],
-        china: bool,
-        play: bool,
-        can_pass: bool,
-    ) -> (Option<Card>, f32);
     /// Returns just the evaluation of the given position
     fn get_eval(&self, state: &GameState) -> f32;
 }
 
 #[derive(Clone)]
 pub struct DebugAgent<'a> {
-    pub fav_action: Action,
-    pub fav_card: Card,
-    pub choices: &'a [usize],
+    pub ptr: Arc<Mutex<usize>>,
+    pub choices: &'a [OutputIndex],
 }
 
 impl<'a> DebugAgent<'a> {
-    pub fn new(fav_action: Action, fav_card: Card, choices: &'a [usize]) -> Self {
+    pub fn new(choices: &'a [OutputIndex]) -> Self {
         DebugAgent {
-            fav_action,
-            fav_card,
+            ptr: Arc::new(Mutex::new(0)),
             choices,
         }
     }
 }
 
 impl<'a> Agent for DebugAgent<'a> {
-    fn decide_action(&self, _s: &GameState, choices: &[usize], a: Action) -> (Option<usize>, f32) {
-        // Todo resolve first?
-        let eval = if mem::discriminant(&a) == mem::discriminant(&self.fav_action) {
-            1.0
-        } else {
-            0.0
-        };
-        for fav in self.choices.iter() {
-            if choices.contains(fav) {
-                return (Some(*fav), eval);
-            }
-        }
-        let choice = if choices.len() != 0 {
-            Some(choices[0])
-        } else {
-            None
-        };
-        (choice, eval)
-    }
-    fn decide_card(
-        &self,
-        _state: &GameState,
-        _cards: &[Card],
-        _china: bool,
-        _play: bool,
-        _can_pass: bool,
-    ) -> (Option<Card>, f32) {
-        todo!()
-    }
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
-    fn decide(&self, state: &GameState, legal: OutputVec) -> (Action, usize) { 
-        unimplemented!() 
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> (Action, usize) {
+        let mut inner_ptr = self.ptr.lock().unwrap();
+        let next = self.choices[*inner_ptr];
+        *inner_ptr += 1;
+        assert!(legal.contains(next));
+        next.decode()
     }
     fn side(&self) -> Side {
         unimplemented!()
@@ -124,45 +81,6 @@ impl RandAgent {
 }
 
 impl Agent for RandAgent {
-    fn decide_action(&self, _s: &GameState, choices: &[usize], _a: Action) -> (Option<usize>, f32) {
-        if choices.len() == 0 {
-            return (None, 0.0); // Todo detect this earlier?
-        }
-        let mut x = thread_rng();
-        let choice = x.gen_range(0, choices.len());
-        (Some(choices[choice]), x.gen())
-    }
-    fn decide_card(
-        &self,
-        _state: &GameState,
-        hand: &[Card],
-        china: bool,
-        _play: bool,
-        _can_pass: bool,
-    ) -> (Option<Card>, f32) {
-        let mut x = thread_rng();
-        if hand.len() > 0 {
-            let choice = if china {
-                x.gen_range(0, hand.len() + 1)
-            } else {
-                x.gen_range(0, hand.len())
-            };
-            let card = if choice >= hand.len() {
-                Card::The_China_Card
-            } else {
-                hand[choice]
-            };
-            (Some(card), x.gen())
-        } else {
-            let choices = &[None, Some(Card::The_China_Card)];
-            // A player cannot be forced to play the China card
-            if china {
-                (choices[x.gen_range(0, 2)], x.gen())
-            } else {
-                (None, x.gen())
-            }
-        }
-    }
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
     }

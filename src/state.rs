@@ -1,5 +1,4 @@
 use crate::action::{Action, Decision, Restriction, EventTime};
-use crate::agent::{Actors, Agent};
 use crate::card::*;
 use crate::country::*;
 
@@ -106,7 +105,7 @@ impl GameState {
         let Decision {
             agent,
             action,
-            allowed,
+            allowed: _,
             quantity,
         } = dec;
         let vec = match action {

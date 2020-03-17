@@ -41,6 +41,9 @@ impl OutputVec {
             self.data.push(x);
         }
     }
+    pub fn contains(&self, value: OutputIndex) -> bool {
+        self.data.iter().find(|x| **x == value).is_some()
+    }
 }
 
 pub(crate) trait TensorOutput {
@@ -98,7 +101,7 @@ impl TensorOutput for Decision {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct OutputIndex {
     data: usize,
 }
@@ -140,6 +143,7 @@ impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
             self.values[key].as_ref()
         }
     }
+    #[cfg(test)]
     pub fn find_key(&self, value: &V) -> K {
         // let index = self.values.binary_search(value)?;
         let index = self.keys.binary_search_by_key(value, |k| {
