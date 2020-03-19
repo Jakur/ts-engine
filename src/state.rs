@@ -281,8 +281,14 @@ impl GameState {
             _ => todo!(),
         }
         decision.quantity -= 1;
-        if decision.quantity > 0 {
-            pending.push(decision);
+        if let Action::StandardOps = decision.action {
+            if let Some(d) = decision.next_influence(self) {
+                pending.push(d);
+            }
+        } else {
+            if decision.quantity > 0 {
+                pending.push(decision);
+            }
         }
         history.push(choice);
     }
@@ -741,31 +747,52 @@ pub enum Period {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tensor::OutputIndex;
+    use crate::agent::DebugAgent;
+    use crate::country;
     #[test]
-    fn basic_actions() {
-        // use crate::agent;
-        // let template = GameState::new();
-        // let agent = agent::DebugAgent::new(
-        //     Action::Coup(0, false),
-        //     Card::De_Stalinization,
-        //     &[CName::UK as usize, CName::Canada as usize],
-        // );
-        // let agents = Actors::new(agent.clone(), agent.clone());
-        // let mut a = template.clone();
-        // let mut pending = Vec::new();
-        // Card::Socialist_Governments.event(&mut a, 0, &mut pending);
-        // a.resolve_actions(&agents, pending);
-        // assert_eq!(a.countries[CName::UK as usize].us, 3);
-        // assert_eq!(a.countries[CName::Canada as usize].us, 1);
-        // a.defcon = 2;
-        // for (x, y) in [(Side::US, 0), (Side::USSR, 2)].into_iter() {
-        //     let allowed = a.standard_allowed(
-        //         &Decision::new_no_allowed(*x, Action::Coup(1, false)),
-        //         &[],
-        //         &vec![],
-        //     );
-        //     assert_eq!(*y, allowed.unwrap().len());
-        // }
+    fn test_influence() {
+        let mut state = GameState::four_four_two();
+        state.control(Side::USSR, CName::Vietnam);
+        state.control(Side::US, CName::Thailand);
+        // state.add_effect(Side::USSR, Effect::VietnamRevolts);
+        // Todo determine this better
+        state.china = true;
+        state.vietnam = true;
+        state.current_event = Some(Card::The_China_Card);
+        let test: Vec<_> = country::access(&state, Side::USSR).into_iter().map(|x| {
+            CName::from_index(x)
+        }).collect();
+        dbg!(test);
+        // Todo determine ops automatically
+        let d = Decision::determine(Side::USSR, Action::StandardOps, 6, &state);
+        let laos = influence_in(CName::LaosCambodia);
+        let thai = influence_in(CName::Thailand); // US Controlled
+        let afghan = influence_in(CName::Afghanistan);
+        let poland = influence_in(CName::Poland);
+        let okay = vec![
+            vec![laos, laos, laos, thai, laos],
+            vec![afghan, afghan, afghan, laos, laos],
+            vec![poland, laos, poland, laos],
+        ];
+        let nok = vec![
+            vec![laos, laos, laos, laos, laos, thai],
+            vec![poland, laos, laos, laos, laos],
+            vec![afghan, afghan, afghan, afghan, thai],
+        ];
+        for x in okay {
+            let mut s = state.clone();
+            let agent = DebugAgent::new(x);
+            assert!(agent.legal_line(&mut s, vec![d.clone()]));
+        }
+        for y in nok {
+            let mut s = state.clone();
+            let agent = DebugAgent::new(y);
+            assert!(!agent.legal_line(&mut s, vec![d.clone()]))
+        }
+    }
+    fn influence_in(country: CName) -> OutputIndex {
+        OutputIndex::new(Action::StandardOps.offset() + country as usize)
     }
     #[test]
     fn count_actions() {

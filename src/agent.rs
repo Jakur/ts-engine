@@ -43,29 +43,58 @@ pub trait Agent {
 }
 
 #[derive(Clone)]
-pub struct DebugAgent<'a> {
+pub struct DebugAgent {
     pub ptr: Arc<Mutex<usize>>,
-    pub choices: &'a [OutputIndex],
+    pub choices: Vec<OutputIndex>,
 }
 
-impl<'a> DebugAgent<'a> {
-    pub fn new(choices: &'a [OutputIndex]) -> Self {
+impl DebugAgent {
+    pub fn new(choices: Vec<OutputIndex>) -> Self {
         DebugAgent {
             ptr: Arc::new(Mutex::new(0)),
             choices,
         }
     }
+    pub fn legal_line(&self, state: &mut GameState, mut pending: Vec<Decision>) -> bool {
+        let mut history = Vec::new();
+        while let (Some(decision), Some(next)) = (pending.pop(), self.choice()) {
+            // dbg!(self.ptr.lock().unwrap());
+            // dbg!(decision.quantity);
+            let legal = decision.encode(state);
+            if !legal.contains(*next) {
+                return false
+            }
+            let (_action, choice) = next.decode();
+            state.resolve_action(decision, Some(choice), &mut pending, &mut history);
+            self.advance_ptr();
+        }
+        // dbg!(pending.len());
+        self.choice().is_none() && pending.is_empty()
+    }
+    fn choice(&self) -> Option<&OutputIndex> {
+        let inner_ptr = self.ptr.lock().unwrap();
+        let ret = self.choices.get(*inner_ptr);
+        ret
+    }
+    fn advance_ptr(&self) {
+        let mut inner_ptr = self.ptr.lock().unwrap();
+        *inner_ptr += 1;
+    }
+    fn next(&self) -> Option<&OutputIndex> {
+        let mut inner_ptr = self.ptr.lock().unwrap();
+        let ret = self.choices.get(*inner_ptr);
+        *inner_ptr += 1;
+        ret
+    }
 }
 
-impl<'a> Agent for DebugAgent<'a> {
+impl Agent for DebugAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> (Action, usize) {
-        let mut inner_ptr = self.ptr.lock().unwrap();
-        let next = self.choices[*inner_ptr];
-        *inner_ptr += 1;
-        assert!(legal.contains(next));
+        let next = self.next().unwrap();
+        assert!(legal.contains(*next));
         next.decode()
     }
     fn side(&self) -> Side {

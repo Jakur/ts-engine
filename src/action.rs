@@ -32,6 +32,14 @@ impl Decision {
         where T: Into<Allowed> {
         Decision::with_quantity(agent, action, allowed, 1)
     }
+    pub fn determine(agent: Side, action: Action, q: i8, state: &GameState) -> Decision {
+        let allowed = match action {
+            Action::StandardOps => state.legal_influence(agent, q),
+            Action::Coup | Action::Realignment => state.legal_coup_realign(agent),
+            _ => todo!(),
+        };
+        Decision::with_quantity(agent, action, allowed, q)
+    }
     pub fn with_quantity<T>(agent: Side, action: Action, allowed: T, q: i8) -> Decision
         where T: Into<Allowed> {
         Decision {
@@ -69,9 +77,21 @@ impl Decision {
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
         Decision::with_quantity(agent, Action::ConductOps, &[], ops)
     }
-    pub fn next_decision(self) -> Option<Decision> {
-        todo!()
-        // If return none, reset limit in state
+    pub fn next_influence(mut self, state: &GameState) -> Option<Decision> {
+        assert!(self.action == Action::StandardOps); // For now?
+        if self.quantity == 0 {
+            None
+        } else if self.quantity == 1 {
+            let opp = self.agent.opposite();
+            let allowed: Vec<_> = self.allowed.slice().iter().copied().filter(|x| {
+                !state.is_controlled(opp, *x)
+            }).collect();
+            let allowed = Allowed::new_owned(allowed);
+            self.allowed = allowed;
+            Some(self)
+        } else {
+            Some(self)
+        }
     }
     pub fn is_trivial(&self) -> bool {
         self.allowed.slice().len() <= 1
@@ -170,11 +190,11 @@ impl Action {
         let res = OFFSETS.binary_search(&data);
         match res {
             Ok(x) => x,
-            Err(x) => x,
+            Err(x) => x - 1,
         }
     }
     pub fn action_from_offset(offset: usize) -> (Action, usize) {
-        let index = Self::action_index(offset) - 1;
+        let index = Self::action_index(offset);
         let action = Action::from_usize(index).unwrap();
         let diff = offset - OFFSETS[index]; // Should be >= 0
         (action, diff)
@@ -247,6 +267,7 @@ impl From<&[usize; 0]> for Allowed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::country::CName;
     #[test]
     fn test_action_offsets() {
         let mut last = 0;
@@ -259,6 +280,14 @@ mod tests {
                 assert!(next > last);
                 last = next;
             }
+        }
+        let inf = Action::StandardOps; 
+        let init_off = inf.offset(); 
+        for &name in [CName::Turkey, CName::Austria, CName::Chile].iter() {
+            let input = init_off + name as usize;
+            let (act, c_index) = Action::action_from_offset(input);
+            assert_eq!(name as usize, c_index);
+            assert_eq!(inf, act);
         }
     }
 }

@@ -213,23 +213,33 @@ mod tests {
 
     #[test]
     fn conduct_ops() {
+        use crate::country::CName::*;
+        use std::collections::HashSet;
         let state = GameState::four_four_two();
         let d = Decision::new(Side::USSR, Action::ConductOps, &[]);
         let output_vec = d.encode(&state);
         let mut coup = 0;
         let mut realign = 0;
-        let mut inf = 0;
+        let mut inf: HashSet<_> = vec![Finland, Sweden, EGermany, Romania, Poland, Czechoslovakia,
+            Austria, Hungary, Turkey, Syria, Lebanon, Israel, Iraq, Jordan, SaudiaArabia,
+            GulfStates, Afghanistan, NKorea, SKorea].into_iter().map(|x| {
+                x as usize
+            }).collect();
         for out in output_vec.data() {
-            let (action, _num) = out.decode();
+            let (action, num) = out.decode();
             match action {
                 Action::Coup => coup += 1,
                 Action::Realignment => realign += 1,
-                Action::StandardOps => inf += 1,
+                Action::StandardOps => {
+                    let in_set = inf.remove(&num);
+                    assert!(in_set);
+                }
                 _ => {},
             }
         }
         assert_eq!(coup, 12);
         assert_eq!(realign, 12);
-        assert_eq!(inf, 16);
+
+        assert_eq!(inf.len(), 0);
     }
 }
