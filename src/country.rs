@@ -462,6 +462,7 @@ pub fn standard_start() -> Vec<Country> {
         (3, NKorea),
         (3, EGermany),
         (1, Finland),
+        (6, USSR)
     ];
     let us = [
         (2, Canada),
@@ -474,6 +475,7 @@ pub fn standard_start() -> Vec<Country> {
         (1, Panama),
         (1, SouthAfrica),
         (5, UK),
+        (6, US)
     ];
     for (x, y) in ussr.iter() {
         c[*y as usize].ussr += x;
