@@ -1,4 +1,4 @@
-use crate::action::{Action, Decision, Restriction, EventTime};
+use crate::action::{Action, Allowed, Decision, Restriction, EventTime};
 use crate::card::*;
 use crate::country::*;
 
@@ -190,7 +190,11 @@ impl GameState {
         let choice = if choice.is_some() {
             choice.unwrap()
         } else {
-            return; // Pass?
+            match decision.action {
+                Action::Event => 0,
+                Action::Pass => return,
+                _ => unimplemented!(),
+            }
         };
         let side = decision.agent;
         match decision.action {
@@ -223,7 +227,7 @@ impl GameState {
                 let side = decision.agent; // Todo Aldrich Ames
                 self.discard_card(side, card);
             }
-            Action::Event => {
+            Action::Event | Action::SpecialEvent => {
                 let card = self.current_event;
                 card.unwrap().event(self, choice, pending);
                 // Todo reset current event ? 
@@ -277,8 +281,18 @@ impl GameState {
             Action::Realignment => {
                 let (us_roll, ussr_roll) = (self.roll(), self.roll());
                 self.take_realign(choice, us_roll, ussr_roll);
-            }
-            _ => todo!(),
+            },
+            Action::CubanMissile => {
+                self.clear_effect(side, self.has_effect(side, Effect::CubanMissileCrisis).unwrap());
+                if choice == 0 {
+                    self.remove_influence(Side::USSR, CName::Cuba as usize, 2);
+                } else if choice == 1 {
+                    self.remove_influence(Side::US, CName::WGermany as usize, 2);
+                } else {
+                    self.remove_influence(Side::US, CName::Turkey as usize, 2);          
+                }
+            },
+            Action::BeginAr | Action::ConductOps | Action::Pass => unimplemented!(),
         }
         decision.quantity -= 1;
         if let Action::StandardOps = decision.action {
@@ -727,6 +741,50 @@ impl GameState {
         hand.iter().copied().filter(|x| {
             x.max_e_choices() > 1
         }).collect()
+    }
+    pub fn legal_war(&self, side: Side) -> Allowed {
+        if side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some() {
+            let vec: Vec<_> = BRUSH_TARGETS
+                    .iter()
+                    .copied()
+                    .filter(|&i| {
+                        !(Region::Europe.has_country(i)
+                            && self.countries[i].controller() == Side::US)
+                    })
+                    .collect();
+            Allowed::new_owned(vec)
+        } else {
+            Allowed::new_slice(&BRUSH_TARGETS[..])
+        }
+    }
+    pub fn legal_cuban(&self, side: Side) -> Allowed {
+        match side {
+            Side::USSR => {
+                if self.countries[CName::Cuba as usize].ussr >= 2 {
+                    Allowed::new_owned(vec![0])
+                } else {
+                    Allowed::new_empty()
+                }
+            },
+            Side::US => {
+                let mut vec = Vec::new();
+                if self.countries[CName::WGermany as usize].us >= 2 {
+                    vec.push(1);
+                }
+                if self.countries[CName::Turkey as usize].us >= 2 {
+                    vec.push(2);
+                }
+                if vec.is_empty() {
+                    Allowed::new_empty()
+                } else {
+                    Allowed::new_owned(vec)
+                }
+            },
+            _ => unimplemented!(),
+        }
+    }
+    pub fn mil_ops(&self, side: Side) -> i8 {
+        self.mil_ops[side as usize]
     }
     pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
         self.restrict = Some(Restriction::Limit(limit));

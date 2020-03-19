@@ -1,5 +1,5 @@
 use crate::action::{Action, Decision, play_card_indices};
-use crate::card::{self, Card};
+use crate::card::{self, Card, Effect};
 use crate::state::GameState;
 
 lazy_static! {
@@ -23,6 +23,7 @@ lazy_static! {
         }).collect();
         IndexMap::new(x)
     };
+
 }
 
 pub struct OutputVec {
@@ -84,11 +85,29 @@ impl TensorOutput for Decision {
                 let mut out = inf_d.encode(state);
                 // Todo coup restrictions
                 let coup_realign = state.legal_coup_realign(self.agent);
-                let coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
+                if !state.has_effect(self.agent, Effect::CubanMissileCrisis).is_some() {
+                    let coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
+                    out.extend(coup_d.encode(state));
+                }
                 let realign_d = Decision::new(self.agent, Action::Realignment, coup_realign);
-                out.extend(coup_d.encode(state));
                 out.extend(realign_d.encode(state));
                 out
+            },
+            Action::CubanMissile => {
+                // This is somewhat clunky, but should work
+                // Todo include pass or empty
+                let pass = Action::Pass.offset();
+                let mut out = OutputVec::new(vec![pass]);
+                let cuban_offset = self.action.offset();
+                let remove = self.allowed.slice().iter().copied().map(|x| {
+                    x + cuban_offset
+                }).collect();
+                out.extend(OutputVec::new(remove));
+                out
+            },
+            Action::Coup if state.has_effect(self.agent, Effect::CubanMissileCrisis).is_some() => {
+                // Todo include pass or empty?
+                OutputVec::new(vec![Action::Pass.offset()])
             }
             _ => {
                 let v = self.allowed.slice().iter().copied().map(|x|{
@@ -109,6 +128,19 @@ pub struct OutputIndex {
 impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
         OutputIndex {data}
+    }
+    // Encode a single action-choice pair. 
+    pub fn encode_single(action: Action, choice: usize, state: &GameState) -> Option<Self> {
+        // Side shouldn't matter
+        let d = Decision::new(state.side, action, vec![choice]);
+        let vec = d.encode(state);
+        let out = *vec.data().last()?;
+        let decode = out.decode();
+        if action == decode.0 && choice == decode.1 {
+            Some(out)
+        } else {
+            None
+        }
     }
     pub fn decode(&self) -> (Action, usize) {
         Action::action_from_offset(self.data)

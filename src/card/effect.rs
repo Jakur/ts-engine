@@ -14,4 +14,5 @@ pub enum Effect {
     US_Hand_Revealed,
     USSR_Hand_Revealed,
     US_Japan,
+    CubanMissileCrisis,
 }

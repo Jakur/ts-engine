@@ -155,8 +155,28 @@ impl<A: Agent, B: Agent> Game<A, B> {
         }
     }
     fn resolve_actions(&mut self, mut pending: Vec<Decision>) {
+        use crate::card::Effect;
         let mut history = Vec::new(); // Todo figure out how to handle this
+        let mut offered_cuban = false;
         while let Some(d) = pending.pop() {
+            // Cuban Missile Crisis 
+            if !offered_cuban {
+                match &d.action {
+                    Action::Coup | Action::ConductOps => {
+                        if self.state.has_effect(d.agent, Effect::CubanMissileCrisis).is_some() {
+                            let legal_cuban = self.state.legal_cuban(d.agent);
+                            if !legal_cuban.slice().is_empty() {
+                                let cuban_d = Decision::new(d.agent, Action::CubanMissile, legal_cuban);
+                                pending.push(d);
+                                pending.push(cuban_d);
+                                offered_cuban = true;
+                                continue
+                            }
+                        }
+                    },
+                    _ => {},
+                }
+            }
             // Do not call eval if there are only 0 or 1 decisions
             let choice = if d.is_trivial() {
                 d.allowed.slice().iter().cloned().next()

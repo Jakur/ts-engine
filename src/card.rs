@@ -13,7 +13,7 @@ pub mod effect;
 pub use deck::*;
 pub use effect::*;
 
-pub const NUM_CARDS: usize = Card::Formosan_Resolution as usize;
+pub const NUM_CARDS: usize = Card::Cuban_Missile_Crisis as usize;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -126,6 +126,11 @@ pub enum Card {
     De_Stalinization,
     Nuclear_Test_Ban,
     Formosan_Resolution = 35,
+    Brush_War,
+    Central_America_Scoring,
+    Southeast_Asia_Scoring,
+    Arms_Race,
+    Cuban_Missile_Crisis = 40,
 }
 
 impl Card {
@@ -141,6 +146,9 @@ impl Card {
             Card::Olympic_Games => 2,
             _ => 1,
         }
+    }
+    pub fn is_special(&self) -> bool {
+        self.max_e_choices() > 1
     }
     /// Returns the list of event options an agent can select from this given
     /// card. If the return is None, the default behavior of just picking
@@ -278,9 +286,14 @@ impl Card {
                     if card.att().side == Side::US {
                         // Todo find out of the US really has agency in these decisions?
                         // Just Chernobyl?
-                        let x = Decision::new(Side::US, Action::Event, &[]);
+                        let d = if card.is_special() {
+                            Decision::new(Side::US, Action::SpecialEvent, 
+                                card.e_choices(state).unwrap_or_else(|| vec![]))
+                        } else {
+                            Decision::new(Side::US, Action::Event, &[])
+                        };
                         state.set_event(card);
-                        pending_actions.push(x);
+                        pending_actions.push(d);
                     }
                     state.discard_card(Side::USSR, card);
                 }
@@ -289,7 +302,7 @@ impl Card {
                 let x = Decision::with_quantity(
                     Side::USSR,
                     Action::Remove,
-                    &country::WESTERN_EUROPE[..],
+                    opp_has_inf(&country::WESTERN_EUROPE[..], Side::USSR, &state),
                     3
                 );
                 state.set_limit(2, pending_actions);
@@ -355,7 +368,7 @@ impl Card {
                     let x = Decision::with_quantity(
                         Side::USSR,
                         Action::Remove,
-                        &country::EASTERN_EUROPE[..],
+                        not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
                         4
                     );
                     pending_actions.push(x);
@@ -383,7 +396,7 @@ impl Card {
             Truman_Doctrine => pending_actions.push(Decision::new(
                 Side::US,
                 Action::Remove,
-                &country::EUROPE[..],
+                not_opp_cont(&country::EUROPE[..], side, state),
             )),
             Olympic_Games => {
                 if choice == 0 {
@@ -449,7 +462,7 @@ impl Card {
                 let x = Decision::with_quantity(
                     Side::USSR,
                     Action::Remove,
-                    &country::SUEZ[..],
+                    opp_has_inf(&country::SUEZ[..], side, state),
                     4
                 );
                 state.set_limit(2, pending_actions);
@@ -460,7 +473,7 @@ impl Card {
                 let x = Decision::with_quantity(
                     Side::US,
                     Action::Remove,
-                    &country::EASTERN_EUROPE[..],
+                    opp_has_inf(&country::EASTERN_EUROPE[..], side, state),
                     3
                 );
                 pending_actions.push(x);
@@ -513,7 +526,23 @@ impl Card {
                 state.defcon = std::cmp::min(5, state.defcon + 2);
             }
             Formosan_Resolution => state.us_effects.push(Effect::FormosanResolution),
-            _ => {}
+            Brush_War => pending_actions.push(Decision::new(side, Action::War, state.legal_war(side))),
+            Central_America_Scoring => {Region::CentralAmerica.score(state);},
+            Southeast_Asia_Scoring => {Region::SoutheastAsia.score(state);},
+            Arms_Race => {
+                if state.mil_ops(side) > state.mil_ops(side.opposite()) {
+                    if state.mil_ops(side) >= state.defcon {
+                        state.vp += 3;
+                    } else {
+                        state.vp += 1
+                    }
+                } 
+            },
+            Cuban_Missile_Crisis => {
+                state.defcon = 2;
+                state.add_effect(side.opposite(), Effect::CubanMissileCrisis);
+            },
+            The_China_Card => {},
         }
         return true;
     }
@@ -566,6 +595,13 @@ impl Card {
 fn not_opp_cont(slice: &[usize], side: Side, state: &GameState) -> Vec<usize> {
     slice.iter().copied().filter(|&x| {
         !state.is_controlled(side.opposite(), x)
+    }).collect()
+}
+
+fn opp_has_inf(slice: &[usize], side: Side, state: &GameState) -> Vec<usize> {
+    let opp = side.opposite();
+    slice.iter().copied().filter(|&x| {
+        state.countries[x].has_influence(opp)
     }).collect()
 }
 

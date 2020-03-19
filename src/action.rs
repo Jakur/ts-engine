@@ -113,6 +113,7 @@ pub enum Action {
     Event, // Card, Decision in branching events
     SpecialEvent,
     War, // Side, is brush war?
+    CubanMissile,
     Pass,
 }
 
@@ -174,6 +175,7 @@ impl Action {
             War => countries, // You can cut this down quite a bit as well
             Event => cards,
             SpecialEvent => *tensor::SPECIAL_TOTAL,
+            CubanMissile => 3,
             Pass => 1,
         }
     }
@@ -228,6 +230,9 @@ impl Allowed {
     pub fn new_owned(allowed: Vec<usize>) -> Allowed {
         let allowed = AllowedType::Owned(allowed);
         Allowed {allowed}
+    }
+    pub fn new_empty() -> Allowed {
+        Allowed {allowed: AllowedType::Empty}
     }
     pub fn slice(&self) -> &[usize] {
         match &self.allowed {
