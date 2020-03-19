@@ -158,7 +158,15 @@ impl<A: Agent, B: Agent> Game<A, B> {
         use crate::card::Effect;
         let mut history = Vec::new(); // Todo figure out how to handle this
         let mut offered_cuban = false;
+        let mut last_agent: Option<Side> = None;
         while let Some(d) = pending.pop() {
+            // Reset current event 
+            if let Some(last) = last_agent {
+                if last != d.agent {
+                    self.state.current_event = None;
+                }
+            }
+            last_agent = Some(d.agent);
             // Cuban Missile Crisis 
             if !offered_cuban {
                 match &d.action {
