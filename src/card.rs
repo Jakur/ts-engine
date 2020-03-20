@@ -13,7 +13,7 @@ pub mod effect;
 pub use deck::*;
 pub use effect::*;
 
-pub const NUM_CARDS: usize = Card::Cuban_Missile_Crisis as usize;
+pub const NUM_CARDS: usize = Card::Summit as usize;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -131,6 +131,11 @@ pub enum Card {
     Southeast_Asia_Scoring,
     Arms_Race,
     Cuban_Missile_Crisis = 40,
+    Nuclear_Subs,
+    Quagmire,
+    SALT_Negotiations,
+    Bear_Trap,
+    Summit
 }
 
 impl Card {
@@ -542,6 +547,19 @@ impl Card {
                 state.defcon = 2;
                 state.add_effect(side.opposite(), Effect::CubanMissileCrisis);
             },
+            Nuclear_Subs => state.add_effect(side, Effect::NuclearSubs),
+            Quagmire => state.add_effect(side.opposite(), Effect::Quagmire),
+            SALT_Negotiations => {
+                state.add_effect(side, Effect::SALT);
+                state.add_effect(side.opposite(), Effect::SALT);
+                let allowed: Vec<_> = state.deck.discard_pile().iter().map(|c| {
+                    *c as usize
+                }).collect();
+                let d = Decision::new(side, Action::RecoverCard, allowed);
+                pending_actions.push(d)
+            },
+            Bear_Trap => state.add_effect(side.opposite(), Effect::BearTrap),
+            Summit => todo!(),
             The_China_Card => {},
         }
         return true;

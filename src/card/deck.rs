@@ -30,6 +30,13 @@ impl Deck {
             Side::Neutral => unimplemented!(),
         }
     }
+    pub fn hand_mut(&mut self, side: Side) -> &mut Vec<Card> {
+        match side {
+            Side::US => &mut self.us_hand,
+            Side::USSR => &mut self.ussr_hand,
+            Side::Neutral => unimplemented!(),
+        }
+    }
     pub fn held_scoring(&self, side: Side) -> bool {
         let hand = self.hand(side);
         hand.iter().any(|x| x.is_scoring())
@@ -138,6 +145,13 @@ impl Deck {
     }
     pub fn china(&self) -> Side {
         self.china
+    }
+    pub fn recover_card(&mut self, side: Side, card: Card) {
+        // Todo figure out error handling
+        let index = self.discard_pile.iter().copied().position(|c| c == card);
+        self.discard_pile.swap_remove(index.unwrap());
+        let hand = self.hand_mut(side);
+        hand.push(card);
     }
     fn reshuffle(&mut self) {
         let mut rng = thread_rng();

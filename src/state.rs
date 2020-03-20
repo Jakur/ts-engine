@@ -292,6 +292,9 @@ impl GameState {
                     self.remove_influence(Side::US, CName::Turkey as usize, 2);          
                 }
             },
+            Action::RecoverCard => {
+                self.deck.recover_card(side, Card::from_index(choice));
+            }
             Action::BeginAr | Action::ConductOps | Action::Pass => unimplemented!(),
         }
         decision.quantity -= 1;

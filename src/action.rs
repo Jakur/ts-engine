@@ -114,6 +114,7 @@ pub enum Action {
     SpecialEvent,
     War, // Side, is brush war?
     CubanMissile,
+    RecoverCard, // SALT
     Pass,
 }
 
@@ -176,6 +177,7 @@ impl Action {
             Event => cards,
             SpecialEvent => *tensor::SPECIAL_TOTAL,
             CubanMissile => 3,
+            RecoverCard => cards,
             Pass => 1,
         }
     }

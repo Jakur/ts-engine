@@ -15,4 +15,8 @@ pub enum Effect {
     USSR_Hand_Revealed,
     US_Japan,
     CubanMissileCrisis,
+    NuclearSubs,
+    Quagmire,
+    SALT,
+    BearTrap
 }
