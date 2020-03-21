@@ -2,11 +2,9 @@
 
 use crate::action::{Action, Decision};
 use crate::country::{self, Country, CName, Region, Side};
-use crate::state::{GameState, Period};
+use crate::state::{GameState, Period, TwilightRand};
 
 use num_traits::FromPrimitive;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 
 pub mod deck;
 pub mod effect;
@@ -256,11 +254,12 @@ impl Card {
     pub fn place_quantity(&self, agent: Side, target: &Country) -> i8 {
         1
     }
-    pub fn event(
+    pub fn event<R: TwilightRand>(
         &self,
         state: &mut GameState,
         choice: usize,
         pending_actions: &mut Vec<Decision>,
+        rng: &mut R
     ) -> bool {
         use Card::*;
         // let att = self.att();
@@ -286,8 +285,8 @@ impl Card {
                 state.vp += 5 - state.defcon;
             }
             Five_Year_Plan => {
-                let card = state.deck.random_card(Side::USSR);
-                if let Some(&card) = card {
+                let card = state.deck.random_card(Side::USSR, rng);
+                if let Some(card) = card {
                     if card.att().side == Side::US {
                         // Todo find out of the US really has agency in these decisions?
                         // Just Chernobyl?
@@ -329,7 +328,7 @@ impl Card {
             Korean_War => {
                 let index = CName::SKorea as usize;
                 state.add_mil_ops(Side::USSR, 2);
-                let roll = state.roll();
+                let roll = rng.roll();
                 if state.war_target(Side::USSR, index, roll) {
                     state.vp -= 2;
                 }
@@ -340,7 +339,7 @@ impl Card {
             }
             Arab_Israeli_War => {
                 let index = CName::Israel as usize;
-                let mut roll = state.roll();
+                let mut roll = rng.roll();
                 // This war is special, and includes the country itself
                 if state.is_controlled(Side::US, index) {
                     roll -= 1;
@@ -408,8 +407,8 @@ impl Card {
                     let mut ussr_roll = 0;
                     let mut us_roll = 0;
                     while ussr_roll == us_roll {
-                        ussr_roll = state.roll();
-                        us_roll = state.roll();
+                        ussr_roll = rng.roll();
+                        us_roll = rng.roll();
                         if let Side::USSR = state.side() {
                             ussr_roll += 2;
                         } else {

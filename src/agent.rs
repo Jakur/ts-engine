@@ -1,7 +1,7 @@
 use crate::action::{Decision, Action};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::GameState;
+use crate::state::{GameState, DebugRand, TwilightRand};
 use crate::tensor::{TensorOutput, OutputVec, OutputIndex};
 
 use rand::prelude::*;
@@ -55,7 +55,7 @@ impl DebugAgent {
             choices,
         }
     }
-    pub fn legal_line(&self, state: &mut GameState, mut pending: Vec<Decision>) -> bool {
+    pub fn legal_line(&self, state: &mut GameState, mut pending: Vec<Decision>, mut rng: DebugRand) -> bool {
         let mut history = Vec::new();
         while let (Some(decision), Some(next)) = (pending.pop(), self.choice()) {
             // dbg!(self.ptr.lock().unwrap());
@@ -65,7 +65,7 @@ impl DebugAgent {
                 return false
             }
             let (_action, choice) = next.decode();
-            state.resolve_action(decision, Some(choice), &mut pending, &mut history);
+            state.resolve_action(decision, Some(choice), &mut pending, &mut history, &mut rng);
             self.advance_ptr();
         }
         // dbg!(pending.len());

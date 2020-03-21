@@ -1,4 +1,5 @@
 use super::*;
+use crate::state::TwilightRand;
 
 #[derive(Clone)]
 pub struct Deck {
@@ -51,11 +52,11 @@ impl Deck {
                 .fold(0, |acc, x| if x.is_scoring() { acc + 1 } else { acc });
         scoring_count >= ar_left
     }
-    pub fn draw_cards(&mut self, target: usize) {
+    pub fn draw_cards<T: TwilightRand>(&mut self, target: usize, rng: &mut T) {
         let mut pick_ussr = true;
         // Oscillating is relevant when reshuffles do occur
         while self.ussr_hand.len() < target && self.us_hand.len() < target {
-            let next_card = self.draw_card();
+            let next_card = self.draw_card(rng);
             if pick_ussr {
                 self.ussr_hand.push(next_card);
             } else {
@@ -64,11 +65,11 @@ impl Deck {
             pick_ussr = !pick_ussr;
         }
         while self.ussr_hand.len() < target {
-            let c = self.draw_card();
+            let c = self.draw_card(rng);
             self.ussr_hand.push(c);
         }
         while self.us_hand.len() < target {
-            let c = self.draw_card();
+            let c = self.draw_card(rng);
             self.us_hand.push(c);
         }
     }
@@ -83,18 +84,16 @@ impl Deck {
             false
         }
     }
-    pub fn random_card(&self, side: Side) -> Option<&Card> {
-        let hand = self.hand(side);
-        let mut rng = thread_rng();
-        hand.choose(&mut rng)
+    pub fn random_card<T: TwilightRand>(&self, side: Side, rng: &mut T) -> Option<Card> {
+        rng.card_from_hand(self, side)
     }
     /// Draws the next card from the draw pile, reshuffling if necessary.
-    fn draw_card(&mut self) -> Card {
+    fn draw_card<T: TwilightRand>(&mut self, rng: &mut T) -> Card {
         match self.draw_pile.pop() {
             Some(c) => c,
             None => {
-                self.reshuffle();
-                self.draw_card()
+                self.reshuffle(rng);
+                self.draw_card(rng)
             }
         }
     }
@@ -113,8 +112,14 @@ impl Deck {
     pub fn discard_pile(&self) -> &Vec<Card> {
         &self.discard_pile
     }
+    pub fn discard_pile_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.discard_pile
+    }
     pub fn draw_pile(&self) -> &Vec<Card> {
         &self.draw_pile
+    }
+    pub fn draw_pile_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.draw_pile
     }
     pub fn removed(&self) -> &Vec<Card> {
         &self.removed
@@ -153,9 +158,10 @@ impl Deck {
         let hand = self.hand_mut(side);
         hand.push(card);
     }
-    fn reshuffle(&mut self) {
-        let mut rng = thread_rng();
-        self.discard_pile.shuffle(&mut rng);
+    pub fn reset_draw_pile(&mut self) {
         self.draw_pile.append(&mut self.discard_pile);
+    }
+    fn reshuffle<T: TwilightRand>(&mut self, rng: &mut T) {
+        rng.reshuffle(self);
     }
 }

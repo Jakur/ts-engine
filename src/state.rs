@@ -3,10 +3,10 @@ use crate::card::*;
 use crate::country::*;
 
 use counter::Counter;
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
 
 use std::collections::HashSet;
+mod random;
+pub use random::{DebugRand, InternalRand, TwilightRand};
 
 #[derive(Clone)]
 pub struct GameState {
@@ -21,7 +21,6 @@ pub struct GameState {
     space_attempts: [i8; 2],
     pub us_effects: Vec<Effect>,
     pub ussr_effects: Vec<Effect>,
-    pub rng: SmallRng,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
     pub current_event: Option<Card>,
@@ -43,7 +42,6 @@ impl GameState {
             space_attempts: [0, 0],
             us_effects: Vec::new(),
             ussr_effects: Vec::new(),
-            rng: SmallRng::from_entropy(),
             deck: Deck::new(),
             restrict: None,
             current_event: None,
@@ -88,9 +86,6 @@ impl GameState {
     pub fn valid_countries(&self) -> &[Country] {
         let len = self.countries.len();
         &self.countries[0..len - 2]
-    }
-    pub fn roll(&mut self) -> i8 {
-        self.rng.gen_range(1, 7)
     }
     pub fn set_event(&mut self, card: Card) {
         self.current_event = Some(card);
@@ -180,12 +175,13 @@ impl GameState {
             }
         }
     }
-    pub fn resolve_action(
+    pub fn resolve_action<R: TwilightRand>(
         &mut self,
         mut decision: Decision,
         choice: Option<usize>,
         pending: &mut Vec<Decision>,
         history: &mut Vec<usize>,
+        rng: &mut R,
     ) {
         let choice = if choice.is_some() {
             choice.unwrap()
@@ -218,7 +214,7 @@ impl GameState {
             }
             Action::Space => {
                 let card = Card::from_index(choice);
-                let roll = self.roll();
+                let roll = rng.roll();
                 self.space_card(decision.agent, roll);
                 self.discard_card(decision.agent, card);
             },
@@ -229,12 +225,12 @@ impl GameState {
             }
             Action::Event | Action::SpecialEvent => {
                 let card = self.current_event;
-                card.unwrap().event(self, choice, pending);
+                card.unwrap().event(self, choice, pending, rng);
                 // Todo reset current event ? 
             }
             Action::Coup => {
                 let free_coup = false; // Todo free coup
-                let roll = self.roll(); // Todo more flexible entropy source
+                let roll = rng.roll(); // Todo more flexible entropy source
                 self.take_coup(side, choice, decision.quantity, roll, free_coup);
             }
             Action::Place => {
@@ -272,14 +268,14 @@ impl GameState {
                     // Todo Brush War
                     _ => false,
                 };
-                let mut roll = self.roll();
+                let mut roll = rng.roll();
                 if brush {
                     roll += 1;
                 }
                 self.war_target(side, choice, roll);
             }
             Action::Realignment => {
-                let (us_roll, ussr_roll) = (self.roll(), self.roll());
+                let (ussr_roll, us_roll) = (rng.roll(), rng.roll());
                 self.take_realign(choice, us_roll, ussr_roll);
             },
             Action::CubanMissile => {
@@ -841,15 +837,16 @@ mod tests {
             vec![poland, laos, laos, laos, laos],
             vec![afghan, afghan, afghan, afghan, thai],
         ];
+        let rng = DebugRand::new_empty();
         for x in okay {
             let mut s = state.clone();
             let agent = DebugAgent::new(x);
-            assert!(agent.legal_line(&mut s, vec![d.clone()]));
+            assert!(agent.legal_line(&mut s, vec![d.clone()], rng.clone()));
         }
         for y in nok {
             let mut s = state.clone();
             let agent = DebugAgent::new(y);
-            assert!(!agent.legal_line(&mut s, vec![d.clone()]))
+            assert!(!agent.legal_line(&mut s, vec![d.clone()], rng.clone()))
         }
     }
     fn influence_in(country: CName) -> OutputIndex {

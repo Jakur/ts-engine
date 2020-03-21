@@ -2,17 +2,18 @@ use crate::action::{Action, Decision};
 use crate::agent::{Actors, Agent};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::GameState;
+use crate::state::{GameState, TwilightRand};
 use crate::tensor::TensorOutput;
 
 use std::mem;
 
-pub struct Game<A: Agent, B: Agent> {
+pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     pub actors: Actors<A, B>,
     pub state: GameState,
+    pub rng: R,
 }
 
-impl<A: Agent, B: Agent> Game<A, B> {
+impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
     pub fn play(&mut self) -> (Side, i8) {
         self.initial_placement();
         let mut instant_win = None;
@@ -198,7 +199,7 @@ impl<A: Agent, B: Agent> Game<A, B> {
                 }
                 Some(choice)
             };
-            self.state.resolve_action(d, choice, &mut pending, &mut history);
+            self.state.resolve_action(d, choice, &mut pending, &mut history, &mut self.rng);
         }
     }
     fn final_scoring(&mut self) -> (Side, i8) {
