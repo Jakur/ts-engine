@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use crate::action::{Action, Decision};
-use crate::country::{self, Country, CName, Region, Side};
+use crate::country::{self, Country, CName, Region, Side, Status};
 use crate::state::{GameState, Period, TwilightRand};
 
 use num_traits::FromPrimitive;
@@ -558,7 +558,36 @@ impl Card {
                 pending_actions.push(d)
             },
             Bear_Trap => state.add_effect(side.opposite(), Effect::BearTrap),
-            Summit => todo!(),
+            Summit => {
+                let mut us_roll = rng.roll();
+                let mut ussr_roll = rng.roll();
+                for r in Region::major_regions() {
+                    let (status, _) = r.status(state, false);
+                    match status[Side::US as usize] {
+                        Status::Domination | Status::Control => us_roll += 1,
+                        _ => {},
+                    }
+                    match status[Side::USSR as usize] {
+                        Status::Domination | Status::Control => ussr_roll += 1,
+                        _ => {},
+                    }
+                }
+                let defcon: Vec<_> = [state.defcon - 1, state.defcon, state.defcon + 1]
+                    .iter().copied().filter_map(|x| {
+                        if 1 <= x && x <= 5 {
+                            Some(x as usize)
+                        } else {
+                            None
+                        }
+                    }).collect();
+                if us_roll > ussr_roll {
+                    state.vp += 2;
+                    pending_actions.push(Decision::new(Side::US, Action::ChangeDefcon, defcon));
+                } else if ussr_roll > us_roll {
+                    state.vp -= 2;
+                    pending_actions.push(Decision::new(Side::USSR, Action::ChangeDefcon, defcon));
+                }
+            }
             The_China_Card => {},
         }
         return true;

@@ -103,7 +103,8 @@ pub enum Region {
     SouthAmerica,
 }
 
-enum Status {
+#[derive(Clone, Copy)]
+pub enum Status {
     Zero,
     Presence,
     Domination,
@@ -111,14 +112,17 @@ enum Status {
 }
 
 impl Region {
-    pub fn score(&self, state: &mut GameState) -> i8 {
+    pub fn major_regions() -> Vec<Region> {
         use Region::*;
-        let countries = self.all_countries();
+        vec![Europe, MiddleEast, Asia, Africa, CentralAmerica, SouthAmerica]
+    }
+    /// Returns the status of both sides in the region, and the battleground difference
+    pub fn status(&self, state: &GameState, use_shuttle: bool) -> ([Status; 2], i8) {
         let mut ussr_bg = 0;
         let mut ussr_n = 0;
         let mut us_bg = 0;
         let mut us_n = 0;
-        for i in countries {
+        for i in self.all_countries() {
             let c = &state.countries[i];
             match c.controller() {
                 Side::US => {
@@ -138,18 +142,85 @@ impl Region {
                 _ => {}
             }
         }
-        // Total number of battlegrounds, then the three scoring levels
-        let (bg_total, p, d, c) = match self {
-            Europe => (5, 3, 7, 0),
-            MiddleEast => (6, 3, 5, 7),
-            Asia => (6, 3, 7, 9),
-            Africa => (5, 1, 4, 6),
-            CentralAmerica => (3, 1, 3, 5),
-            SouthAmerica => (4, 2, 5, 6),
-            _ => (0, 0, 0, 0),
+        let mut ret = [Status::Zero, Status::Zero];
+        let bg_total = match self {
+            Region::Europe => 5,
+            Region::MiddleEast => 6,
+            Region::Asia => 6,
+            Region::Africa => 5,
+            Region::CentralAmerica => 3,
+            Region::SouthAmerica => 4,
+            _ => 0,
+        };
+        match self {
+            Region::MiddleEast => {
+                if let Some(_) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                    if !state.is_final_scoring() && use_shuttle {
+                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
+                    }
+                }
+            }
+            Region::Asia => {
+                if let Some(_) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                    if !state.is_final_scoring() && use_shuttle {
+                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
+                    }
+                }
+                if state.is_controlled(Side::US, CName::Taiwan) {
+                    if let Some(_) = state.has_effect(Side::US, Effect::FormosanResolution) {
+                        us_bg += 1;
+                        us_n -= 1;
+                    }
+                }
+            }
+            _ => {}
+        }
+        let diff = us_bg + us_n - ussr_bg - ussr_n;
+        let ussr_status = {
+            if ussr_bg == bg_total && diff < 0 {
+                Status::Control
+            } else if ussr_bg > us_bg && diff < 0 && ussr_n > 0 {
+                Status::Domination
+            } else if ussr_bg + ussr_n > 0 {
+                Status::Presence
+            } else {
+                Status::Zero
+            }
+        };
+        let us_status = {
+            if us_bg == bg_total && diff > 0 {
+                Status::Control
+            } else if us_bg > ussr_bg && diff > 0 && us_n > 0 {
+                Status::Domination
+            } else if us_bg + us_n > 0 {
+                Status::Presence
+            } else {
+                Status::Zero
+            }
+        };
+        ret[Side::US as usize] = us_status;
+        ret[Side::USSR as usize] = ussr_status;
+        if let Region::SoutheastAsia = self {
+            (ret, us_n - ussr_n + 2 * us_bg - 2 * ussr_bg)
+        } else {
+            (ret, us_bg - ussr_bg)
+        }
+    }
+    pub fn score(&self, state: &mut GameState) -> i8 {
+        use Region::*;
+        // Vp for the three successive scoring levels
+        let (p, d, c) = match self {
+            Europe => (3, 7, 0),
+            MiddleEast => (3, 5, 7),
+            Asia => (3, 7, 9),
+            Africa => (1, 4, 6),
+            CentralAmerica => (1, 3, 5),
+            SouthAmerica => (2, 5, 6),
+            _ => (0, 0, 0),
         };
         let mut vp_change = 0;
-        // Special cases
+        let (statuses, bg_diff) = self.status(state, !state.is_final_scoring());
+        // Special case adjacency
         match self {
             Europe => {
                 for c in [CName::Finland, CName::Poland, CName::Romania].iter() {
@@ -164,7 +235,6 @@ impl Region {
             MiddleEast => {
                 if let Some(index) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() {
-                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
                         state.clear_effect(Side::US, index);
                     }
                 }
@@ -180,14 +250,7 @@ impl Region {
                 }
                 if let Some(index) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() {
-                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
                         state.clear_effect(Side::US, index);
-                    }
-                }
-                if state.is_controlled(Side::US, CName::Taiwan) {
-                    if let Some(_) = state.has_effect(Side::US, Effect::FormosanResolution) {
-                        us_bg += 1;
-                        us_n -= 1;
                     }
                 }
             }
@@ -201,42 +264,13 @@ impl Region {
             _ => {}
         }
         // Usual scoring protocol
-        let (us_status, ussr_status) = match self {
-            SoutheastAsia => {
-                vp_change += us_n;
-                vp_change -= ussr_n;
-                vp_change += 2 * us_bg; // US Thailand
-                vp_change -= 2 * ussr_bg; // USSR Thailand
-                state.vp += vp_change;
-                return vp_change;
-            }
-            _ => {
-                let diff = us_bg + us_n - ussr_bg - ussr_n;
-                let ussr_status = {
-                    if ussr_bg == bg_total && diff < 0 {
-                        Status::Control
-                    } else if ussr_bg > us_bg && diff < 0 && ussr_n > 0 {
-                        Status::Domination
-                    } else if ussr_bg + ussr_n > 0 {
-                        Status::Presence
-                    } else {
-                        Status::Zero
-                    }
-                };
-                let us_status = {
-                    if us_bg == bg_total && diff > 0 {
-                        Status::Control
-                    } else if us_bg > ussr_bg && diff > 0 && us_n > 0 {
-                        Status::Domination
-                    } else if us_bg + us_n > 0 {
-                        Status::Presence
-                    } else {
-                        Status::Zero
-                    }
-                };
-                (us_status, ussr_status)
-            }
-        };
+        if let Region::SoutheastAsia = self {
+            vp_change += bg_diff;
+            state.vp += vp_change;
+            return vp_change;
+        }
+        let us_status = statuses[Side::US as usize];
+        let ussr_status = statuses[Side::USSR as usize];
         // Auto win for control
         if *self == Europe {
             if let Status::Control = us_status {
@@ -264,8 +298,7 @@ impl Region {
             _ => {}
         }
         // 1 point per battleground
-        vp_change += us_bg;
-        vp_change -= ussr_bg;
+        vp_change += bg_diff;
         state.vp += vp_change;
         return vp_change;
     }

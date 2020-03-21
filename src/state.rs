@@ -290,7 +290,8 @@ impl GameState {
             },
             Action::RecoverCard => {
                 self.deck.recover_card(side, Card::from_index(choice));
-            }
+            },
+            Action::ChangeDefcon => self.defcon = choice as i8,
             Action::BeginAr | Action::ConductOps | Action::Pass => unimplemented!(),
         }
         decision.quantity -= 1;
