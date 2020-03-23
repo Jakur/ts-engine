@@ -107,7 +107,11 @@ impl TensorOutput for Decision {
                 out
             },
             Action::PlayCard => {
-                play_card_indices(self.agent, state)
+                if self.allowed.slice().len() == 0 {
+                    play_card_indices(self.agent, state)
+                } else {
+                    OutputVec::new(self.allowed.slice().iter().copied().collect())
+                }
             },
             Action::ConductOps => {
                 let inf = state.legal_influence(self.agent, self.quantity);

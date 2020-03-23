@@ -49,6 +49,7 @@ impl Decision {
             quantity: q,
         }
     }
+    /// Creates a (trivial) decision for eventing a single given card
     pub fn new_event(card: Card) -> Self {
         Decision::new(card.side(), Action::Event, vec![card as usize])
     }
@@ -156,7 +157,7 @@ pub fn play_card_indices(agent: Side, state: &GameState) -> OutputVec {
     OutputVec::new(vec)
 }
 
-fn play_card_index(card: Card, resolve: EventTime) -> usize {
+pub fn play_card_index(card: Card, resolve: EventTime) -> usize {
     (card as usize) * 3 + resolve as usize
 }
 

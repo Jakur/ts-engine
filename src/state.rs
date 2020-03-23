@@ -249,10 +249,14 @@ impl GameState {
                     }
                 }
                 self.discard_card(side, card);
-            }
-            Action::Event | Action::SpecialEvent => {
+            },
+            Action::Event => {
                 let card = self.current_event;
-                card.unwrap().event(self, choice, pending, rng);
+                card.unwrap().event(self, pending, rng);
+            }
+            Action::SpecialEvent => {
+                let card = self.current_event;
+                card.unwrap().special_event(self, choice, pending, rng);
                 // Todo reset current event ? 
             }
             Action::Coup => {
