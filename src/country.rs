@@ -154,20 +154,20 @@ impl Region {
         };
         match self {
             Region::MiddleEast => {
-                if let Some(_) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                if state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() && use_shuttle {
                         ussr_bg = std::cmp::max(0, ussr_bg - 1);
                     }
                 }
             }
             Region::Asia => {
-                if let Some(_) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                if state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() && use_shuttle {
                         ussr_bg = std::cmp::max(0, ussr_bg - 1);
                     }
                 }
                 if state.is_controlled(Side::US, CName::Taiwan) {
-                    if let Some(_) = state.has_effect(Side::US, Effect::FormosanResolution) {
+                    if state.has_effect(Side::US, Effect::FormosanResolution) {
                         us_bg += 1;
                         us_n -= 1;
                     }
@@ -233,7 +233,7 @@ impl Region {
                 }
             }
             MiddleEast => {
-                if let Some(index) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                if let Some(index) = state.effect_pos(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() {
                         state.clear_effect(Side::US, index);
                     }
@@ -248,7 +248,7 @@ impl Region {
                 if state.is_controlled(Side::USSR, CName::Japan) {
                     vp_change -= 1;
                 }
-                if let Some(index) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                if let Some(index) = state.effect_pos(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() {
                         state.clear_effect(Side::US, index);
                     }

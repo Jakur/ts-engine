@@ -160,12 +160,11 @@ impl Card {
         use Card::*;
         match self {
             Blockade => {
-                let mut discards: Vec<_> = state.cards_at_least(Side::US, 3).into_iter().map(|i| {
-                    let card_id = state.deck.us_hand()[i] as usize;
-                    card_id
-                }).collect();
-                discards.push(0); // Do not discard
-                Some(discards)
+                if state.cards_at_least(Side::US, 3).is_empty() {
+                    Some(vec![0])   
+                } else {
+                    Some(vec![0, 1])
+                }
             }
             Olympic_Games => Some(vec![0, 1]),
             Independent_Reds => {
@@ -321,8 +320,10 @@ impl Card {
                 if choice == 0 {
                     state.remove_all(Side::US, CName::WGermany);
                 } else {
-                    let card = Card::from_usize(choice).expect("Already checked");
-                    state.deck.play_card(Side::US, card);
+                    let cards: Vec<_> = state.cards_at_least(Side::US, 3)
+                        .into_iter().map(|c| c as usize).collect();
+                    let d = Decision::new(Side::US, Action::Discard, cards);
+                    pending_actions.push(d);
                 }
             }
             Korean_War => {
@@ -599,9 +600,9 @@ impl Card {
         use Card::*;
         match self {
             The_China_Card => false,
-            Socialist_Governments => state.has_effect(Side::US, Effect::IronLady).is_none(),
-            Arab_Israeli_War => state.has_effect(Side::US, Effect::CampDavid).is_none(),
-            NATO => state.has_effect(Side::US, Effect::AllowNato).is_some(),
+            Socialist_Governments => !state.has_effect(Side::US, Effect::IronLady),
+            Arab_Israeli_War => !state.has_effect(Side::US, Effect::CampDavid),
+            NATO => state.has_effect(Side::US, Effect::AllowNato),
             _ => true, // todo make this accurate
         }
     }
@@ -616,14 +617,17 @@ impl Card {
         self.att().scoring
     }
     pub fn modified_ops(&self, side: Side, state: &GameState) -> i8 {
-        let base_ops = self.base_ops();
         let offset = state.base_ops_offset(side);
-        if offset == 0 {
-            base_ops
-        } else if offset == -1 {
-            std::cmp::max(1, base_ops + offset)
-        } else { // +1
-            std::cmp::min(4, base_ops + offset)
+        self.ops(offset)
+    }
+    pub fn ops(&self, offset: i8) -> i8 {
+        let x = self.base_ops() + offset;
+        if offset > 0 {
+            std::cmp::min(4, x)
+        } else if offset < 0 {
+            std::cmp::max(1, x)
+        } else {
+            x
         }
     }
     pub fn base_ops(&self) -> i8 {

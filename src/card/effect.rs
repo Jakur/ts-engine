@@ -18,5 +18,6 @@ pub enum Effect {
     NuclearSubs,
     Quagmire,
     SALT,
-    BearTrap
+    BearTrap,
+    NorthSeaOil,
 }

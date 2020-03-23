@@ -50,7 +50,7 @@ impl Decision {
         }
     }
     pub fn new_event(card: Card) -> Self {
-        Decision::new(card.side(), Action::Event, &[])
+        Decision::new(card.side(), Action::Event, vec![card as usize])
     }
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);

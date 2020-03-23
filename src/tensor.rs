@@ -1,5 +1,6 @@
 use crate::action::{Action, Decision, play_card_indices};
 use crate::card::{self, Card, Effect};
+use crate::country::Side;
 use crate::state::GameState;
 
 lazy_static! {
@@ -68,12 +69,41 @@ impl TensorOutput for Decision {
                 OutputVec::new(vec)
             }
             Action::BeginAr => {
+                let side = state.side;
+                // Quagmire / Bear Trap
+                if (side == Side::US && state.has_effect(side, Effect::Quagmire)) ||
+                    (side == Side::USSR && state.has_effect(side, Effect::BearTrap)) {
+                    let can_discard = state.cards_at_least(state.side, 2);
+                    if can_discard.is_empty() {
+                        // Must play scoring cards then pass
+                        let scoring = state.deck.scoring_cards(side);
+                        if scoring.is_empty() {
+                            return OutputVec::new(vec![Action::Pass.offset()])
+                        } else {
+                            let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
+                            let d = Decision::new(side, Action::Event, scoring);
+                            return d.encode(state)
+                        }
+                    } else {
+                        // If must play scoring cards for the rest of the turn
+                        if state.deck.must_play_scoring(side, state.max_ar(side) - state.ar) {
+                            let scoring = state.deck.scoring_cards(side);
+                            let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
+                            let x = Decision::new(side, Action::Event, scoring);
+                            return x.encode(state)
+                        }
+                        // Else discard normally
+                        let legal: Vec<_> = can_discard.into_iter().map(|x| x as usize).collect();
+                        let x = Decision::new(state.side, Action::Discard, legal);
+                        return x.encode(state)
+                    }
+                } 
                 let space = state.legal_space(self.agent);
                 let space_d = Decision::new(self.agent, Action::Space, space);
                 let mut out = space_d.encode(state);
                 let play_d = Decision::new(self.agent, Action::PlayCard, &[]);
                 out.extend(play_d.encode(state));
-                // Todo rarer things like discarding
+                // Todo rarer things like discarding with space power
                 out
             },
             Action::PlayCard => {
@@ -85,7 +115,7 @@ impl TensorOutput for Decision {
                 let mut out = inf_d.encode(state);
                 // Todo coup restrictions
                 let coup_realign = state.legal_coup_realign(self.agent);
-                if !state.has_effect(self.agent, Effect::CubanMissileCrisis).is_some() {
+                if !state.has_effect(self.agent, Effect::CubanMissileCrisis) {
                     let coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
                     out.extend(coup_d.encode(state));
                 }
@@ -105,7 +135,7 @@ impl TensorOutput for Decision {
                 out.extend(OutputVec::new(remove));
                 out
             },
-            Action::Coup if state.has_effect(self.agent, Effect::CubanMissileCrisis).is_some() => {
+            Action::Coup if state.has_effect(self.agent, Effect::CubanMissileCrisis) => {
                 // Todo include pass or empty?
                 OutputVec::new(vec![Action::Pass.offset()])
             }

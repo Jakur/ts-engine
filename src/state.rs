@@ -83,6 +83,17 @@ impl GameState {
     pub fn side(&self) -> &Side {
         &self.side
     }
+    pub fn max_ar(&self, side: Side) -> i8 {
+        if self.turn <= 3 {
+            6
+        } else if self.space[side as usize] == 8 {
+            8
+        } else if side == Side::US && self.has_effect(side, Effect::NorthSeaOil) {
+            8
+        } else {
+            7
+        }
+    }
     pub fn valid_countries(&self) -> &[Country] {
         let len = self.countries.len();
         &self.countries[0..len - 2]
@@ -127,7 +138,7 @@ impl GameState {
                     // Todo Brush War
                     _ => (Side::USSR, false)
                 };
-                if side == Side::USSR && brush && self.has_effect(Side::US, Effect::Nato).is_some() {
+                if side == Side::USSR && brush && self.has_effect(Side::US, Effect::Nato) {
                     Some(
                         BRUSH_TARGETS
                             .iter()
@@ -221,6 +232,22 @@ impl GameState {
             Action::Discard => {
                 let card = Card::from_index(choice);
                 let side = decision.agent; // Todo Aldrich Ames
+                // Clear Quagmire / Bear Trap if applicable
+                if side == Side::US {
+                    if let Some(index) = self.effect_pos(side, Effect::Quagmire) {
+                        let roll = rng.roll();
+                        if roll <= 4 {
+                            self.clear_effect(side, index);
+                        }
+                    }
+                } else {
+                    if let Some(index) = self.effect_pos(side, Effect::BearTrap) {
+                        let roll = rng.roll();
+                        if roll <= 4 {
+                            self.clear_effect(side, index);
+                        }
+                    }
+                }
                 self.discard_card(side, card);
             }
             Action::Event | Action::SpecialEvent => {
@@ -279,7 +306,7 @@ impl GameState {
                 self.take_realign(choice, us_roll, ussr_roll);
             },
             Action::CubanMissile => {
-                self.clear_effect(side, self.has_effect(side, Effect::CubanMissileCrisis).unwrap());
+                self.clear_effect(side, self.effect_pos(side, Effect::CubanMissileCrisis).unwrap());
                 if choice == 0 {
                     self.remove_influence(Side::USSR, CName::Cuba as usize, 2);
                 } else if choice == 1 {
@@ -306,8 +333,17 @@ impl GameState {
         }
         history.push(choice);
     }
-    /// Returns the index of the effect if it is in play, or else None
-    pub fn has_effect(&self, side: Side, effect: Effect) -> Option<usize> {
+    /// Return true if the side has the effect, else false.
+    pub fn has_effect(&self, side: Side, effect: Effect) -> bool {
+        let vec = match side {
+            Side::US => &self.us_effects,
+            Side::USSR => &self.ussr_effects,
+            _ => unimplemented!(),
+        };
+        vec.iter().any(|e| *e == effect)
+    }
+    /// Returns the index of the effect if it is in play, or else None.
+    pub fn effect_pos(&self, side: Side, effect: Effect) -> Option<usize> {
         let vec = match side {
             Side::US => &self.us_effects,
             Side::USSR => &self.ussr_effects,
@@ -499,26 +535,16 @@ impl GameState {
     pub fn discard_card(&mut self, side: Side, card: Card) {
         self.deck.play_card(side, card);
     }
-    /// Returns hand indices for cards at least the given value. China is never
+    /// Returns cards in hand at least the given value. China is never
     /// included.
-    pub fn cards_at_least(&self, side: Side, val: i8) -> Vec<usize> {
+    pub fn cards_at_least(&self, side: Side, val: i8) -> Vec<Card> {
         let cards = self.deck.hand(side);
         let offset = self.base_ops_offset(side);
         cards
             .iter()
-            .enumerate()
-            .filter_map(|(i, c)| {
-                let mut x = c.base_ops() + offset;
-                if x < 1 {
-                    x = 1;
-                } else if x > 4 {
-                    x = 4;
-                }
-                if x >= val {
-                    Some(i)
-                } else {
-                    None
-                }
+            .copied()
+            .filter(|c| {
+                c.ops(offset) >= val
             })
             .collect()
     }
@@ -661,7 +687,7 @@ impl GameState {
             vec.extend(valid(&ASIA));
         }
         if self.defcon >= 5 {
-            if side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some()
+            if side == Side::USSR && self.has_effect(Side::US, Effect::Nato)
             {
                 let mut set: HashSet<usize> = EUROPE
                     .iter()
@@ -677,7 +703,7 @@ impl GameState {
                 // Todo other NATO exceptions
                 let france = &self.countries[CName::France as usize];
                 if france.controller() == Side::US {
-                    if self.has_effect(Side::USSR, Effect::DeGaulle).is_some() {
+                    if self.has_effect(Side::USSR, Effect::DeGaulle) {
                         set.insert(CName::France as usize);
                     }
                 }
@@ -743,7 +769,7 @@ impl GameState {
         }).collect()
     }
     pub fn legal_war(&self, side: Side) -> Allowed {
-        if side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some() {
+        if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
             let vec: Vec<_> = BRUSH_TARGETS
                     .iter()
                     .copied()

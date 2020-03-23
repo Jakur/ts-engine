@@ -38,6 +38,10 @@ impl Deck {
             Side::Neutral => unimplemented!(),
         }
     }
+    /// Returns a new vector holding all scoring cards in the side's hand.
+    pub fn scoring_cards(&self, side: Side) -> Vec<Card> {
+        self.hand(side).iter().copied().filter(|c| c.is_scoring()).collect()
+    }
     pub fn held_scoring(&self, side: Side) -> bool {
         let hand = self.hand(side);
         hand.iter().any(|x| x.is_scoring())

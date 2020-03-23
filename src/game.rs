@@ -172,7 +172,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
             if !offered_cuban {
                 match &d.action {
                     Action::Coup | Action::ConductOps => {
-                        if self.state.has_effect(d.agent, Effect::CubanMissileCrisis).is_some() {
+                        if self.state.has_effect(d.agent, Effect::CubanMissileCrisis) {
                             let legal_cuban = self.state.legal_cuban(d.agent);
                             if !legal_cuban.slice().is_empty() {
                                 let cuban_d = Decision::new(d.agent, Action::CubanMissile, legal_cuban);
