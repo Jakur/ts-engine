@@ -44,7 +44,7 @@ lazy_static! {
     pub static ref EDGES: Vec<Vec<usize>> = adjacency_list();
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
     US = 0,
     USSR = 1,

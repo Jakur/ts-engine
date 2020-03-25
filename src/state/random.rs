@@ -54,9 +54,9 @@ impl TwilightRand for InternalRand {
 
 #[derive(Clone)]
 pub struct DebugRand {
-    rolls: Vec<i8>,
-    discards: Vec<Option<Card>>,
-    shuffle_order: Vec<Vec<Card>>
+    pub rolls: Vec<i8>,
+    pub discards: Vec<Option<Card>>,
+    pub shuffle_order: Vec<Vec<Card>>
 }
 
 impl DebugRand {

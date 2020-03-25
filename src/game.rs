@@ -3,7 +3,7 @@ use crate::agent::{Actors, Agent};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::{GameState, TwilightRand};
-use crate::tensor::TensorOutput;
+use crate::tensor::{DecodedChoice, TensorOutput};
 
 use std::mem;
 
@@ -14,8 +14,18 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
 }
 
 impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
-    pub fn play(&mut self) -> (Side, i8) {
+    pub fn setup(&mut self) {
+        // Todo figure this out
         self.initial_placement();
+    }
+    pub fn do_ply(&mut self) -> Option<Side> {
+        let pending = vec![Decision::begin_ar(self.state.side)];
+        self.resolve_actions(pending);
+        let win = self.state.advance_ply();
+        win
+    }
+    pub fn play(&mut self) -> (Side, i8) {
+        // self.initial_placement();
         let mut instant_win = None;
         while instant_win.is_none() && self.state.turn <= 10 {
             // Todo add mid war / late war cards to deck
@@ -130,13 +140,13 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         // Todo see headline ability, can event card
         let us = &self.actors.us_agent;
         let us_decision = Decision::headline(Side::US, &self.state);
-        let (_, us_choice) = us.decide(&self.state, us_decision.encode(&self.state));
-        let us_card = Card::from_index(us_choice);
+        let us_decoded = us.decide(&self.state, us_decision.encode(&self.state));
+        let us_card = Card::from_index(us_decoded.choice.unwrap());
 
         let ussr = &self.actors.ussr_agent;
         let ussr_decision = Decision::headline(Side::USSR, &self.state);
-        let (_, ussr_choice) = ussr.decide(&self.state, ussr_decision.encode(&self.state));
-        let ussr_card = Card::from_index(ussr_choice); 
+        let ussr_decoded = ussr.decide(&self.state, ussr_decision.encode(&self.state));
+        let ussr_card = Card::from_index(ussr_decoded.choice.unwrap()); 
 
         // Hands cannot be empty at the HL phase
         let decisions = (Decision::new_event(ussr_card), 
@@ -160,7 +170,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         let mut history = Vec::new(); // Todo figure out how to handle this
         let mut offered_cuban = false;
         let mut last_agent: Option<Side> = None;
-        while let Some(d) = pending.pop() {
+        while let Some(mut d) = pending.pop() {
             // Reset current event 
             if let Some(last) = last_agent {
                 if last != d.agent {
@@ -187,18 +197,28 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
                 }
             }
             // Do not call eval if there are only 0 or 1 decisions
-            let choice = if d.is_trivial() {
-                d.allowed.slice().iter().cloned().next()
+            let legal = d.encode(&self.state);
+            let (action, choice) = if legal.is_trivial() {
+                (d.action, d.allowed.slice().iter().cloned().next())
             } else {
                 let agent = self.actors.get(d.agent);
-                let legal = d.encode(&self.state);
-                let (action, choice) = agent.decide(&self.state, legal);
-                match action {
-                    Action::ConductOps | Action::BeginAr => {},
-                    _ => assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action)),
-                }
-                Some(choice)
+                let x = agent.decide(&self.state, legal);
+                // match action {
+                //     Action::ConductOps | Action::BeginAr => {},
+                //     _ => assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action)),
+                // }
+                (x.action, x.choice)
             };
+            // Fix our decision if it was a meta decision that we're now collapsing
+            if action != d.action {
+                let new_legal = match action {
+                    Action::Coup | Action::Realignment => self.state.legal_coup_realign(d.agent),
+                    Action::StandardOps => self.state.legal_influence(d.agent, d.quantity),
+                    Action::Event => Vec::new(), // Doesn't matter
+                    _ => unimplemented!(),
+                };
+                d = Decision::with_quantity(d.agent, action, new_legal, d.quantity);
+            } 
             self.state.resolve_action(d, choice, &mut pending, &mut history, &mut self.rng);
         }
     }
@@ -221,5 +241,50 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         } else {
             (Side::USSR, self.state.vp)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tensor::OutputIndex;
+    use crate::agent::*;
+    use crate::state::DebugRand;
+    use crate::country::CName;
+    #[test]
+    fn test_summit() {
+        let mut game = standard_start();
+        game.state.deck.us_hand_mut().extend(vec![Card::Summit; 7]);
+        game.state.deck.ussr_hand_mut().extend(vec![Card::Summit; 7]);
+        game.state.defcon = 2;
+        let summit_play = OutputIndex::new(Action::Event.offset() + Card::Summit as usize);
+        let x = summit_play.decode().action;
+        assert_eq!(x, Action::Event);
+        let defcon_one = OutputIndex::new(Action::ChangeDefcon.offset() + 1);
+        let ussr = &mut game.actors.ussr_mut().choices;
+        ussr.push(summit_play);
+        let us = &mut game.actors.us_mut().choices;
+        us.push(defcon_one);
+        game.state.current_event = Some(Card::Summit); // Todo do this more nicely
+        game.rng.rolls.append(&mut vec![5, 3]); // US, USSR 
+        assert_eq!(game.do_ply().unwrap(), Side::US);
+    }
+    fn standard_start() -> Game<DebugAgent, DebugAgent, DebugRand> {
+        use CName::*;
+        let ussr = [Poland, Poland, Poland, Poland, EGermany, Austria];
+        let us = [WGermany, WGermany, WGermany, WGermany, Italy, Italy, Italy,
+            Italy, Iran];
+        let ussr_agent = DebugAgent::new(ussr.iter().map(|c| encode_inf(*c)).collect());
+        let us_agent = DebugAgent::new(us.iter().map(|c| encode_inf(*c)).collect());
+        let actors = Actors::new(ussr_agent, us_agent);
+        let state = GameState::new();
+        let rng = DebugRand::new_empty();
+        let mut game = Game {actors, state, rng};
+        game.setup();
+        game
+    }
+    fn encode_inf(c_name: CName) -> OutputIndex {
+        let offset = Action::Place.offset();
+        OutputIndex::new(offset + (c_name as usize))
     }
 }

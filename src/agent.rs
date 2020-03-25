@@ -2,7 +2,7 @@ use crate::action::{Decision, Action};
 use crate::card::Card;
 use crate::country::Side;
 use crate::state::{GameState, DebugRand, TwilightRand};
-use crate::tensor::{TensorOutput, OutputVec, OutputIndex};
+use crate::tensor::{TensorOutput, OutputVec, OutputIndex, DecodedChoice};
 
 use rand::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -30,12 +30,24 @@ where
             _ => unimplemented!(),
         }
     }
+    pub fn ussr(&self) -> &A {
+        &self.ussr_agent
+    }
+    pub fn ussr_mut(&mut self) -> &mut A {
+        &mut self.ussr_agent
+    }
+    pub fn us(&self) -> &B {
+        &self.us_agent
+    }
+    pub fn us_mut(&mut self) -> &mut B {
+        &mut self.us_agent
+    }
 }
 
 pub trait Agent {
     /// Given a game state and encoding of all legal actions, decide which
     /// action to take and return the action the desired index
-    fn decide(&self, state: &GameState, legal: OutputVec) -> (Action, usize);
+    fn decide(&self, state: &GameState, legal: OutputVec) -> DecodedChoice;
     /// Returns which side the agent is playing
     fn side(&self) -> Side;
     /// Returns just the evaluation of the given position
@@ -58,17 +70,14 @@ impl DebugAgent {
     pub fn legal_line(&self, state: &mut GameState, mut pending: Vec<Decision>, mut rng: DebugRand) -> bool {
         let mut history = Vec::new();
         while let (Some(decision), Some(next)) = (pending.pop(), self.choice()) {
-            // dbg!(self.ptr.lock().unwrap());
-            // dbg!(decision.quantity);
             let legal = decision.encode(state);
             if !legal.contains(*next) {
                 return false
             }
-            let (_action, choice) = next.decode();
-            state.resolve_action(decision, Some(choice), &mut pending, &mut history, &mut rng);
+            let decoded = next.decode();
+            state.resolve_action(decision, decoded.choice, &mut pending, &mut history, &mut rng);
             self.advance_ptr();
         }
-        // dbg!(pending.len());
         self.choice().is_none() && pending.is_empty()
     }
     fn choice(&self) -> Option<&OutputIndex> {
@@ -92,7 +101,7 @@ impl Agent for DebugAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
-    fn decide(&self, _state: &GameState, legal: OutputVec) -> (Action, usize) {
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let next = self.next().unwrap();
         assert!(legal.contains(*next));
         next.decode()
@@ -113,7 +122,7 @@ impl Agent for RandAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
     }
-    fn decide(&self, _state: &GameState, legal: OutputVec) -> (Action, usize) { 
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice { 
         let mut rng = thread_rng();
         let x = legal.data().choose(&mut rng);
         if let Some(choice) = x {

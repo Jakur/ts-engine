@@ -12,6 +12,7 @@ pub use deck::*;
 pub use effect::*;
 
 pub const NUM_CARDS: usize = Card::Summit as usize;
+
 const IND_REDS: [CName; 5] = [
     CName::Yugoslavia,
     CName::Romania,
@@ -90,6 +91,16 @@ fn init_cards() -> Vec<Attributes> {
         c(USSR, 3).star(),
         c(Neutral, 4),
         c(US, 2).star(), // Formosan
+        c(Neutral, 3),
+        c(Neutral, 0).scoring(),
+        c(Neutral, 0).star().scoring(),
+        c(Neutral, 3),
+        c(Neutral, 3).star(),
+        c(US, 2).star(),
+        c(USSR, 3).star(),
+        c(Neutral, 3).star(),
+        c(US, 3).star(),
+        c(Neutral, 1) // Summit
     ];
     x
 }
@@ -579,8 +590,8 @@ impl Card {
             },
             Bear_Trap => state.add_effect(side.opposite(), Effect::BearTrap),
             Summit => {
-                let mut us_roll = rng.roll();
                 let mut ussr_roll = rng.roll();
+                let mut us_roll = rng.roll();
                 for r in Region::major_regions() {
                     let (status, _) = r.status(state, false);
                     match status[Side::US as usize] {
@@ -686,8 +697,8 @@ mod tests {
     #[test]
     fn check_cards() {
         let atts = init_cards();
-        assert_eq!(atts.len(), 36);
-        let cards: Vec<_> = (1..36).map(|x| Card::from_u8(x)).collect();
+        assert_eq!(atts.len(), NUM_CARDS + 1);
+        let cards: Vec<_> = (1..NUM_CARDS + 1).map(|x| Card::from_u8(x as u8)).collect();
         for c in cards {
             assert!(c.is_some());
         }

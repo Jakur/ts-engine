@@ -19,7 +19,7 @@ lazy_static!{
 
 pub const NUM_ACTIONS: usize = Action::Pass as usize + 1;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Decision {
     pub agent: Side,
     pub action: Action,
@@ -94,9 +94,6 @@ impl Decision {
             Some(self)
         }
     }
-    pub fn is_trivial(&self) -> bool {
-        self.allowed.slice().len() <= 1
-    }
 }
 
 #[derive(Clone, Copy, FromPrimitive, Debug, PartialEq)]
@@ -165,7 +162,7 @@ impl Action {
     pub fn legal_choices(&self) -> usize {
         use Action::*;
         let countries = crate::country::NUM_COUNTRIES - 2;
-        let cards = Card::total();
+        let cards = Card::total() + 1;
         match self {
             PlayCard => {
                 // Todo if you really want to be precise you can make neutral special
@@ -180,7 +177,7 @@ impl Action {
             SpecialEvent => *tensor::SPECIAL_TOTAL,
             CubanMissile => 3,
             RecoverCard => cards,
-            ChangeDefcon => 5,
+            ChangeDefcon => 6, // Todo avoid DEFCON 0? 
             Pass => 1,
         }
     }
@@ -220,7 +217,7 @@ pub enum Restriction {
     Limit(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 /// Abstraction across data which is known at compile time and data that must be
 /// computed on the fly.
 pub struct Allowed {
@@ -248,7 +245,7 @@ impl Allowed {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum AllowedType {
     Slice(&'static [usize]),
     Owned(Vec<usize>),

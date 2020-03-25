@@ -26,7 +26,18 @@ lazy_static! {
     };
 
 }
+pub struct DecodedChoice {
+    pub action: Action,
+    pub choice: Option<usize>,
+}
 
+impl DecodedChoice {
+    pub fn new(action: Action, choice: Option<usize>) -> Self {
+        Self {action, choice}
+    }
+}
+
+#[derive(Debug)]
 pub struct OutputVec {
     data: Vec<OutputIndex>
 }
@@ -45,6 +56,9 @@ impl OutputVec {
     }
     pub fn contains(&self, value: OutputIndex) -> bool {
         self.data.iter().find(|x| **x == value).is_some()
+    }
+    pub fn is_trivial(&self) -> bool {
+        self.data.len() <= 1
     }
 }
 
@@ -170,14 +184,15 @@ impl OutputIndex {
         let vec = d.encode(state);
         let out = *vec.data().last()?;
         let decode = out.decode();
-        if action == decode.0 && choice == decode.1 {
+        if action == decode.action && choice == decode.choice.unwrap() {
             Some(out)
         } else {
             None
         }
     }
-    pub fn decode(&self) -> (Action, usize) {
-        Action::action_from_offset(self.data)
+    pub fn decode(&self) -> DecodedChoice {
+        let x = Action::action_from_offset(self.data);
+        DecodedChoice::new(x.0, Some(x.1))
     }
 }
 
@@ -260,14 +275,12 @@ mod tests {
         let side = Side::US;
         let d = Decision::new(side, Action::BeginAr, &[]);
         let output_vec = d.encode(&state);
-        // dbg!(output_vec.data);
         assert_eq!(output_vec.data.len(), 15 + 4);
-        dbg!(output_vec.data.len());
         let mut events = 0;
         let mut spaces = 0;
         for out in output_vec.data() {
-            let (action, _num) = out.decode();
-            match action {
+            let decoded = out.decode();
+            match decoded.action {
                 Action::Event => events += 1,
                 Action::Space => spaces += 1,
                 _ => {},
@@ -292,12 +305,12 @@ mod tests {
                 x as usize
             }).collect();
         for out in output_vec.data() {
-            let (action, num) = out.decode();
-            match action {
+            let decoded = out.decode();
+            match decoded.action {
                 Action::Coup => coup += 1,
                 Action::Realignment => realign += 1,
                 Action::StandardOps => {
-                    let in_set = inf.remove(&num);
+                    let in_set = inf.remove(&decoded.choice.unwrap());
                     assert!(in_set);
                 }
                 _ => {},

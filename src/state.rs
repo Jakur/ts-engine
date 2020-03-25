@@ -265,11 +265,15 @@ impl GameState {
                 self.take_coup(side, choice, decision.quantity, roll, free_coup);
             }
             Action::Place => {
-                let c = self.current_event.expect("Only place through event");
-                let q = c.influence_quantity(&self, &decision.action, choice);
-                let side = match c.side() {
-                    s @ Side::US | s @ Side::USSR => s,
-                    Side::Neutral => decision.agent,
+                let (q, side) = if let Some(card) = self.current_event {
+                    let q = card.influence_quantity(&self, &decision.action, choice);
+                    let side = match card.side() {
+                        s @ Side::US | s @ Side::USSR => s,
+                        Side::Neutral => decision.agent,
+                    };
+                    (q, side)
+                } else {
+                    (1, decision.agent)
                 };
                 for _ in 0..q {
                     self.add_influence(side, choice);
@@ -658,7 +662,7 @@ impl GameState {
         let hand = self.deck.hand(side);
         let ops_offset = self.base_ops_offset(side);
         for &c in hand.iter() {
-            if self.can_space(self.side, c.base_ops() + ops_offset) {
+            if self.can_space(self.side, c.ops(ops_offset)) {
                 vec.push(c as usize);
             }
         }
@@ -851,7 +855,6 @@ mod tests {
         let test: Vec<_> = country::access(&state, Side::USSR).into_iter().map(|x| {
             CName::from_index(x)
         }).collect();
-        dbg!(test);
         // Todo determine ops automatically
         let d = Decision::determine(Side::USSR, Action::StandardOps, 6, &state);
         let laos = influence_in(CName::LaosCambodia);
