@@ -1,5 +1,5 @@
 use crate::action::{Action, Decision, play_card_indices};
-use crate::card::{self, Card, Effect};
+use crate::card::{Card, Effect};
 use crate::country::Side;
 use crate::state::GameState;
 
@@ -11,7 +11,7 @@ lazy_static! {
     };
     static ref CARD_OFFSET: IndexMap<Card, usize> = {
         let mut sum = 0;
-        let x = (1..card::NUM_CARDS + 1).filter_map(|c| {
+        let x = (1..Card::total()).filter_map(|c| {
             let c = Card::from_index(c);
             let choices = c.max_e_choices();
             if choices <= 1 {

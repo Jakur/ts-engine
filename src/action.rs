@@ -162,7 +162,7 @@ impl Action {
     pub fn legal_choices(&self) -> usize {
         use Action::*;
         let countries = crate::country::NUM_COUNTRIES - 2;
-        let cards = Card::total() + 1;
+        let cards = Card::total();
         match self {
             PlayCard => {
                 // Todo if you really want to be precise you can make neutral special
