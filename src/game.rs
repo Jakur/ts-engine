@@ -265,9 +265,15 @@ mod tests {
         ussr.push(summit_play);
         let us = &mut game.actors.us_mut().choices;
         us.push(defcon_one);
-        game.state.current_event = Some(Card::Summit); // Todo do this more nicely
-        game.rng.rolls.append(&mut vec![5, 3]); // US, USSR 
+        game.rng.rolls.extend([3, 5].iter().rev()); // USSR, US 
         assert_eq!(game.do_ply().unwrap(), Side::US);
+    }
+    fn test_traps() {
+        // let mut game = standard_start();
+        // game.state.deck.us_hand_mut().extend([Card::De_Gaulle_Leads_France, Card::Comecon].iter());
+        // game.state.deck.us_hand_mut().extend(vec![Card::Summit; 5].iter());
+        // game.state.deck.ussr_hand_mut().extend([Card::Olympic_Games, Card::NATO].iter());
+        // game.state.deck.ussr_hand_mut().extend(vec![Card::Summit; 5].iter());
     }
     fn standard_start() -> Game<DebugAgent, DebugAgent, DebugRand> {
         use CName::*;

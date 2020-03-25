@@ -98,9 +98,6 @@ impl GameState {
         let len = self.countries.len();
         &self.countries[0..len - 2]
     }
-    pub fn set_event(&mut self, card: Card) {
-        self.current_event = Some(card);
-    }
     /// Returns the standard allowed actions if they differ from the decision
     /// slice, or else None.
     pub fn standard_allowed(
@@ -214,11 +211,13 @@ impl GameState {
                         let event = Decision::new_event(card);
                         pending.push(event);
                         pending.push(conduct);
+                        self.current_event = Some(card);
                     }
                     EventTime::Before => {
                         let event = Decision::new_event(card);
                         pending.push(conduct);
                         pending.push(event);
+                        self.current_event = Some(card);
                     }
                     EventTime::Never => pending.push(conduct),
                 }
@@ -251,8 +250,9 @@ impl GameState {
                 self.discard_card(side, card);
             },
             Action::Event => {
-                let card = self.current_event;
-                card.unwrap().event(self, pending, rng);
+                let card = Card::from_index(choice); 
+                self.current_event = Some(card);
+                card.event(self, pending, rng);
             }
             Action::SpecialEvent => {
                 let card = self.current_event;

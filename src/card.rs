@@ -377,7 +377,7 @@ impl Card {
                         } else {
                             Decision::new(Side::US, Action::Event, &[])
                         };
-                        state.set_event(card);
+                        state.current_event = Some(card);
                         pending_actions.push(d);
                     }
                     state.discard_card(Side::USSR, card);
