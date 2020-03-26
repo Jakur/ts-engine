@@ -10,11 +10,17 @@ pub mod card;
 pub mod country;
 pub mod game;
 pub mod state;
+pub mod record;
 mod tensor;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_name() {
+        let c = card::Card::Asia_Scoring;
+        println!("{:?}", c);
+    }
     #[test]
     fn test_scoring() {
         use country::CName::*;

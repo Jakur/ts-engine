@@ -486,6 +486,9 @@ impl CName {
     pub fn from_index(index: usize) -> CName {
         CName::from_usize(index).unwrap()
     }
+    pub fn total() -> usize {
+        NUM_COUNTRIES
+    }
 }
 /// Returns countries with their starting influence before players have any agency.
 pub fn standard_start() -> Vec<Country> {
