@@ -34,7 +34,7 @@ impl Decision {
     }
     pub fn determine(agent: Side, action: Action, q: i8, state: &GameState) -> Decision {
         let allowed = match action {
-            Action::StandardOps => state.legal_influence(agent, q),
+            Action::Influence => state.legal_influence(agent, q),
             Action::Coup | Action::Realignment => state.legal_coup_realign(agent),
             _ => todo!(),
         };
@@ -79,7 +79,7 @@ impl Decision {
         Decision::with_quantity(agent, Action::ConductOps, &[], ops)
     }
     pub fn next_influence(mut self, state: &GameState) -> Option<Decision> {
-        assert!(self.action == Action::StandardOps); // For now?
+        assert!(self.action == Action::Influence); // For now?
         if self.quantity == 0 {
             None
         } else if self.quantity == 1 {
@@ -100,7 +100,7 @@ impl Decision {
 pub enum Action {
     BeginAr = 0,
     ConductOps,
-    StandardOps, 
+    Influence, 
     Coup, 
     Space,
     Realignment,
@@ -130,7 +130,7 @@ impl Action {
         let cards = Card::total();
         match self {
             ConductOps | BeginAr => 1, // meta action or dummy
-            StandardOps | Coup | Realignment | Place | Remove => countries,
+            Influence | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
             Event | EventOps | Ops | OpsEvent => cards,
@@ -242,7 +242,7 @@ mod tests {
                 last = next;
             }
         }
-        let inf = Action::StandardOps; 
+        let inf = Action::Influence; 
         let init_off = inf.offset(); 
         for &name in [CName::Turkey, CName::Austria, CName::Chile].iter() {
             let input = init_off + name as usize;

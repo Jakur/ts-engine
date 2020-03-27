@@ -59,21 +59,19 @@ fn card(x: &str) -> IResult<&str, Card> {
 enum MetaAction {
     Real(Action),
     Roll,
-    OE,
-    EO,
     Unknown,
 }
 
 fn action(x: &str) -> IResult<&str, MetaAction> {
     let (left, word) = nom::bytes::complete::is_not(" \t")(x)?;
     let meta = match word {
-        "Inf" => MetaAction::Real(Action::StandardOps),
+        "Inf" => MetaAction::Real(Action::Influence),
         "Place" => MetaAction::Real(Action::Place),
         "Special" => MetaAction::Real(Action::SpecialEvent),
         "Remove" => MetaAction::Real(Action::Remove),
         "Roll" => MetaAction::Roll,
-        "OE" => MetaAction::OE,
-        "EO" => MetaAction::EO,
+        "OE" => MetaAction::Real(Action::OpsEvent),
+        "EO" => MetaAction::Real(Action::EventOps),
         "E" => MetaAction::Real(Action::Event),
         "O" => MetaAction::Real(Action::ConductOps),
         _ => MetaAction::Unknown, // Always a play card ?
@@ -135,7 +133,7 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
         if let Some(c) = card {
             // Opponent card
             if c.side().opposite() == side { 
-                MetaAction::OE // Default way of playing opp card
+                MetaAction::Real(Action::OpsEvent) // Default way of playing opp card
             } else {
                 MetaAction::Real(Action::ConductOps)
             }

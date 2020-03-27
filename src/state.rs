@@ -112,7 +112,7 @@ impl GameState {
             quantity,
         } = dec;
         let vec = match action {
-            Action::StandardOps => {
+            Action::Influence => {
                 Some(self.legal_influence(*agent, *quantity))
             },
             Action::Coup | Action::Realignment => {
@@ -283,7 +283,7 @@ impl GameState {
                     self.add_influence(side, choice);
                 }
             }
-            Action::StandardOps => {
+            Action::Influence => {
                 let cost = self.add_influence(side, choice);
                 if self.china && !Region::Asia.has_country(choice) {
                     decision.quantity -= 1;
@@ -334,7 +334,7 @@ impl GameState {
             Action::BeginAr | Action::ConductOps | Action::Pass => unimplemented!(),
         }
         decision.quantity -= 1;
-        if let Action::StandardOps = decision.action {
+        if let Action::Influence = decision.action {
             if let Some(d) = decision.next_influence(self) {
                 pending.push(d);
             }
@@ -860,7 +860,7 @@ mod tests {
             CName::from_index(x)
         }).collect();
         // Todo determine ops automatically
-        let d = Decision::determine(Side::USSR, Action::StandardOps, 6, &state);
+        let d = Decision::determine(Side::USSR, Action::Influence, 6, &state);
         let laos = influence_in(CName::LaosCambodia);
         let thai = influence_in(CName::Thailand); // US Controlled
         let afghan = influence_in(CName::Afghanistan);
@@ -888,7 +888,7 @@ mod tests {
         }
     }
     fn influence_in(country: CName) -> OutputIndex {
-        OutputIndex::new(Action::StandardOps.offset() + country as usize)
+        OutputIndex::new(Action::Influence.offset() + country as usize)
     }
     #[test]
     fn count_actions() {

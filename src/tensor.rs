@@ -43,7 +43,7 @@ impl std::fmt::Debug for DecodedChoice {
         if let Some(c) = self.choice {
             let c_str = match self.action {
                 Ops | OpsEvent | Event | EventOps | Space | Discard => format!("{:?}", Card::from_index(c)),
-                StandardOps | Coup | Realignment | Place | Remove | War => format!("{:?}", CName::from_index(c)),
+                Influence | Coup | Realignment | Place | Remove | War => format!("{:?}", CName::from_index(c)),
                 _ => format!("{:?}", c),
             };
             write!(f, "[{:?}: {:?}]", self.action, c_str)
@@ -150,7 +150,7 @@ impl TensorOutput for Decision {
             },
             Action::ConductOps => {
                 let inf = state.legal_influence(self.agent, self.quantity);
-                let inf_d = Decision::new(self.agent, Action::StandardOps, inf);
+                let inf_d = Decision::new(self.agent, Action::Influence, inf);
                 let mut out = inf_d.encode(state);
                 // Todo coup restrictions
                 let coup_realign = state.legal_coup_realign(self.agent);
@@ -330,7 +330,7 @@ mod tests {
             match decoded.action {
                 Action::Coup => coup += 1,
                 Action::Realignment => realign += 1,
-                Action::StandardOps => {
+                Action::Influence => {
                     let in_set = inf.remove(&decoded.choice.unwrap());
                     assert!(in_set);
                 }

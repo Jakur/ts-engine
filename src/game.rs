@@ -213,7 +213,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
             if action != d.action {
                 let new_legal = match action {
                     Action::Coup | Action::Realignment => self.state.legal_coup_realign(d.agent),
-                    Action::StandardOps => self.state.legal_influence(d.agent, d.quantity),
+                    Action::Influence => self.state.legal_influence(d.agent, d.quantity),
                     Action::Event => Vec::new(), // Doesn't matter
                     _ => unimplemented!(),
                 };
