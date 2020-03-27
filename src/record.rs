@@ -1,15 +1,14 @@
 use crate::card::Card;
 use crate::country::{Side, CName};
+use crate::action::Action;
 use nom::{
     self,
-    error::{ErrorKind},
+    error::ErrorKind,
     Err::Error,
     IResult,
-    branch::alt,
-    bytes::complete::{tag, take_while_m_n},
-    combinator::map_res,
+    bytes::complete::{is_not, is_a, tag},
+    combinator::map,
     sequence::tuple};
-
 use std::collections::HashMap;
 
 lazy_static!{
@@ -19,120 +18,131 @@ lazy_static!{
             (format!("{:?}", c), c)
         }).collect()
     };
+    static ref COUNTRIES: HashMap<String, CName> = {
+        (1..CName::total()).map(|i| {
+            let c = CName::from_index(i);
+            (format!("{:?}", c), c)
+        }).collect()
+    };
 }
 
-fn intermediate(input: String) -> Vec<String> {
-    let countries: HashMap<_, _> = (0..CName::total() - 2).map(|i| {
-        let c = CName::from_index(i);
-        let string = format!("{:?}", c);
-        (string, (c as usize).to_string())
-    }).collect();
-    let us = format!("{:?} ", Side::US);
-    let ussr = format!("{:?} ", Side::USSR);
-    let mut side = Side::USSR;
-    let vec: Vec<_> = input.lines().filter_map(|line| {
-        if line.starts_with("#") {
-            None
-        } else {
-            let mut words: Vec<&str> = line.split_whitespace().collect();
-            if !(words[0] == "US" || words[0] == "USSR") {
-                match side {
-                    Side::US => words.insert(0, &us),
-                    Side::USSR => words.insert(0, &ussr),
-                    _ => unimplemented!(),
-                }
-            } else {
-                if words[0] == "US" {
-                    side = Side::US;
-                } else if words[0] == "USSR" {
-                    side = Side::USSR;
-                } else {
-                    unimplemented!();
-                }
-            }
-            let country: HashMap<_, (usize, _)> = words.iter().filter_map(|w| {
-                if w.contains("-") {
-                    let mut iter = w.split("-");
-                    let quantity = iter.next().unwrap();
-                    let country = iter.next().unwrap();
-                    Some((w.clone(), (quantity.parse().unwrap(), country)))
-                } else {
-                    None
-                }
-            }).collect();
-            words = words.into_iter().filter(|x| country.contains_key(x)).collect();
-            for (quantity, country) in country.values() {
-                for _ in 0..*quantity {
-                    words.push(country);
-                }
-            }
-            for i in 0..words.len() {
-                if false {
-                    // words[i] = num;
-                } else {
-                    if let Some(num) = countries.get(words[i]) {
-                        words[i] = num;
-                    }
-                }
-            }
-            let joined = words.join(" ");
-            Some(joined)
+// Todo real error handling?
+macro_rules! become_err {
+    ($e:expr) => {Err(Error(($e, ErrorKind::Fix)))};
+}
+
+fn side(x: &str) -> IResult<&str, Side> {
+    let p = map(nom::branch::alt((tag("USSR"), tag("US"))), |s: &str| {
+        match s {
+            "USSR" => Side::USSR,
+            "US" => Side::US,
+            _ => unreachable!(),
         }
-    }).collect();
-    vec
-}
-
-fn parse(input: String) {
-    let mut side = Side::US;
-    let cards: HashMap<String, Card> = (1..Card::total()).map(|i| {
-        let c = Card::from_index(i);
-        let string = format!("{:?}", c);
-        (string, c)
-    }).collect();
-    let vec: Vec<_> = input.lines().filter(|line| !line.starts_with("#")).collect();
-}
-
-fn side(x: &str) -> IResult<&str, &str> {
-    nom::branch::alt((tag("USSR"), tag("US")))(x)
+    });
+    p(x)
 }
 
 fn space(x: &str) -> IResult<&str, &str> {
     nom::bytes::complete::is_a(" \t")(x)
 }
 
-fn card(x: &str) -> IResult<&str, &str> {
-    let word = nom::bytes::complete::is_not(" \t")(x);
-    if let Ok((_, w)) = word {
-        if let Some(_) = CARDS.get(w) {
-            word // Valid card
-        } else {
-            Err(Error((x, ErrorKind::IsNot))) // Todo improve this
-        }
+fn card(x: &str) -> IResult<&str, Card> {
+    let (left, word) = nom::bytes::complete::is_not(" \t")(x)?;
+    if let Some(card) = CARDS.get(word) {
+        Ok((left, *card)) // Valid card
     } else {
-        Err(Error((x, ErrorKind::IsNot))) // Todo improve this
+        become_err![x]
     }
 }
 
-// fn parse(x: &str) -> IResult<&str, &str> {
-//     tuple((side, space, card))
-// }
+#[derive(Debug)]
+enum MetaAction {
+    Real(Action),
+    Roll,
+    OE,
+    EO,
+    Unknown,
+}
+
+fn action(x: &str) -> IResult<&str, MetaAction> {
+    let (left, word) = nom::bytes::complete::is_not(" \t")(x)?;
+    let meta = match word {
+        "Inf" => MetaAction::Real(Action::StandardOps),
+        "Place" => MetaAction::Real(Action::Place),
+        "Special" => MetaAction::Real(Action::SpecialEvent),
+        "Remove" => MetaAction::Real(Action::Remove),
+        "Roll" => MetaAction::Roll,
+        "OE" => MetaAction::OE,
+        "EO" => MetaAction::EO,
+        "E" => MetaAction::Real(Action::Event),
+        "O" => MetaAction::Real(Action::ConductOps),
+        _ => MetaAction::Unknown, // Always a play card ?
+    };
+    Ok((left, meta))
+}
+
+fn choices(x: &str) -> IResult<&str, Vec<usize>> {
+    let (left, list) = nom::multi::separated_list(tag(" "), is_not(" "))(x)?;
+    let mut output = Vec::new();
+    for s in list {
+        if let Ok(num) = s.parse::<usize>() {
+            output.push(num)
+        } else {
+            let expanded = expand_country(s);
+            if let Ok(ex) = expanded {
+                output.extend(ex.1.into_iter());
+            } else {
+                return become_err![x]
+            }
+        }
+    }
+    Ok((left, output))
+}
+
+fn expand_country(x: &str) -> IResult<&str, Vec<usize>> {
+    let (left, (num, _, country_str)) = tuple((is_not("-"), is_a("-"), is_not(" ")))(x)?;
+    let num: usize = match num.parse() {
+        Ok(n) => n,
+        _ => return become_err![x]
+    };
+    let country_index = match COUNTRIES.get(country_str) {
+        Some(c) => *c as usize,
+        _ => return become_err![x]
+    };
+    let vec: Vec<_> = std::iter::repeat(country_index).take(num).collect();
+    Ok((left, vec))
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn basic_parse() {
-        assert_eq!(side("USSR Place 20 20"), Ok((" Place 20 20", "USSR")));
-        assert_eq!(side("US Warsaw_Pact_Formed OE"), Ok((" Warsaw_Pact_Formed OE", "US")));
+        assert_eq!(side("USSR Place 20 20"), Ok((" Place 20 20", Side::USSR)));
+        assert_eq!(side("US Warsaw_Pact_Formed OE"), Ok((" Warsaw_Pact_Formed OE", Side::US)));
         assert!(side("IDK").is_err());
-        assert_eq!(card("Warsaw_Pact_Formed OE"), Ok((" OE", "Warsaw_Pact_Formed")));
+        assert_eq!(card("Warsaw_Pact_Formed OE"), Ok((" OE", Card::Warsaw_Pact_Formed)));
         assert!(card("NotNATO").is_err());
+        let (empty, c) = choices("20 40 60").unwrap();
+        assert_eq!(empty, "");
+        assert_eq!(c, vec![20usize, 40, 60]);
+        let (empty, expand) = expand_country("4-Poland").unwrap();
+        assert_eq!(empty, "");
+        let poland = CName::Poland as usize;
+        let eg = CName::EGermany as usize;
+        let aust = CName::Austria as usize;
+        assert_eq!(expand, vec![poland; 4]);
+        assert!(expand_country("6-Beers").is_err());
+        let (empty, choices) = choices("4-Poland 2-EGermany 1-Austria").unwrap();
+        assert_eq!(empty, "");
+        assert_eq!(choices, vec![poland, poland, poland, poland, eg, eg, aust]);
     }
     #[test]
     fn line_parse() {
         let input = "US Warsaw_Pact_Formed OE";
-        let (_, (side, _, card)) = tuple((side, space, card))(input).unwrap();
+        let (_, (side, _, card, _, act)) = tuple((side, space, card, space, action))(input).unwrap();
         dbg!(side);
         dbg!(card);
+        dbg!(act);
     }
 }
