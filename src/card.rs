@@ -517,17 +517,15 @@ impl Card {
             Red_Scare_Purge => state.add_effect(*state.side(), Effect::RedScarePurge),
             UN_Intervention => {
                 let hand = state.deck.hand(side);
-                let vec: Vec<_> = hand
-                    .iter()
-                    .filter_map(|c| {
-                        if c.side() == side.opposite() {
-                            Some(action::play_card_index(*self, EventTime::Never))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                let d = Decision::new(side, Action::PlayCard, vec);
+                let opp = side.opposite();
+                let vec: Vec<_> = hand.iter().copied().filter_map(|c| {
+                    if c.side() == opp {
+                        Some(c as usize)
+                    } else {
+                        None
+                    }
+                }).collect();
+                let d = Decision::new(side, Action::Ops, vec);
                 pending_actions.push(d);
             }
             De_Stalinization => {

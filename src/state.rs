@@ -202,25 +202,39 @@ impl GameState {
         };
         let side = decision.agent;
         match decision.action {
-            Action::PlayCard => {
-                let (card, time) = Action::play_card_data(choice);
+            Action::EventOps => {
+                let card = Card::from_index(choice);
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
-                match time {
-                    EventTime::After => {
-                        let event = Decision::new_event(card);
-                        pending.push(event);
-                        pending.push(conduct);
-                        self.current_event = Some(card);
-                    }
-                    EventTime::Before => {
-                        let event = Decision::new_event(card);
-                        pending.push(conduct);
-                        pending.push(event);
-                        self.current_event = Some(card);
-                    }
-                    EventTime::Never => pending.push(conduct),
-                }
+                let event = Decision::new_event(card);
+                pending.push(conduct);
+                pending.push(event);
+                self.current_event = Some(card);
+            }
+            Action::OpsEvent => {
+                let card = Card::from_index(choice);
+                let ops = card.modified_ops(decision.agent, self);
+                let conduct = Decision::conduct_ops(decision.agent, ops);
+                let event = Decision::new_event(card);
+                pending.push(event);
+                pending.push(conduct);
+                self.current_event = Some(card);
+            }
+            Action::Ops => {
+                let card = Card::from_index(choice);
+                let ops = card.modified_ops(decision.agent, self);
+                let conduct = Decision::conduct_ops(decision.agent, ops);
+                pending.push(conduct);
+            }
+            Action::Event => {
+                let card = Card::from_index(choice); 
+                self.current_event = Some(card);
+                card.event(self, pending, rng);
+            }
+            Action::SpecialEvent => {
+                let card = self.current_event;
+                card.unwrap().special_event(self, choice, pending, rng);
+                // Todo reset current event ? 
             }
             Action::Space => {
                 let card = Card::from_index(choice);
@@ -249,16 +263,6 @@ impl GameState {
                 }
                 self.discard_card(side, card);
             },
-            Action::Event => {
-                let card = Card::from_index(choice); 
-                self.current_event = Some(card);
-                card.event(self, pending, rng);
-            }
-            Action::SpecialEvent => {
-                let card = self.current_event;
-                card.unwrap().special_event(self, choice, pending, rng);
-                // Todo reset current event ? 
-            }
             Action::Coup => {
                 let free_coup = false; // Todo free coup
                 let roll = rng.roll(); // Todo more flexible entropy source

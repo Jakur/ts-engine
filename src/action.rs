@@ -99,7 +99,6 @@ impl Decision {
 #[derive(Clone, Copy, FromPrimitive, Debug, PartialEq)]
 pub enum Action {
     BeginAr = 0,
-    PlayCard,
     ConductOps,
     StandardOps, 
     Coup, 
@@ -108,50 +107,16 @@ pub enum Action {
     Place,      //Side, amount, can place in opponent controlled
     Remove,           // Side, remove all
     Discard,          // Side
-    Event, // Card, Decision in branching events
+    Ops,
+    OpsEvent,
+    EventOps,
+    Event, 
     SpecialEvent,
     War, // Side, is brush war?
     CubanMissile,
     RecoverCard, // SALT
     ChangeDefcon,
     Pass,
-}
-
-pub fn play_card_indices(agent: Side, state: &GameState) -> OutputVec {
-    let f = play_card_index;
-    let event_offset = Action::Event.offset();
-    let hand = state.deck.hand(agent);
-    let mut vec = Vec::new();
-    for &c in hand.iter() {
-        let can_event = c.can_event(state);
-        // Opponent Card
-        if c.side() == agent.opposite() {
-            if can_event {
-                vec.push(f(c, EventTime::Before));
-                vec.push(f(c, EventTime::After));
-            } else { 
-                // Basically free ops in this case
-                vec.push(f(c, EventTime::Never));
-            }
-        } else {
-            // Event
-            if can_event {
-                vec.push(event_offset + c as usize);
-            }
-            // Play for ops
-            if !c.is_scoring() {
-                vec.push(f(c, EventTime::Never));
-            }
-        }
-    }
-    if state.deck.china_available(agent) {
-        let china = Card::The_China_Card;
-        vec.push(f(china, EventTime::Never));
-    }
-    if hand.is_empty() || state.ar == 8 {
-        vec.push(Action::Pass.offset()); // Pass
-    }
-    OutputVec::new(vec)
 }
 
 pub fn play_card_index(card: Card, resolve: EventTime) -> usize {
@@ -164,16 +129,11 @@ impl Action {
         let countries = crate::country::NUM_COUNTRIES - 2;
         let cards = Card::total();
         match self {
-            PlayCard => {
-                // Todo if you really want to be precise you can make neutral special
-                // For now we won't
-                cards * 3
-            },
             ConductOps | BeginAr => 1, // meta action or dummy
             StandardOps | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
-            Event => cards,
+            Event | EventOps | Ops | OpsEvent => cards,
             SpecialEvent => *tensor::SPECIAL_TOTAL,
             CubanMissile => 3,
             RecoverCard => cards,
@@ -183,12 +143,6 @@ impl Action {
     }
     pub fn offset(&self) -> usize {
         OFFSETS[*self as usize]
-    }
-    pub fn play_card_data(choice: usize) -> (Card, EventTime) {
-        let rem = choice % 3;
-        let time = EventTime::from_usize(rem).unwrap();
-        let card = Card::from_index(choice / 3);
-        (card, time)
     }
     pub fn action_index(data: usize) -> usize {
         let res = OFFSETS.binary_search(&data);

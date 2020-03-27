@@ -101,6 +101,36 @@ impl Deck {
             }
         }
     }
+    /// Returns a vector of cards which, if played by the given side, will cause
+    /// the opponent's event to fire.
+    pub fn opp_events_fire(&self, side: Side, state: &GameState) -> Vec<Card> {
+        let hand = self.hand(side);
+        let opp = side.opposite();
+        hand.iter().copied().filter(|c| {
+            c.side() == opp && c.can_event(state)
+        }).collect()
+    }
+    /// Returns a vector of cards that the given side can themselves event.
+    pub fn can_event(&self, side: Side, state: &GameState) -> Vec<Card> {
+        let hand = self.hand(side);
+        let opp = side.opposite();
+        hand.iter().copied().filter(|c| {
+            c.side() != opp && c.can_event(state)
+        }).collect()
+    }
+    /// Returns cards that can be played for just ops, i.e. non-scoring cards of
+    /// neutral or allied variety, or those opponent events that won't fire.
+    pub fn can_play_ops(&self, side: Side, state: &GameState) -> Vec<Card> {
+        let hand = self.hand(side);
+        let opp = side.opposite();
+        let mut vec: Vec<_> = hand.iter().copied().filter(|c| {
+            !c.is_scoring() && (c.side() != opp || !c.can_event(state))
+        }).collect();
+        if self.china_available(side) {
+            vec.push(Card::The_China_Card);
+        }
+        vec
+    }
     pub fn us_hand_mut(&mut self) -> &mut Vec<Card> {
         &mut self.us_hand
     }

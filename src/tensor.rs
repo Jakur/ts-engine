@@ -1,6 +1,6 @@
-use crate::action::{Action, Decision, play_card_indices};
+use crate::action::{Action, Decision};
 use crate::card::{Card, Effect};
-use crate::country::Side;
+use crate::country::{CName, Side};
 use crate::state::GameState;
 
 lazy_static! {
@@ -34,6 +34,22 @@ pub struct DecodedChoice {
 impl DecodedChoice {
     pub fn new(action: Action, choice: Option<usize>) -> Self {
         Self {action, choice}
+    }
+}
+
+impl std::fmt::Debug for DecodedChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        use Action::*;
+        if let Some(c) = self.choice {
+            let c_str = match self.action {
+                Ops | OpsEvent | Event | EventOps | Space | Discard => format!("{:?}", Card::from_index(c)),
+                StandardOps | Coup | Realignment | Place | Remove | War => format!("{:?}", CName::from_index(c)),
+                _ => format!("{:?}", c),
+            };
+            write!(f, "[{:?}: {:?}]", self.action, c_str)
+        } else {
+            write!(f, "[{:?}: {:?}]", self.action, self.choice)
+        }
     }
 }
 
@@ -83,7 +99,7 @@ impl TensorOutput for Decision {
                 OutputVec::new(vec)
             }
             Action::BeginAr => {
-                let side = state.side;
+                let side = self.agent;
                 // Quagmire / Bear Trap
                 if (side == Side::US && state.has_effect(side, Effect::Quagmire)) ||
                     (side == Side::USSR && state.has_effect(side, Effect::BearTrap)) {
@@ -115,17 +131,22 @@ impl TensorOutput for Decision {
                 let space = state.legal_space(self.agent);
                 let space_d = Decision::new(self.agent, Action::Space, space);
                 let mut out = space_d.encode(state);
-                let play_d = Decision::new(self.agent, Action::PlayCard, &[]);
-                out.extend(play_d.encode(state));
+                let cc = |vec: Vec<Card>| {
+                    vec.into_iter().map(|c| c as usize).collect::<Vec<_>>()
+                };
+                let before_after = cc(state.deck.opp_events_fire(side, state));
+                let event = cc(state.deck.can_event(side, state));
+                let ops = cc(state.deck.can_play_ops(side, state));
+                let e_ops = Decision::new(self.agent, Action::EventOps, before_after.clone());
+                let ops_e = Decision::new(self.agent, Action::OpsEvent, before_after);
+                let e = Decision::new(self.agent, Action::Event, event);
+                let ops = Decision::new(self.agent, Action::Ops, ops);
+                out.extend(e_ops.encode(state));
+                out.extend(ops_e.encode(state));
+                out.extend(e.encode(state));
+                out.extend(ops.encode(state));
                 // Todo rarer things like discarding with space power
                 out
-            },
-            Action::PlayCard => {
-                if self.allowed.slice().len() == 0 {
-                    play_card_indices(self.agent, state)
-                } else {
-                    OutputVec::new(self.allowed.slice().iter().copied().collect())
-                }
             },
             Action::ConductOps => {
                 let inf = state.legal_influence(self.agent, self.quantity);
@@ -275,7 +296,6 @@ mod tests {
         let side = Side::US;
         let d = Decision::new(side, Action::BeginAr, &[]);
         let output_vec = d.encode(&state);
-        assert_eq!(output_vec.data.len(), 15 + 4);
         let mut events = 0;
         let mut spaces = 0;
         for out in output_vec.data() {
@@ -286,6 +306,7 @@ mod tests {
                 _ => {},
             }
         }
+        assert_eq!(output_vec.data.len(), 15 + 4);
         assert_eq!(events, 4);
         assert_eq!(spaces, 4);
     }
