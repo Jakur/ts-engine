@@ -7,7 +7,7 @@ use nom::{
     Err::Error,
     IResult,
     bytes::complete::{is_not, is_a, tag},
-    combinator::map,
+    combinator::{map, opt},
     sequence::tuple};
 use std::collections::HashMap;
 
@@ -111,6 +111,52 @@ fn expand_country(x: &str) -> IResult<&str, Vec<usize>> {
     };
     let vec: Vec<_> = std::iter::repeat(country_index).take(num).collect();
     Ok((left, vec))
+}
+
+struct Parsed {
+    side: Side,
+    card: Option<Card>,
+    action: MetaAction,
+    choices: Option<Vec<usize>>,
+}
+
+fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
+    let (_, (side, _, card, _, act, _, choices)) = tuple((
+        opt(side),
+        opt(space),
+        opt(card),
+        opt(space),
+        action, // Not optional ?
+        opt(space),
+        opt(choices)
+    ))(line).ok()?;
+    let side = side.unwrap_or(last_side);
+    let action = if let MetaAction::Unknown = act {
+        if let Some(c) = card {
+            // Opponent card
+            if c.side().opposite() == side { 
+                MetaAction::OE // Default way of playing opp card
+            } else {
+                MetaAction::Real(Action::ConductOps)
+            }
+        } else {
+            unimplemented!()
+        }
+    } else {
+        act
+    };
+    Some(Parsed {side, card, action, choices})
+}
+
+fn parse_lines(string: &str) {
+    let mut last_side = Side::USSR;
+    // let mut rolls = [Vec::new(), Vec::new()];
+    for line in string.lines() {
+        if let Some(parsed) = parse_line(line, last_side) {
+            last_side = parsed.side;
+        }
+    }
+    todo!()
 }
 
 #[cfg(test)]
