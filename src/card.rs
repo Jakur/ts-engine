@@ -303,8 +303,8 @@ impl Card {
                     let mut ussr_roll = 0;
                     let mut us_roll = 0;
                     while ussr_roll == us_roll {
-                        ussr_roll = rng.roll();
-                        us_roll = rng.roll();
+                        ussr_roll = rng.roll(Side::USSR);
+                        us_roll = rng.roll(Side::US);
                         if let Side::USSR = state.side() {
                             ussr_roll += 2;
                         } else {
@@ -401,7 +401,7 @@ impl Card {
             Korean_War => {
                 let index = CName::SKorea as usize;
                 state.add_mil_ops(Side::USSR, 2);
-                let roll = rng.roll();
+                let roll = rng.roll(Side::USSR);
                 if state.war_target(Side::USSR, index, roll) {
                     state.vp -= 2;
                 }
@@ -412,7 +412,7 @@ impl Card {
             }
             Arab_Israeli_War => {
                 let index = CName::Israel as usize;
-                let mut roll = rng.roll();
+                let mut roll = rng.roll(Side::USSR);
                 // This war is special, and includes the country itself
                 if state.is_controlled(Side::US, index) {
                     roll -= 1;
@@ -588,8 +588,8 @@ impl Card {
             },
             Bear_Trap => state.add_effect(side.opposite(), Effect::BearTrap),
             Summit => {
-                let mut ussr_roll = rng.roll();
-                let mut us_roll = rng.roll();
+                let mut ussr_roll = rng.roll(Side::USSR);
+                let mut us_roll = rng.roll(Side::US);
                 for r in Region::major_regions() {
                     let (status, _) = r.status(state, false);
                     match status[Side::US as usize] {

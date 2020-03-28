@@ -1,11 +1,12 @@
 use crate::action::{Decision, Action};
 use crate::card::Card;
 use crate::country::Side;
+use crate::game::Game;
 use crate::state::{GameState, DebugRand, TwilightRand};
 use crate::tensor::{TensorOutput, OutputVec, OutputIndex, DecodedChoice};
 
 use rand::prelude::*;
-use std::sync::{Arc, Mutex};
+use crossbeam_queue::ArrayQueue;
 
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
@@ -54,56 +55,35 @@ pub trait Agent {
     fn get_eval(&self, state: &GameState) -> f32;
 }
 
-#[derive(Clone)]
-pub struct DebugAgent {
-    pub ptr: Arc<Mutex<usize>>,
-    pub choices: Vec<OutputIndex>,
+pub struct ScriptedAgent {
+    pub choices: ArrayQueue<OutputIndex>,
 }
 
-impl DebugAgent {
+impl ScriptedAgent {
     pub fn new(choices: Vec<OutputIndex>) -> Self {
-        DebugAgent {
-            ptr: Arc::new(Mutex::new(0)),
-            choices,
+        let queue = ArrayQueue::new(choices.len());
+        for c in choices.into_iter() {
+            queue.push(c).unwrap();
+        }
+        ScriptedAgent {
+            choices: queue,
         }
     }
-    pub fn legal_line(&self, state: &mut GameState, mut pending: Vec<Decision>, mut rng: DebugRand) -> bool {
-        let mut history = Vec::new();
-        while let (Some(decision), Some(next)) = (pending.pop(), self.choice()) {
-            let legal = decision.encode(state);
-            if !legal.contains(*next) {
-                return false
-            }
-            let decoded = next.decode();
-            state.resolve_action(decision, decoded.choice, &mut pending, &mut history, &mut rng);
-            self.advance_ptr();
-        }
-        self.choice().is_none() && pending.is_empty()
+    pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
+        let (_win, _pts) = game.play(goal_t, Some(goal_ar));
     }
-    fn choice(&self) -> Option<&OutputIndex> {
-        let inner_ptr = self.ptr.lock().unwrap();
-        let ret = self.choices.get(*inner_ptr);
-        ret
-    }
-    fn advance_ptr(&self) {
-        let mut inner_ptr = self.ptr.lock().unwrap();
-        *inner_ptr += 1;
-    }
-    fn next(&self) -> Option<&OutputIndex> {
-        let mut inner_ptr = self.ptr.lock().unwrap();
-        let ret = self.choices.get(*inner_ptr);
-        *inner_ptr += 1;
-        ret
+    fn next(&self) -> Option<OutputIndex> {
+        self.choices.pop().ok()
     }
 }
 
-impl Agent for DebugAgent {
+impl Agent for ScriptedAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let next = self.next().unwrap();
-        assert!(legal.contains(*next));
+        assert!(legal.contains(next));
         next.decode()
     }
     fn side(&self) -> Side {

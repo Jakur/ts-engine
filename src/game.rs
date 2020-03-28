@@ -1,8 +1,8 @@
 use crate::action::{Action, Decision};
-use crate::agent::{Actors, Agent};
+use crate::agent::{Actors, Agent, ScriptedAgent};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::{GameState, TwilightRand};
+use crate::state::{GameState, TwilightRand, DebugRand};
 use crate::tensor::{DecodedChoice, TensorOutput};
 
 use std::mem;
@@ -14,6 +14,13 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
 }
 
 impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
+    pub fn new(ussr_agent: A, us_agent: B, state: GameState, rng: R) 
+        -> Game<A, B, R> {
+            let actors = Actors::new(ussr_agent, us_agent);
+            Game {
+                actors, state, rng
+            }
+    }
     pub fn setup(&mut self) {
         // Todo figure this out
         self.initial_placement();
@@ -24,16 +31,23 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         let win = self.state.advance_ply();
         win
     }
-    pub fn play(&mut self) -> (Side, i8) {
+    pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> (Side, i8) {
         // self.initial_placement();
         let mut instant_win = None;
-        while instant_win.is_none() && self.state.turn <= 10 {
+        while instant_win.is_none() && self.state.turn <= goal_turn {
             // Todo add mid war / late war cards to deck
-            instant_win = if self.state.turn <= 3 {
-                self.do_turn(6)
-            } else {
-                self.do_turn(8) // Space race AR8 is impossible before Mid War
+            let goal = match goal_ar {
+                Some(x) if self.state.turn == goal_turn => x,
+                _ => {
+                    if self.state.turn <= 3 {
+                        6
+                    } else {
+                        8 // Space race AR8 is impossible before Mid War
+                    }
+                }
             };
+            instant_win = self.do_turn(goal);
+            self.state.ar = 0;
         }
         if let Some(winner) = instant_win {
             // Always make instant wins 20 point victories
@@ -92,10 +106,12 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
     }
     fn do_turn(&mut self, goal_ar: i8) -> Option<Side> {
         use std::cmp::max;
-        self.state.ar = 0;
-        self.state.side = Side::USSR;
-        self.headline();
-        self.state.ar = 1;
+
+        if self.state.ar == 0 {
+            self.state.side = Side::USSR;
+            self.headline();
+            self.state.ar = 1;
+        }
         while self.state.ar <= goal_ar {
             // AR 8 space power
             // Todo North Sea Oil
@@ -262,10 +278,11 @@ mod tests {
         assert_eq!(x, Action::Event);
         let defcon_one = OutputIndex::new(Action::ChangeDefcon.offset() + 1);
         let ussr = &mut game.actors.ussr_mut().choices;
-        ussr.push(summit_play);
+        ussr.push(summit_play).unwrap(); // Buffer is okay due to init influence
         let us = &mut game.actors.us_mut().choices;
-        us.push(defcon_one);
-        game.rng.rolls.extend([3, 5].iter().rev()); // USSR, US 
+        us.push(defcon_one).unwrap(); // Buffer is okay due to init influence
+        game.rng.us_rolls = vec![5];
+        game.rng.ussr_rolls = vec![3];
         assert_eq!(game.do_ply().unwrap(), Side::US);
     }
     fn test_traps() {
@@ -275,13 +292,13 @@ mod tests {
         // game.state.deck.ussr_hand_mut().extend([Card::Olympic_Games, Card::NATO].iter());
         // game.state.deck.ussr_hand_mut().extend(vec![Card::Summit; 5].iter());
     }
-    fn standard_start() -> Game<DebugAgent, DebugAgent, DebugRand> {
+    fn standard_start() -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
         use CName::*;
         let ussr = [Poland, Poland, Poland, Poland, EGermany, Austria];
         let us = [WGermany, WGermany, WGermany, WGermany, Italy, Italy, Italy,
             Italy, Iran];
-        let ussr_agent = DebugAgent::new(ussr.iter().map(|c| encode_inf(*c)).collect());
-        let us_agent = DebugAgent::new(us.iter().map(|c| encode_inf(*c)).collect());
+        let ussr_agent = ScriptedAgent::new(ussr.iter().map(|c| encode_inf(*c)).collect());
+        let us_agent = ScriptedAgent::new(us.iter().map(|c| encode_inf(*c)).collect());
         let actors = Actors::new(ussr_agent, us_agent);
         let state = GameState::new();
         let rng = DebugRand::new_empty();

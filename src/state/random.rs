@@ -8,8 +8,8 @@ use crate::country::Side;
 /// over the randomness and also games where the randomness is provided from an
 /// external source, e.g. a server.
 pub trait TwilightRand {
-    /// Rolls a six-sided die and returns the result.
-    fn roll(&mut self) -> i8;
+    /// Rolls a six-sided die for the given side and returns the result.
+    fn roll(&mut self, side: Side) -> i8;
     /// Returns a random card from the given side's hand, or None if and only if
     /// that side's hand is empty.
     fn card_from_hand(&mut self, deck: &Deck, side: Side) -> Option<Card>;
@@ -33,7 +33,7 @@ impl InternalRand {
 }
 
 impl TwilightRand for InternalRand {
-    fn roll(&mut self) -> i8 {
+    fn roll(&mut self, _side: Side) -> i8 {
         self.rng.gen_range(1, 7)
     }
     fn card_from_hand(&mut self, deck: &Deck, side: Side) -> Option<Card> {
@@ -54,20 +54,26 @@ impl TwilightRand for InternalRand {
 
 #[derive(Clone)]
 pub struct DebugRand {
-    pub rolls: Vec<i8>,
+    pub us_rolls: Vec<i8>,
+    pub ussr_rolls: Vec<i8>,
     pub discards: Vec<Option<Card>>,
     pub shuffle_order: Vec<Vec<Card>>
 }
 
 impl DebugRand {
     pub fn new_empty() -> Self {
-        DebugRand {rolls: Vec::new(), discards: Vec::new(), shuffle_order: Vec::new()}
+        DebugRand {us_rolls: Vec::new(), ussr_rolls: Vec::new(), 
+            discards: Vec::new(), shuffle_order: Vec::new()}
     }
 }
 
 impl TwilightRand for DebugRand {
-    fn roll(&mut self) -> i8 {
-        self.rolls.pop().unwrap()
+    fn roll(&mut self, side: Side) -> i8 {
+        match side {
+            Side::US => self.us_rolls.pop().unwrap(),
+            Side::USSR => self.ussr_rolls.pop().unwrap(),
+            _ => unimplemented!()
+        }
     }
     fn card_from_hand(&mut self, deck: &Deck, side: Side) -> Option<Card> {
         let card = self.discards.pop().unwrap();
