@@ -100,6 +100,7 @@ impl Decision {
 pub enum Action {
     BeginAr = 0,
     ConductOps,
+    ClearEvent,
     Influence, 
     Coup, 
     Space,
@@ -129,7 +130,7 @@ impl Action {
         let countries = crate::country::NUM_COUNTRIES - 2;
         let cards = Card::total();
         match self {
-            ConductOps | BeginAr => 1, // meta action or dummy
+            ConductOps | BeginAr | ClearEvent => 1, // meta action or dummy
             Influence | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well

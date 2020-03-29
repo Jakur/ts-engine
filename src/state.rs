@@ -197,6 +197,10 @@ impl GameState {
             match decision.action {
                 Action::Event => 0,
                 Action::Pass => return,
+                Action::ClearEvent => {
+                    self.current_event = None;
+                    return;
+                }
                 _ => unimplemented!(),
             }
         };
@@ -209,7 +213,6 @@ impl GameState {
                 let event = Decision::new_event(card);
                 pending.push(conduct);
                 pending.push(event);
-                self.current_event = Some(card);
             }
             Action::OpsEvent => {
                 let card = Card::from_index(choice);
@@ -218,7 +221,6 @@ impl GameState {
                 let event = Decision::new_event(card);
                 pending.push(event);
                 pending.push(conduct);
-                self.current_event = Some(card);
             }
             Action::Ops => {
                 let card = Card::from_index(choice);
@@ -267,6 +269,7 @@ impl GameState {
                 let free_coup = false; // Todo free coup
                 let roll = rng.roll(decision.agent);
                 self.take_coup(side, choice, decision.quantity, roll, free_coup);
+                decision.quantity = 1; // Use up all of your ops on one action
             }
             Action::Place => {
                 let (q, side) = if let Some(card) = self.current_event {
@@ -331,7 +334,7 @@ impl GameState {
                 self.deck.recover_card(side, Card::from_index(choice));
             },
             Action::ChangeDefcon => self.defcon = choice as i8,
-            Action::BeginAr | Action::ConductOps | Action::Pass => unimplemented!(),
+            Action::BeginAr | Action::ConductOps | Action::Pass | Action::ClearEvent => unreachable!(),
         }
         decision.quantity -= 1;
         if let Action::Influence = decision.action {
@@ -774,12 +777,12 @@ impl GameState {
             unreachable!() // Todo figure out if this is actually unreachable
         }
     }
-    pub fn legal_special_event(&self, side: Side) -> Vec<Card> {
-        let hand = self.deck.hand(side);
-        hand.iter().copied().filter(|x| {
-            x.max_e_choices() > 1
-        }).collect()
-    }
+    // pub fn legal_special_event(&self, side: Side) -> Vec<Card> {
+    //     let hand = self.deck.hand(side);
+    //     hand.iter().copied().filter(|x| {
+    //         x.max_e_choices() > 1
+    //     }).collect()
+    // }
     pub fn legal_war(&self, side: Side) -> Allowed {
         if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
             let vec: Vec<_> = BRUSH_TARGETS

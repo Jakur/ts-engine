@@ -113,6 +113,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
             self.headline();
             self.state.ar = 1;
         }
+        self.state.side = Side::USSR;
         while self.state.ar <= goal_ar {
             // AR 8 space power
             // Todo North Sea Oil
@@ -170,20 +171,15 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
             Decision::new_event(us_card));
 
         // Headline order
-        // Todo see if current event can be set more nicely
         if us_card.base_ops() >= ussr_card.base_ops() {
             self.state.side = Side::US;
-            self.state.current_event = Some(us_card);
             self.resolve_actions(vec![decisions.1]);
             self.state.side = Side::USSR;
-            self.state.current_event = Some(ussr_card);
             self.resolve_actions(vec![decisions.0]);
         } else {
             self.state.side = Side::USSR;
-            self.state.current_event = Some(ussr_card);
             self.resolve_actions(vec![decisions.0]);
             self.state.side = Side::US;
-            self.state.current_event = Some(us_card);
             self.resolve_actions(vec![decisions.1]);
         }
     }
@@ -191,16 +187,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         use crate::card::Effect;
         let mut history = Vec::new(); // Todo figure out how to handle this
         let mut offered_cuban = false;
-        let mut last_agent: Option<Side> = None;
         while let Some(mut d) = pending.pop() {
-            dbg!(&d);
-            // Reset current event 
-            if let Some(last) = last_agent {
-                if last != d.agent {
-                    self.state.current_event = None;
-                }
-            }
-            last_agent = Some(d.agent);
             // Cuban Missile Crisis 
             if !offered_cuban {
                 match &d.action {
@@ -237,7 +224,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
                 let new_legal = match action {
                     Action::Coup | Action::Realignment => self.state.legal_coup_realign(d.agent),
                     Action::Influence => self.state.legal_influence(d.agent, d.quantity),
-                    Action::Event => Vec::new(), // Doesn't matter
+                    Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => Vec::new(), // Doesn't matter
                     _ => unimplemented!(),
                 };
                 d = Decision::with_quantity(d.agent, action, new_legal, d.quantity);

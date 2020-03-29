@@ -87,8 +87,6 @@ pub fn access(state: &GameState, side: Side) -> Vec<usize> {
     }
     set.remove(&US_INDEX);
     set.remove(&USSR_INDEX);
-    assert!(set.get(&(CName::Syria as usize)).is_some());
-    assert!(set.get(&(CName::Turkey as usize)).is_some());
     set.into_iter().collect()
 }
 

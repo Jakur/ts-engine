@@ -86,18 +86,18 @@ impl TensorOutput for Decision {
     fn encode(&self, state: &GameState) -> OutputVec {
         let begin = self.action.offset();
         let out = match self.action {
-            Action::SpecialEvent => {
-                let legal = state.legal_special_event(self.agent);
-                let mut vec = Vec::new();
-                for card in legal {
-                    let choices = card.e_choices(state);
-                    let card_offset = CARD_OFFSET.get(card).unwrap();
-                    if let Some(v) = choices {
-                        vec.extend(v.into_iter().map(|x| x + card_offset));
-                    }
-                } 
-                OutputVec::new(vec)
-            }
+            // Action::SpecialEvent => {
+            //     let legal = state.legal_special_event(self.agent);
+            //     let mut vec = Vec::new();
+            //     for card in legal {
+            //         let choices = card.e_choices(state);
+            //         let card_offset = CARD_OFFSET.get(card).unwrap();
+            //         if let Some(v) = choices {
+            //             vec.extend(v.into_iter().map(|x| x + card_offset));
+            //         }
+            //     } 
+            //     OutputVec::new(vec)
+            // }
             Action::BeginAr => {
                 let side = self.agent;
                 // Quagmire / Bear Trap
