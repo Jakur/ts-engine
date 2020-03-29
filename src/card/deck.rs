@@ -57,24 +57,17 @@ impl Deck {
         scoring_count >= ar_left
     }
     pub fn draw_cards<T: TwilightRand>(&mut self, target: usize, rng: &mut T) {
-        let mut pick_ussr = true;
+        let mut side = Side::USSR;
         // Oscillating is relevant when reshuffles do occur
         while self.ussr_hand.len() < target && self.us_hand.len() < target {
-            let next_card = self.draw_card(rng);
-            if pick_ussr {
-                self.ussr_hand.push(next_card);
-            } else {
-                self.us_hand.push(next_card);
-            }
-            pick_ussr = !pick_ussr;
+            self.draw_card(rng, side);
+            side = side.opposite();
         }
         while self.ussr_hand.len() < target {
-            let c = self.draw_card(rng);
-            self.ussr_hand.push(c);
+            self.draw_card(rng, Side::USSR);
         }
         while self.us_hand.len() < target {
-            let c = self.draw_card(rng);
-            self.us_hand.push(c);
+            self.draw_card(rng, Side::US);
         }
     }
     /// Searches the discard pile for a played card and removes it.
@@ -92,14 +85,8 @@ impl Deck {
         rng.card_from_hand(self, side)
     }
     /// Draws the next card from the draw pile, reshuffling if necessary.
-    fn draw_card<T: TwilightRand>(&mut self, rng: &mut T) -> Card {
-        match self.draw_pile.pop() {
-            Some(c) => c,
-            None => {
-                self.reshuffle(rng);
-                self.draw_card(rng)
-            }
-        }
+    fn draw_card<T: TwilightRand>(&mut self, rng: &mut T, side: Side) {
+        rng.draw_card(self, side);
     }
     /// Returns a vector of cards which, if played by the given side, will cause
     /// the opponent's event to fire.
@@ -130,6 +117,9 @@ impl Deck {
             vec.push(Card::The_China_Card);
         }
         vec
+    }
+    pub fn pop_draw_pile(&mut self) -> Option<Card> {
+        self.draw_pile.pop()
     }
     pub fn us_hand_mut(&mut self) -> &mut Vec<Card> {
         &mut self.us_hand
