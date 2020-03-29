@@ -60,9 +60,9 @@ pub struct ScriptedAgent {
 }
 
 impl ScriptedAgent {
-    pub fn new(choices: Vec<OutputIndex>) -> Self {
+    pub fn new(choices: &Vec<OutputIndex>) -> Self {
         let queue = ArrayQueue::new(choices.len());
-        for c in choices.into_iter() {
+        for c in choices.iter().copied() {
             queue.push(c).unwrap();
         }
         ScriptedAgent {
@@ -83,6 +83,8 @@ impl Agent for ScriptedAgent {
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let next = self.next().unwrap();
+        dbg!(next);
+        dbg!(&legal);
         assert!(legal.contains(next));
         next.decode()
     }

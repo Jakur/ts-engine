@@ -1,6 +1,10 @@
 use crate::card::Card;
 use crate::country::{Side, CName};
 use crate::action::Action;
+use crate::tensor::OutputIndex;
+use crate::agent::ScriptedAgent;
+use crate::state::{GameState, DebugRand};
+use crate::game::Game;
 use nom::{
     self,
     error::ErrorKind,
@@ -64,16 +68,19 @@ enum MetaAction {
 
 fn action(x: &str) -> IResult<&str, MetaAction> {
     let (left, word) = nom::bytes::complete::is_not(" \t")(x)?;
+    // Todo Realignment
     let meta = match word {
         "Inf" => MetaAction::Real(Action::Influence),
+        "Coup" => MetaAction::Real(Action::Coup),
         "Place" => MetaAction::Real(Action::Place),
         "Special" => MetaAction::Real(Action::SpecialEvent),
         "Remove" => MetaAction::Real(Action::Remove),
         "Roll" => MetaAction::Roll,
+        "HL" => MetaAction::Real(Action::Event), // Headline 
         "OE" => MetaAction::Real(Action::OpsEvent),
         "EO" => MetaAction::Real(Action::EventOps),
         "E" => MetaAction::Real(Action::Event),
-        "O" => MetaAction::Real(Action::ConductOps),
+        "O" => MetaAction::Real(Action::Ops),
         _ => MetaAction::Unknown, // Always a play card ?
     };
     Ok((left, meta))
@@ -86,11 +93,17 @@ fn choices(x: &str) -> IResult<&str, Vec<usize>> {
         if let Ok(num) = s.parse::<usize>() {
             output.push(num)
         } else {
-            let expanded = expand_country(s);
-            if let Ok(ex) = expanded {
-                output.extend(ex.1.into_iter());
+            // If we have a lone country name, e.g. "Italy"
+            if let Some(c) = COUNTRIES.get(s) {
+                output.push(*c as usize);
             } else {
-                return become_err![x]
+                // Check for shorthand, e.g. "3-Italy"
+                let expanded = expand_country(s);
+                if let Ok(ex) = expanded {
+                    output.extend(ex.1.into_iter());
+                } else {
+                    return become_err![x]
+                }
             }
         }
     }
@@ -98,10 +111,12 @@ fn choices(x: &str) -> IResult<&str, Vec<usize>> {
 }
 
 fn expand_country(x: &str) -> IResult<&str, Vec<usize>> {
-    let (left, (num, _, country_str)) = tuple((is_not("-"), is_a("-"), is_not(" ")))(x)?;
-    let num: usize = match num.parse() {
+    let (left, (first, _, country_str)) = tuple((is_not("-"), is_a("-"), is_not(" ")))(x)?;
+    let num: usize = match first.parse() {
         Ok(n) => n,
-        _ => return become_err![x]
+        _ => {
+            return become_err![x]
+        }
     };
     let country_index = match COUNTRIES.get(country_str) {
         Some(c) => *c as usize,
@@ -111,6 +126,7 @@ fn expand_country(x: &str) -> IResult<&str, Vec<usize>> {
     Ok((left, vec))
 }
 
+#[derive(Debug)]
 struct Parsed {
     side: Side,
     card: Option<Card>,
@@ -119,23 +135,25 @@ struct Parsed {
 }
 
 fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
+    // dbg!(line);
     let (_, (side, _, card, _, act, _, choices)) = tuple((
         opt(side),
         opt(space),
         opt(card),
         opt(space),
-        action, // Not optional ?
+        opt(action),
         opt(space),
         opt(choices)
     ))(line).ok()?;
     let side = side.unwrap_or(last_side);
-    let action = if let MetaAction::Unknown = act {
+    let act = act.unwrap_or(MetaAction::Unknown);
+    let act = if let MetaAction::Unknown = act {
         if let Some(c) = card {
             // Opponent card
-            if c.side().opposite() == side { 
+            if c.side() == side.opposite() { 
                 MetaAction::Real(Action::OpsEvent) // Default way of playing opp card
             } else {
-                MetaAction::Real(Action::ConductOps)
+                MetaAction::Real(Action::Ops)
             }
         } else {
             unimplemented!()
@@ -143,18 +161,64 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
     } else {
         act
     };
-    Some(Parsed {side, card, action, choices})
+    Some(Parsed {side, card, action: act, choices})
 }
 
-fn parse_lines(string: &str) {
+pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
     let mut last_side = Side::USSR;
-    // let mut rolls = [Vec::new(), Vec::new()];
+    let mut us_rolls = Vec::new();
+    let mut ussr_rolls = Vec::new();
+    let mut us_cards = Vec::new();
+    let mut ussr_cards = Vec::new();
+    let mut choices = [Vec::new(), Vec::new()];
     for line in string.lines() {
+        if line.starts_with("#") {
+            continue
+        }
         if let Some(parsed) = parse_line(line, last_side) {
+            dbg!(&line);
+            dbg!(&parsed);
             last_side = parsed.side;
+            match parsed.action {
+                MetaAction::Roll => {
+                    let roll = parsed.choices.unwrap()[0] as i8;
+                    match parsed.side {
+                        Side::US => us_rolls.push(roll),
+                        Side::USSR => ussr_rolls.push(roll),
+                        _ => unimplemented!(),
+                    }
+                },
+                MetaAction::Real(act) => {
+                    match act {
+                        Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => {
+                            let card = parsed.card.unwrap();
+                            match parsed.side {
+                                Side::US => us_cards.push(card),
+                                Side::USSR => ussr_cards.push(card),
+                                _ => unimplemented!(),
+                            }
+                            let x = OutputIndex::encode_single(act, card as usize);
+                            choices[parsed.side as usize].push(x);
+                        },
+                        _ => {
+                            for choice in parsed.choices.unwrap() {
+                                let x = OutputIndex::encode_single(act, choice);
+                                choices[parsed.side as usize].push(x);
+                            }
+                        }
+                    }
+                },
+                _ => unimplemented!(),
+            }
+        } else {
+            dbg!(line);
+            unimplemented!();
         }
     }
-    todo!()
+    let us_agent = ScriptedAgent::new(&choices[Side::US as usize]);
+    let ussr_agent = ScriptedAgent::new(&choices[Side::USSR as usize]);
+    let rng = DebugRand::new(us_rolls, ussr_rolls, vec![], us_cards, ussr_cards);
+    Game::new(ussr_agent, us_agent, GameState::new(), rng)
 }
 
 #[cfg(test)]

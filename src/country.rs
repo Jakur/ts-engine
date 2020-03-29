@@ -61,6 +61,18 @@ impl Side {
     }
 }
 
+impl From<usize> for Side {
+    fn from(num: usize) -> Self {
+        if num == 0 {
+            Side::US
+        } else if num == 1 {
+            Side::USSR
+        } else {
+            Side::Neutral
+        }
+    }
+}
+
 pub fn access(state: &GameState, side: Side) -> Vec<usize> {
     let mut set = HashSet::new();
     for (i, list) in EDGES

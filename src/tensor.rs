@@ -189,7 +189,7 @@ impl TensorOutput for Decision {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct OutputIndex {
     data: usize,
 }
@@ -199,21 +199,19 @@ impl OutputIndex {
         OutputIndex {data}
     }
     // Encode a single action-choice pair. 
-    pub fn encode_single(action: Action, choice: usize, state: &GameState) -> Option<Self> {
-        // Side shouldn't matter
-        let d = Decision::new(state.side, action, vec![choice]);
-        let vec = d.encode(state);
-        let out = *vec.data().last()?;
-        let decode = out.decode();
-        if action == decode.action && choice == decode.choice.unwrap() {
-            Some(out)
-        } else {
-            None
-        }
+    pub fn encode_single(action: Action, choice: usize) -> Self {
+        Self::new(action.offset() + choice)
     }
     pub fn decode(&self) -> DecodedChoice {
         let x = Action::action_from_offset(self.data);
         DecodedChoice::new(x.0, Some(x.1))
+    }
+}
+
+impl std::fmt::Debug for OutputIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        let decoded = self.decode();
+        write!(f, "{:?}", decoded)
     }
 }
 

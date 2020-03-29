@@ -14,7 +14,7 @@ pub struct Deck {
 
 impl Deck {
     pub fn new() -> Self {
-        Deck {
+        let mut deck = Deck {
             us_hand: Vec::new(),
             ussr_hand: Vec::new(),
             discard_pile: Vec::new(),
@@ -22,7 +22,16 @@ impl Deck {
             removed: Vec::new(),
             china: Side::USSR,
             china_up: true,
+        };
+        // Todo early war cards with higher indices
+        for c_index in 1..Card::Formosan_Resolution as usize + 1 {
+            let card = Card::from_index(c_index);
+            if card == Card::The_China_Card {
+                continue
+            }
+            deck.draw_pile.push(card);
         }
+        deck
     }
     pub fn hand(&self, side: Side) -> &Vec<Card> {
         match side {
@@ -185,7 +194,7 @@ impl Deck {
     pub fn reset_draw_pile(&mut self) {
         self.draw_pile.append(&mut self.discard_pile);
     }
-    fn reshuffle<T: TwilightRand>(&mut self, rng: &mut T) {
+    pub fn reshuffle<T: TwilightRand>(&mut self, rng: &mut T) {
         rng.reshuffle(self);
     }
 }

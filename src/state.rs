@@ -35,7 +35,7 @@ impl GameState {
             vp: 0,
             defcon: 5,
             turn: 1, // Todo make compatible with initial placements
-            ar: 1,
+            ar: 0,
             side: Side::USSR,
             space: [0, 0],
             mil_ops: [0, 0],

@@ -75,9 +75,12 @@ pub struct DebugRand {
 
 impl DebugRand {
     pub fn new_empty() -> Self {
-        DebugRand {us_rolls: Vec::new(), ussr_rolls: Vec::new(), 
-            discards: Vec::new(), us_draw: Vec::new(), ussr_draw: Vec::new()}
+        Self::new(Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
     }
+    pub fn new(us_rolls: Vec<i8>, ussr_rolls: Vec<i8>, discards: Vec<Option<Card>>, 
+        us_draw: Vec<Card>, ussr_draw: Vec<Card>) -> Self {
+            DebugRand {us_rolls, ussr_rolls, discards, us_draw, ussr_draw}
+        }
 }
 
 impl TwilightRand for DebugRand {
@@ -108,11 +111,18 @@ impl TwilightRand for DebugRand {
             _ => None,
         };
         if let Some(card) = card {
+            if card == Card::The_China_Card {
+                return
+            }
             let index = deck.draw_pile().iter().position(|&c| c == card).unwrap();
             deck.draw_pile_mut().swap_remove(index);
             deck.hand_mut(side).push(card);
         } else {
-            unimplemented!();
+            // We've drawn all the known cards we care about, so just draw 
+            // non-scoring cards for now
+            let index = deck.draw_pile().iter().position(|c| !c.is_scoring()).unwrap();
+            let card = deck.draw_pile_mut().swap_remove(index);
+            deck.hand_mut(side).push(card);
         }
     }
 }

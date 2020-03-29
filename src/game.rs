@@ -22,7 +22,8 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
             }
     }
     pub fn setup(&mut self) {
-        // Todo figure this out
+        // Todo figure this ou
+        self.state.deck.draw_cards(8, &mut self.rng);
         self.initial_placement();
     }
     pub fn do_ply(&mut self) -> Option<Side> {
@@ -169,15 +170,20 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
             Decision::new_event(us_card));
 
         // Headline order
+        // Todo see if current event can be set more nicely
         if us_card.base_ops() >= ussr_card.base_ops() {
             self.state.side = Side::US;
+            self.state.current_event = Some(us_card);
             self.resolve_actions(vec![decisions.1]);
             self.state.side = Side::USSR;
+            self.state.current_event = Some(ussr_card);
             self.resolve_actions(vec![decisions.0]);
         } else {
             self.state.side = Side::USSR;
+            self.state.current_event = Some(ussr_card);
             self.resolve_actions(vec![decisions.0]);
             self.state.side = Side::US;
+            self.state.current_event = Some(us_card);
             self.resolve_actions(vec![decisions.1]);
         }
     }
@@ -187,6 +193,7 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         let mut offered_cuban = false;
         let mut last_agent: Option<Side> = None;
         while let Some(mut d) = pending.pop() {
+            dbg!(&d);
             // Reset current event 
             if let Some(last) = last_agent {
                 if last != d.agent {
@@ -297,8 +304,8 @@ mod tests {
         let ussr = [Poland, Poland, Poland, Poland, EGermany, Austria];
         let us = [WGermany, WGermany, WGermany, WGermany, Italy, Italy, Italy,
             Italy, Iran];
-        let ussr_agent = ScriptedAgent::new(ussr.iter().map(|c| encode_inf(*c)).collect());
-        let us_agent = ScriptedAgent::new(us.iter().map(|c| encode_inf(*c)).collect());
+        let ussr_agent = ScriptedAgent::new(&ussr.iter().map(|c| encode_inf(*c)).collect());
+        let us_agent = ScriptedAgent::new(&us.iter().map(|c| encode_inf(*c)).collect());
         let actors = Actors::new(ussr_agent, us_agent);
         let state = GameState::new();
         let rng = DebugRand::new_empty();

@@ -344,7 +344,12 @@ impl Card {
         };
         if self.is_special() {
             let legal = self.e_choices(state).unwrap();
-            let d = Decision::new(side, Action::SpecialEvent, legal);
+            let d = if *self == Card::Olympic_Games {
+                // Opposite side decides which special outcome
+                Decision::new(side.opposite(), Action::SpecialEvent, legal)
+            } else {
+                Decision::new(side, Action::SpecialEvent, legal)
+            };
             pending_actions.push(d);
             return true
         }
