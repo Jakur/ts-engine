@@ -2,7 +2,7 @@ use crate::action::{Action, Decision};
 use crate::agent::{Actors, Agent, ScriptedAgent};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::{GameState, TwilightRand, DebugRand};
+use crate::state::{DebugRand, GameState, TwilightRand};
 use crate::tensor::{DecodedChoice, TensorOutput};
 
 use std::mem;
@@ -13,13 +13,10 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     pub rng: R,
 }
 
-impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
-    pub fn new(ussr_agent: A, us_agent: B, state: GameState, rng: R) 
-        -> Game<A, B, R> {
-            let actors = Actors::new(ussr_agent, us_agent);
-            Game {
-                actors, state, rng
-            }
+impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
+    pub fn new(ussr_agent: A, us_agent: B, state: GameState, rng: R) -> Game<A, B, R> {
+        let actors = Actors::new(ussr_agent, us_agent);
+        Game { actors, state, rng }
     }
     pub fn setup(&mut self) {
         // Todo figure this ou
@@ -62,25 +59,15 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         }
     }
     fn initial_placement(&mut self) {
-        use crate::country::{WESTERN_EUROPE, EASTERN_EUROPE};
+        use crate::country::{EASTERN_EUROPE, WESTERN_EUROPE};
         let mut pending_actions = Vec::new();
         // USSR
-        let x = Decision::with_quantity(
-            Side::USSR,
-            Action::Place,
-            &EASTERN_EUROPE[..],
-            6
-        );
+        let x = Decision::with_quantity(Side::USSR, Action::Place, &EASTERN_EUROPE[..], 6);
         pending_actions.push(x);
         self.resolve_actions(pending_actions);
         // US
         pending_actions = Vec::new();
-        let x = Decision::with_quantity(
-            Side::US, 
-            Action::Place, 
-            &WESTERN_EUROPE[..], 
-            7
-        );
+        let x = Decision::with_quantity(Side::US, Action::Place, &WESTERN_EUROPE[..], 7);
         pending_actions.push(x);
         self.resolve_actions(pending_actions);
         // US Bonus + 2
@@ -164,11 +151,10 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
         let ussr = &self.actors.ussr_agent;
         let ussr_decision = Decision::headline(Side::USSR, &self.state);
         let ussr_decoded = ussr.decide(&self.state, ussr_decision.encode(&self.state));
-        let ussr_card = Card::from_index(ussr_decoded.choice.unwrap()); 
+        let ussr_card = Card::from_index(ussr_decoded.choice.unwrap());
 
         // Hands cannot be empty at the HL phase
-        let decisions = (Decision::new_event(ussr_card), 
-            Decision::new_event(us_card));
+        let decisions = (Decision::new_event(ussr_card), Decision::new_event(us_card));
 
         // Headline order
         if us_card.base_ops() >= ussr_card.base_ops() {
@@ -185,52 +171,67 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
     }
     fn resolve_actions(&mut self, mut pending: Vec<Decision>) {
         use crate::card::Effect;
-        let mut history = Vec::new(); // Todo figure out how to handle this
         let mut offered_cuban = false;
-        while let Some(mut d) = pending.pop() {
-            // Cuban Missile Crisis 
+        while let Some(d) = pending.pop() {
+            let mut history = Vec::new(); // Todo figure out how to handle this
+                                          // Cuban Missile Crisis
             if !offered_cuban {
                 match &d.action {
                     Action::Coup | Action::ConductOps => {
                         if self.state.has_effect(d.agent, Effect::CubanMissileCrisis) {
                             let legal_cuban = self.state.legal_cuban(d.agent);
                             if !legal_cuban.slice().is_empty() {
-                                let cuban_d = Decision::new(d.agent, Action::CubanMissile, legal_cuban);
+                                let cuban_d =
+                                    Decision::new(d.agent, Action::CubanMissile, legal_cuban);
                                 pending.push(d);
                                 pending.push(cuban_d);
                                 offered_cuban = true;
-                                continue
+                                continue;
                             }
                         }
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
-            // Do not call eval if there are only 0 or 1 decisions
-            let legal = d.encode(&self.state);
-            let (action, choice) = if legal.is_trivial() {
-                (d.action, d.allowed.slice().iter().cloned().next())
-            } else {
-                let agent = self.actors.get(d.agent);
-                let x = agent.decide(&self.state, legal);
-                // match action {
-                //     Action::ConductOps | Action::BeginAr => {},
-                //     _ => assert_eq!(mem::discriminant(&action), mem::discriminant(&d.action)),
-                // }
-                (x.action, x.choice)
-            };
-            // Fix our decision if it was a meta decision that we're now collapsing
-            if action != d.action {
-                let new_legal = match action {
-                    Action::Coup | Action::Realignment => self.state.legal_coup_realign(d.agent),
-                    Action::Influence => self.state.legal_influence(d.agent, d.quantity),
-                    Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => Vec::new(), // Doesn't matter
-                    _ => unimplemented!(),
-                };
-                d = Decision::with_quantity(d.agent, action, new_legal, d.quantity);
-            } 
-            self.state.resolve_action(d, choice, &mut pending, &mut history, &mut self.rng);
+            let mut decision = Some(d);
+            while let Some(remaining) = decision {
+                decision = self.resolve_single(remaining, &mut pending, &mut history);
+            }
         }
+    }
+    fn resolve_single(
+        &mut self,
+        mut decision: Decision,
+        pending: &mut Vec<Decision>,
+        history: &mut Vec<usize>,
+    ) -> Option<Decision> {
+        // Do not call eval if there are only 0 or 1 decisions
+        let legal = decision.encode(&self.state);
+        let (action, choice) = if legal.is_trivial() {
+            (
+                decision.action,
+                decision.allowed.slice().iter().cloned().next(),
+            )
+        } else {
+            let agent = self.actors.get(decision.agent);
+            let x = agent.decide(&self.state, legal);
+            (x.action, x.choice)
+        };
+        // Fix our decision if it was a meta decision that we're now collapsing
+        if action != decision.action {
+            let new_legal = match action {
+                Action::Coup | Action::Realignment => self.state.legal_coup_realign(decision.agent),
+                Action::Influence => self
+                    .state
+                    .legal_influence(decision.agent, decision.quantity),
+                Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => Vec::new(), // Doesn't matter
+                _ => unimplemented!(),
+            };
+            decision =
+                Decision::with_quantity(decision.agent, action, new_legal, decision.quantity);
+        }
+        self.state
+            .resolve_action(decision, choice, pending, history, &mut self.rng)
     }
     fn final_scoring(&mut self) -> (Side, i8) {
         use crate::country::Region::*;
@@ -257,15 +258,18 @@ impl<A: Agent, B: Agent, R: TwilightRand > Game<A, B, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::OutputIndex;
     use crate::agent::*;
-    use crate::state::DebugRand;
     use crate::country::CName;
+    use crate::state::DebugRand;
+    use crate::tensor::OutputIndex;
     #[test]
     fn test_summit() {
         let mut game = standard_start();
         game.state.deck.us_hand_mut().extend(vec![Card::Summit; 7]);
-        game.state.deck.ussr_hand_mut().extend(vec![Card::Summit; 7]);
+        game.state
+            .deck
+            .ussr_hand_mut()
+            .extend(vec![Card::Summit; 7]);
         game.state.defcon = 2;
         let summit_play = OutputIndex::new(Action::Event.offset() + Card::Summit as usize);
         let x = summit_play.decode().action;
@@ -289,14 +293,15 @@ mod tests {
     fn standard_start() -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
         use CName::*;
         let ussr = [Poland, Poland, Poland, Poland, EGermany, Austria];
-        let us = [WGermany, WGermany, WGermany, WGermany, Italy, Italy, Italy,
-            Italy, Iran];
+        let us = [
+            WGermany, WGermany, WGermany, WGermany, Italy, Italy, Italy, Italy, Iran,
+        ];
         let ussr_agent = ScriptedAgent::new(&ussr.iter().map(|c| encode_inf(*c)).collect());
         let us_agent = ScriptedAgent::new(&us.iter().map(|c| encode_inf(*c)).collect());
         let actors = Actors::new(ussr_agent, us_agent);
         let state = GameState::new();
         let rng = DebugRand::new_empty();
-        let mut game = Game {actors, state, rng};
+        let mut game = Game { actors, state, rng };
         game.setup();
         game
     }

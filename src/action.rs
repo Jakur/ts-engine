@@ -78,6 +78,19 @@ impl Decision {
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
         Decision::with_quantity(agent, Action::ConductOps, &[], ops)
     }
+    pub fn next_decision(mut self, history: &[usize], state: &GameState) -> Option<Decision> {
+        self.quantity -= 1; 
+        if self.quantity == 0 {
+            None
+        } else {
+            if let Action::Influence = self.action {
+                self.next_influence(state)
+            } else {
+                state.apply_restriction(history, &mut self);
+                Some(self)
+            }
+        }
+    }
     pub fn next_influence(mut self, state: &GameState) -> Option<Decision> {
         assert!(self.action == Action::Influence); // For now?
         if self.quantity == 0 {

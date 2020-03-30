@@ -164,7 +164,7 @@ impl GameState {
         // Todo figure out if restriction is always limit
         self.apply_restriction(history, dec);
     }
-    fn apply_restriction(&self, history: &[usize], decision: &mut Decision) {
+    pub fn apply_restriction(&self, history: &[usize], decision: &mut Decision) {
         if let Some(restrict) = &self.restrict {
             match restrict {
                 Restriction::Limit(num) => {
@@ -190,18 +190,18 @@ impl GameState {
         pending: &mut Vec<Decision>,
         history: &mut Vec<usize>,
         rng: &mut R,
-    ) {
-        let choice = if choice.is_some() {
-            choice.unwrap()
-        } else {
-            match decision.action {
-                Action::Event => 0,
-                Action::Pass => return,
-                Action::ClearEvent => {
-                    self.current_event = None;
-                    return;
+    ) -> Option<Decision> {
+        let choice = match choice {
+            Some(c) => c,
+            None => {
+                match decision.action {
+                    Action::Event => 0,
+                    Action::ClearEvent => {
+                        self.current_event = None;
+                        return None;
+                    }
+                    _ => return None, // Pass, implicit or explicit
                 }
-                _ => unimplemented!(),
             }
         };
         let side = decision.agent;
@@ -336,17 +336,9 @@ impl GameState {
             Action::ChangeDefcon => self.defcon = choice as i8,
             Action::BeginAr | Action::ConductOps | Action::Pass | Action::ClearEvent => unreachable!(),
         }
-        decision.quantity -= 1;
-        if let Action::Influence = decision.action {
-            if let Some(d) = decision.next_influence(self) {
-                pending.push(d);
-            }
-        } else {
-            if decision.quantity > 0 {
-                pending.push(decision);
-            }
-        }
         history.push(choice);
+        dbg!(&history);
+        decision.next_decision(&history, self)
     }
     /// Return true if the side has the effect, else false.
     pub fn has_effect(&self, side: Side, effect: Effect) -> bool {

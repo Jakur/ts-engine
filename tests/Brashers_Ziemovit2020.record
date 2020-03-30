@@ -14,7 +14,10 @@ Coup Italy
 USSR Roll 4
 US Suez_Crisis
 Inf 2-Egypt 1-Lebanon
-USSR Remove 2-UK 1-Israel
+#Annoyingly my system doesn't check trivial cases, so Israel is removed
+#But it cannot be included
+USSR Remove 2-UK
+#USSR Remove 1-Israel
 Warsaw_Pact_Formed
 Inf 2-Italy 1-Afghanistan
 US Arab_Israeli_War
