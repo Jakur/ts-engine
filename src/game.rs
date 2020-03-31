@@ -143,7 +143,10 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.state.vp -= us_pen;
         self.state.vp += ussr_pen;
         self.state.turn += 1;
+        // Reset Defcon and Mil ops for next turn
         self.state.defcon = std::cmp::min(defcon + 1, 5);
+        self.state.mil_ops[0] = 0;
+        self.state.mil_ops[1] = 0;
         self.state.check_win()
     }
     fn headline(&mut self) {

@@ -11,7 +11,7 @@ fn load_file(name: &str) -> String {
 
 #[test]
 fn parse_one_turn() {
-    use ts_engine::country::{self, countries, CName::*};
+    use ts_engine::country::{self, countries, CName::*, Side};
     let s = load_file("tests/Brashers_Ziemovit2020.record");
     let mut game = ts_engine::record::parse_lines(&s);
     assert_eq!(game.rng.us_rolls, vec![6, 1]);
@@ -71,4 +71,8 @@ fn parse_one_turn() {
     assert_eq!(game.state.vp, 0);
     assert!(game.state.us_effects.is_empty());
     assert!(game.state.ussr_effects.is_empty());
+    assert_eq!(game.state.space[Side::US as usize], 1);
+    assert_eq!(game.state.space[Side::USSR as usize], 0);
+    assert_eq!(game.state.mil_ops[Side::US as usize], 0);
+    assert_eq!(game.state.mil_ops[Side::USSR as usize], 0);
 }
