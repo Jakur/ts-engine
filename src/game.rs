@@ -55,7 +55,11 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 (winner, 20)
             }
         } else {
-            self.final_scoring()
+            if self.state.turn >= 10 {
+                self.final_scoring()
+            } else {
+                (Side::Neutral, self.state.vp)
+            }
         }
     }
     fn initial_placement(&mut self) {
@@ -139,6 +143,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.state.vp -= us_pen;
         self.state.vp += ussr_pen;
         self.state.turn += 1;
+        self.state.defcon = std::cmp::min(defcon + 1, 5);
         self.state.check_win()
     }
     fn headline(&mut self) {
@@ -196,6 +201,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             let mut decision = Some(d);
             while let Some(remaining) = decision {
                 decision = self.resolve_single(remaining, &mut pending, &mut history);
+                self.state.china = false; // Todo better place for this?
             }
         }
     }
@@ -233,7 +239,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         let res = self
             .state
             .resolve_action(decision, choice, pending, history, &mut self.rng);
-        dbg!(history);
         res
     }
     fn final_scoring(&mut self) -> (Side, i8) {

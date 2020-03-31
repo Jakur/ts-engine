@@ -188,8 +188,6 @@ pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand
             continue;
         }
         if let Some(parsed) = parse_line(line, last_side) {
-            dbg!(&line);
-            dbg!(&parsed);
             last_side = parsed.side;
             match parsed.action {
                 MetaAction::Roll => {

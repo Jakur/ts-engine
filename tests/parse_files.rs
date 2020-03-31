@@ -11,16 +11,11 @@ fn load_file(name: &str) -> String {
 
 #[test]
 fn parse_one_turn() {
-    use ts_engine::country::{
-        self, countries,
-        CName::{self, *},
-    };
+    use ts_engine::country::{self, countries, CName::*};
     let s = load_file("tests/Brashers_Ziemovit2020.record");
     let mut game = ts_engine::record::parse_lines(&s);
     assert_eq!(game.rng.us_rolls, vec![6, 1]);
     game.setup();
-    // dbg!(&game.rng.us_draw);
-    // dbg!(&game.rng.ussr_draw);
     game.play(1, None);
     let us = [
         (Canada, 2i8),
@@ -38,6 +33,7 @@ fn parse_one_turn() {
         (Thailand, 3),
         (Malaysia, 1),
         (Australia, 4),
+        (Philippines, 1),
         (SouthAfrica, 1),
         (Panama, 1),
     ];
@@ -66,8 +62,13 @@ fn parse_one_turn() {
     for index in 0..country::NUM_COUNTRIES - 2 {
         let c1 = &all_countries[index];
         let c2 = &game.state.countries[index];
-        dbg!(CName::from_index(index));
+        // dbg!(CName::from_index(index));
         assert_eq!(c1.us, c2.us);
         assert_eq!(c1.ussr, c2.ussr);
     }
+    assert_eq!(game.state.turn, 2);
+    assert_eq!(game.state.defcon, 3);
+    assert_eq!(game.state.vp, 0);
+    assert!(game.state.us_effects.is_empty());
+    assert!(game.state.ussr_effects.is_empty());
 }

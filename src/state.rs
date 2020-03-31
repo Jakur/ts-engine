@@ -224,8 +224,6 @@ impl GameState {
             Action::Coup => {
                 let free_coup = false; // Todo free coup
                 let roll = rng.roll(decision.agent);
-                dbg!(roll);
-                dbg!(&self.countries[choice]);
                 let mut ops = decision.quantity;
                 if self.china && !Region::Asia.has_country(choice) {
                     ops -= 1;
@@ -233,7 +231,6 @@ impl GameState {
                 }
                 self.take_coup(side, choice, ops, roll, free_coup);
                 decision.quantity = 1; // Use up all of your ops on one action
-                dbg!(&self.countries[choice]);
             }
             Action::Place => {
                 let (q, side) = if let Some(card) = self.current_event {

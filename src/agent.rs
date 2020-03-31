@@ -81,8 +81,6 @@ impl Agent for ScriptedAgent {
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let next = self.next().unwrap();
-        // dbg!(&legal);
-        dbg!(next);
         assert!(legal.contains(next));
         next.decode()
     }
