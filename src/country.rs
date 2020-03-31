@@ -1,6 +1,7 @@
 use crate::card::Effect;
 use crate::state::GameState;
 
+use num_traits::FromPrimitive;
 use std::collections::HashSet;
 
 pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
@@ -10,7 +11,7 @@ pub const USSR_INDEX: usize = CName::USSR as usize;
 lazy_static! {
     pub static ref EUROPE: Vec<usize> = Region::Europe.all_countries();
     pub static ref ASIA: Vec<usize> = Region::Asia.all_countries();
-    pub static ref MIDDLE_EAST: Vec<usize> = Region::Asia.all_countries();
+    pub static ref MIDDLE_EAST: Vec<usize> = Region::MiddleEast.all_countries();
     pub static ref WESTERN_EUROPE: Vec<usize> = Region::WesternEurope.all_countries();
     pub static ref EASTERN_EUROPE: Vec<usize> = Region::EasternEurope.all_countries();
     pub static ref AFRICA: Vec<usize> = Region::Africa.all_countries();
@@ -43,7 +44,7 @@ lazy_static! {
     pub static ref EDGES: Vec<Vec<usize>> = adjacency_list();
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
     US = 0,
     USSR = 1,
@@ -56,6 +57,18 @@ impl Side {
             Side::US => Side::USSR,
             Side::USSR => Side::US,
             Side::Neutral => unimplemented!(), // Not sure if this should be called
+        }
+    }
+}
+
+impl From<usize> for Side {
+    fn from(num: usize) -> Self {
+        if num == 0 {
+            Side::US
+        } else if num == 1 {
+            Side::USSR
+        } else {
+            Side::Neutral
         }
     }
 }
@@ -100,7 +113,8 @@ pub enum Region {
     SouthAmerica,
 }
 
-enum Status {
+#[derive(Clone, Copy)]
+pub enum Status {
     Zero,
     Presence,
     Domination,
@@ -108,14 +122,24 @@ enum Status {
 }
 
 impl Region {
-    pub fn score(&self, state: &mut GameState) -> i8 {
+    pub fn major_regions() -> Vec<Region> {
         use Region::*;
-        let countries = self.all_countries();
+        vec![
+            Europe,
+            MiddleEast,
+            Asia,
+            Africa,
+            CentralAmerica,
+            SouthAmerica,
+        ]
+    }
+    /// Returns the status of both sides in the region, and the battleground difference
+    pub fn status(&self, state: &GameState, use_shuttle: bool) -> ([Status; 2], i8) {
         let mut ussr_bg = 0;
         let mut ussr_n = 0;
         let mut us_bg = 0;
         let mut us_n = 0;
-        for i in countries {
+        for i in self.all_countries() {
             let c = &state.countries[i];
             match c.controller() {
                 Side::US => {
@@ -135,21 +159,88 @@ impl Region {
                 _ => {}
             }
         }
-        // Total number of battlegrounds, then the three scoring levels
-        let (bg_total, p, d, c) = match self {
-            Europe => (5, 3, 7, 0),
-            MiddleEast => (6, 3, 5, 7),
-            Asia => (6, 3, 7, 9),
-            Africa => (5, 1, 4, 6),
-            CentralAmerica => (3, 1, 3, 5),
-            SouthAmerica => (4, 2, 5, 6),
-            _ => (0, 0, 0, 0),
+        let mut ret = [Status::Zero, Status::Zero];
+        let bg_total = match self {
+            Region::Europe => 5,
+            Region::MiddleEast => 6,
+            Region::Asia => 6,
+            Region::Africa => 5,
+            Region::CentralAmerica => 3,
+            Region::SouthAmerica => 4,
+            _ => 0,
+        };
+        match self {
+            Region::MiddleEast => {
+                if state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                    if !state.is_final_scoring() && use_shuttle {
+                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
+                    }
+                }
+            }
+            Region::Asia => {
+                if state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                    if !state.is_final_scoring() && use_shuttle {
+                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
+                    }
+                }
+                if state.is_controlled(Side::US, CName::Taiwan) {
+                    if state.has_effect(Side::US, Effect::FormosanResolution) {
+                        us_bg += 1;
+                        us_n -= 1;
+                    }
+                }
+            }
+            _ => {}
+        }
+        let diff = us_bg + us_n - ussr_bg - ussr_n;
+        let ussr_status = {
+            if ussr_bg == bg_total && diff < 0 {
+                Status::Control
+            } else if ussr_bg > us_bg && diff < 0 && ussr_n > 0 {
+                Status::Domination
+            } else if ussr_bg + ussr_n > 0 {
+                Status::Presence
+            } else {
+                Status::Zero
+            }
+        };
+        let us_status = {
+            if us_bg == bg_total && diff > 0 {
+                Status::Control
+            } else if us_bg > ussr_bg && diff > 0 && us_n > 0 {
+                Status::Domination
+            } else if us_bg + us_n > 0 {
+                Status::Presence
+            } else {
+                Status::Zero
+            }
+        };
+        ret[Side::US as usize] = us_status;
+        ret[Side::USSR as usize] = ussr_status;
+        if let Region::SoutheastAsia = self {
+            (ret, us_n - ussr_n + 2 * us_bg - 2 * ussr_bg)
+        } else {
+            (ret, us_bg - ussr_bg)
+        }
+    }
+    pub fn score(&self, state: &mut GameState) -> i8 {
+        use Region::*;
+        // Vp for the three successive scoring levels
+        let (p, d, c) = match self {
+            Europe => (3, 7, 0),
+            MiddleEast => (3, 5, 7),
+            Asia => (3, 7, 9),
+            Africa => (1, 4, 6),
+            CentralAmerica => (1, 3, 5),
+            SouthAmerica => (2, 5, 6),
+            _ => (0, 0, 0),
         };
         let mut vp_change = 0;
-        // Special cases
+        let (statuses, bg_diff) = self.status(state, !state.is_final_scoring());
+        // Special case adjacency
         match self {
             Europe => {
-                for c in [CName::Finland, CName::Poland, CName::Romania].into_iter() {
+                for c in [CName::Finland, CName::Poland, CName::Romania].iter() {
                     if state.is_controlled(Side::US, *c) {
                         vp_change += 1;
                     }
@@ -159,15 +250,14 @@ impl Region {
                 }
             }
             MiddleEast => {
-                if let Some(index) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                if let Some(index) = state.effect_pos(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() {
-                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
                         state.clear_effect(Side::US, index);
                     }
                 }
             }
             Asia => {
-                for c in [CName::Afghanistan, CName::NKorea].into_iter() {
+                for c in [CName::Afghanistan, CName::NKorea].iter() {
                     if state.is_controlled(Side::US, *c) {
                         vp_change += 1;
                     }
@@ -175,21 +265,14 @@ impl Region {
                 if state.is_controlled(Side::USSR, CName::Japan) {
                     vp_change -= 1;
                 }
-                if let Some(index) = state.has_effect(Side::US, Effect::ShuttleDiplomacy) {
+                if let Some(index) = state.effect_pos(Side::US, Effect::ShuttleDiplomacy) {
                     if !state.is_final_scoring() {
-                        ussr_bg = std::cmp::max(0, ussr_bg - 1);
                         state.clear_effect(Side::US, index);
-                    }
-                }
-                if state.is_controlled(Side::US, CName::Taiwan) {
-                    if let Some(_) = state.has_effect(Side::US, Effect::FormosanResolution) {
-                        us_bg += 1;
-                        us_n -= 1;
                     }
                 }
             }
             CentralAmerica => {
-                for c in [CName::Mexico, CName::Cuba].into_iter() {
+                for c in [CName::Mexico, CName::Cuba].iter() {
                     if state.is_controlled(Side::USSR, *c) {
                         vp_change -= 1;
                     }
@@ -198,42 +281,13 @@ impl Region {
             _ => {}
         }
         // Usual scoring protocol
-        let (us_status, ussr_status) = match self {
-            SoutheastAsia => {
-                vp_change += us_n;
-                vp_change -= ussr_n;
-                vp_change += 2 * us_bg; // US Thailand
-                vp_change -= 2 * ussr_bg; // USSR Thailand
-                state.vp += vp_change;
-                return vp_change;
-            }
-            _ => {
-                let diff = us_bg + us_n - ussr_bg - ussr_n;
-                let ussr_status = {
-                    if ussr_bg == bg_total && diff < 0 {
-                        Status::Control
-                    } else if ussr_bg > us_bg && diff < 0 && ussr_n > 0 {
-                        Status::Domination
-                    } else if ussr_bg + ussr_n > 0 {
-                        Status::Presence
-                    } else {
-                        Status::Zero
-                    }
-                };
-                let us_status = {
-                    if us_bg == bg_total && diff > 0 {
-                        Status::Control
-                    } else if us_bg > ussr_bg && diff > 0 && us_n > 0 {
-                        Status::Domination
-                    } else if us_bg + us_n > 0 {
-                        Status::Presence
-                    } else {
-                        Status::Zero
-                    }
-                };
-                (us_status, ussr_status)
-            }
-        };
+        if let Region::SoutheastAsia = self {
+            vp_change += bg_diff;
+            state.vp += vp_change;
+            return vp_change;
+        }
+        let us_status = statuses[Side::US as usize];
+        let ussr_status = statuses[Side::USSR as usize];
         // Auto win for control
         if *self == Europe {
             if let Status::Control = us_status {
@@ -261,8 +315,7 @@ impl Region {
             _ => {}
         }
         // 1 point per battleground
-        vp_change += us_bg;
-        vp_change -= ussr_bg;
+        vp_change += bg_diff;
         state.vp += vp_change;
         return vp_change;
     }
@@ -290,7 +343,7 @@ impl Region {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Country {
     pub stability: i8,
     pub us: i8,
@@ -313,6 +366,13 @@ impl Country {
         match side {
             Side::US => self.us > 0,
             Side::USSR => self.ussr > 0,
+            Side::Neutral => unimplemented!(),
+        }
+    }
+    pub fn influence(&self, side: Side) -> i8 {
+        match side {
+            Side::US => self.us,
+            Side::USSR => self.ussr,
             Side::Neutral => unimplemented!(),
         }
     }
@@ -343,7 +403,7 @@ impl Country {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, FromPrimitive)]
 pub enum CName {
     Turkey = 0,
     Greece,
@@ -438,6 +498,15 @@ impl From<CName> for usize {
         item as usize
     }
 }
+
+impl CName {
+    pub fn from_index(index: usize) -> CName {
+        CName::from_usize(index).unwrap()
+    }
+    pub fn total() -> usize {
+        NUM_COUNTRIES
+    }
+}
 /// Returns countries with their starting influence before players have any agency.
 pub fn standard_start() -> Vec<Country> {
     use CName::*;
@@ -448,6 +517,7 @@ pub fn standard_start() -> Vec<Country> {
         (3, NKorea),
         (3, EGermany),
         (1, Finland),
+        (6, USSR),
     ];
     let us = [
         (2, Canada),
@@ -460,17 +530,18 @@ pub fn standard_start() -> Vec<Country> {
         (1, Panama),
         (1, SouthAfrica),
         (5, UK),
+        (6, US),
     ];
-    for (x, y) in ussr.into_iter() {
+    for (x, y) in ussr.iter() {
         c[*y as usize].ussr += x;
     }
-    for (x, y) in us.into_iter() {
+    for (x, y) in us.iter() {
         c[*y as usize].us += x;
     }
     c
 }
 
-fn countries() -> Vec<Country> {
+pub fn countries() -> Vec<Country> {
     use CName::*;
     let mut countries = vec![Country::new_non(0); NUM_COUNTRIES];
     let bgs = [
@@ -563,11 +634,11 @@ fn countries() -> Vec<Country> {
         (US, 6),
         (USSR, 6),
     ];
-    for (n, s) in bgs.into_iter() {
+    for (n, s) in bgs.iter() {
         let c = Country::new_bg(*s);
         countries[*n as usize] = c;
     }
-    for (n, s) in non.into_iter() {
+    for (n, s) in non.iter() {
         let c = Country::new_non(*s);
         countries[*n as usize] = c;
     }

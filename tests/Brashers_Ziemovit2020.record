@@ -1,0 +1,46 @@
+USSR Place 4-Poland 1-EGermany 1-Austria
+US Place 4-WGermany 3-Italy
+Place 1-Italy 1-Iran
+#T1
+USSR Olympic_Games HL
+US Captured_Nazi_Scientist HL
+Special 0
+USSR Roll 6
+US Roll 1
+#AR1
+#Remember to be explicit with events that may not occur
+USSR NATO O
+Coup Italy
+USSR Roll 4
+US Suez_Crisis
+Inf 2-Egypt 1-Lebanon
+#Annoyingly my system doesn't check trivial cases, so Israel is removed
+#But it cannot be included
+USSR Remove 2-UK
+#USSR Remove 1-Israel
+Warsaw_Pact_Formed
+Inf 2-Italy 1-Afghanistan
+US Arab_Israeli_War
+Inf 1-Pakistan 1-Malaysia
+USSR Roll 4
+USSR The_China_Card O
+Coup Pakistan
+USSR Roll 3
+US Fidel OE
+Coup Iraq
+US Roll 6
+USSR Independent_Reds OE
+Inf 1-Syria 1-India
+#Todo fix below card to The_Cambridge_Five once it's implemented
+US Formosan_Resolution
+Inf 1-Thailand 1-France
+#Todo fix below card to Special_Relationship
+USSR Korean_War
+Inf 2-SpainPortugal
+US UN_Intervention
+Inf 1-Thailand
+USSR Indo_Pakistani_War
+Inf 1-Italy 1-Afghanistan
+US East_European_Unrest
+Inf 1-LaosCambodia 1-Thailand 1-Libya
+#T2

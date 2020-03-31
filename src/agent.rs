@@ -1,8 +1,11 @@
-use crate::action::Action;
+use crate::action::{Action, Decision};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::GameState;
+use crate::game::Game;
+use crate::state::{DebugRand, GameState, TwilightRand};
+use crate::tensor::{DecodedChoice, OutputIndex, OutputVec, TensorOutput};
 
+use crossbeam_queue::ArrayQueue;
 use rand::prelude::*;
 
 pub struct Actors<A: Agent, B: Agent> {
@@ -28,82 +31,61 @@ where
             _ => unimplemented!(),
         }
     }
+    pub fn ussr(&self) -> &A {
+        &self.ussr_agent
+    }
+    pub fn ussr_mut(&mut self) -> &mut A {
+        &mut self.ussr_agent
+    }
+    pub fn us(&self) -> &B {
+        &self.us_agent
+    }
+    pub fn us_mut(&mut self) -> &mut B {
+        &mut self.us_agent
+    }
 }
 
 pub trait Agent {
-    /// Decides a country to act upon, or None if there is no legal option. Also
-    /// includes a numerical evaluation of the position from the agent's perspective.
-    fn decide_action(
-        &self,
-        state: &GameState,
-        choices: &[usize],
-        action: Action,
-    ) -> (Option<usize>, f32);
-    /// Picks a card among valid options for an action, either picking a card
-    /// to play or else to discard. Also includes a numerical evaluation of the
-    /// position from the agent's perspective.
-    fn decide_card(
-        &self,
-        state: &GameState,
-        cards: &[Card],
-        china: bool,
-        play: bool,
-        can_pass: bool,
-    ) -> (Option<Card>, f32);
+    /// Given a game state and encoding of all legal actions, decide which
+    /// action to take and return the action the desired index
+    fn decide(&self, state: &GameState, legal: OutputVec) -> DecodedChoice;
+    /// Returns which side the agent is playing
+    fn side(&self) -> Side;
     /// Returns just the evaluation of the given position
     fn get_eval(&self, state: &GameState) -> f32;
 }
 
-#[derive(Clone)]
-pub struct DebugAgent<'a> {
-    pub fav_action: Action<'a>,
-    pub fav_card: Card,
-    pub choices: &'a [usize],
+pub struct ScriptedAgent {
+    pub choices: ArrayQueue<OutputIndex>,
 }
 
-impl<'a> DebugAgent<'a> {
-    pub fn new(fav_action: Action<'a>, fav_card: Card, choices: &'a [usize]) -> Self {
-        DebugAgent {
-            fav_action,
-            fav_card,
-            choices,
+impl ScriptedAgent {
+    pub fn new(choices: &Vec<OutputIndex>) -> Self {
+        let queue = ArrayQueue::new(choices.len());
+        for c in choices.iter().copied() {
+            queue.push(c).unwrap();
         }
+        ScriptedAgent { choices: queue }
+    }
+    pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
+        let (_win, _pts) = game.play(goal_t, Some(goal_ar));
+    }
+    fn next(&self) -> Option<OutputIndex> {
+        self.choices.pop().ok()
     }
 }
 
-impl<'a> Agent for DebugAgent<'a> {
-    fn decide_action(&self, _s: &GameState, choices: &[usize], a: Action) -> (Option<usize>, f32) {
-        use std::mem::discriminant;
-        // Todo resolve first?
-        let eval = if discriminant(&a) == discriminant(&self.fav_action) {
-            1.0
-        } else {
-            0.0
-        };
-        for fav in self.choices.iter() {
-            if choices.contains(fav) {
-                return (Some(*fav), eval);
-            }
-        }
-        let choice = if choices.len() != 0 {
-            Some(choices[0])
-        } else {
-            None
-        };
-        (choice, eval)
-    }
-    fn decide_card(
-        &self,
-        _state: &GameState,
-        _cards: &[Card],
-        _china: bool,
-        _play: bool,
-        _can_pass: bool,
-    ) -> (Option<Card>, f32) {
-        todo!()
-    }
+impl Agent for ScriptedAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         todo!()
+    }
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
+        let next = self.next().unwrap();
+        assert!(legal.contains(next));
+        next.decode()
+    }
+    fn side(&self) -> Side {
+        unimplemented!()
     }
 }
 
@@ -115,46 +97,24 @@ impl RandAgent {
 }
 
 impl Agent for RandAgent {
-    fn decide_action(&self, _s: &GameState, choices: &[usize], _a: Action) -> (Option<usize>, f32) {
-        if choices.len() == 0 {
-            return (None, 0.0); // Todo detect this earlier?
-        }
-        let mut x = thread_rng();
-        let choice = x.gen_range(0, choices.len());
-        (Some(choices[choice]), x.gen())
-    }
-    fn decide_card(
-        &self,
-        _state: &GameState,
-        hand: &[Card],
-        china: bool,
-        _play: bool,
-        _can_pass: bool,
-    ) -> (Option<Card>, f32) {
-        let mut x = thread_rng();
-        if hand.len() > 0 {
-            let choice = if china {
-                x.gen_range(0, hand.len() + 1)
-            } else {
-                x.gen_range(0, hand.len())
-            };
-            let card = if choice >= hand.len() {
-                Card::The_China_Card
-            } else {
-                hand[choice]
-            };
-            (Some(card), x.gen())
-        } else {
-            let choices = &[None, Some(Card::The_China_Card)];
-            // A player cannot be forced to play the China card
-            if china {
-                (choices[x.gen_range(0, 2)], x.gen())
-            } else {
-                (None, x.gen())
-            }
-        }
-    }
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
     }
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
+        let mut rng = thread_rng();
+        let x = legal.data().choose(&mut rng);
+        if let Some(choice) = x {
+            choice.decode()
+        } else {
+            panic!("Nothing to decide!");
+        }
+    }
+    fn side(&self) -> Side {
+        unimplemented!()
+    }
+}
+
+pub fn legal_headline(agent: Side, state: &GameState) -> OutputVec {
+    let d = Decision::headline(agent, state);
+    d.encode(state)
 }

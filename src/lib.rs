@@ -1,16 +1,26 @@
 #[macro_use]
 extern crate lazy_static;
 
+#[macro_use]
+extern crate num_derive;
+
 pub mod action;
 pub mod agent;
 pub mod card;
 pub mod country;
 pub mod game;
 pub mod state;
+pub mod record;
+mod tensor;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_name() {
+        let c = card::Card::Asia_Scoring;
+        println!("{:?}", c);
+    }
     #[test]
     fn test_scoring() {
         use country::CName::*;
@@ -69,10 +79,10 @@ mod tests {
             Chile,
             Uruguay,
         ];
-        for c in us.into_iter() {
+        for c in us.iter() {
             state.control(Side::US, *c);
         }
-        for c in ussr.into_iter() {
+        for c in ussr.iter() {
             state.control(Side::USSR, *c);
         }
         // Use two copies of Shuttle, so order of scoring doesn't matter
@@ -91,7 +101,7 @@ mod tests {
             (Region::MiddleEast, -3), // Without Shuttle
             (Region::Asia, 8),        // Without Shuttle
         ];
-        for (r, delta) in scores.into_iter() {
+        for (r, delta) in scores.iter() {
             assert_eq!(Region::score(r, &mut state), *delta);
         }
     }

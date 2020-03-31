@@ -1,4 +1,5 @@
 use super::*;
+use crate::state::TwilightRand;
 
 #[derive(Clone)]
 pub struct Deck {
@@ -13,7 +14,7 @@ pub struct Deck {
 
 impl Deck {
     pub fn new() -> Self {
-        Deck {
+        let mut deck = Deck {
             us_hand: Vec::new(),
             ussr_hand: Vec::new(),
             discard_pile: Vec::new(),
@@ -21,7 +22,16 @@ impl Deck {
             removed: Vec::new(),
             china: Side::USSR,
             china_up: true,
+        };
+        // Todo early war cards with higher indices
+        for c_index in 1..Card::Formosan_Resolution as usize + 1 {
+            let card = Card::from_index(c_index);
+            if card == Card::The_China_Card {
+                continue
+            }
+            deck.draw_pile.push(card);
         }
+        deck
     }
     pub fn hand(&self, side: Side) -> &Vec<Card> {
         match side {
@@ -29,6 +39,17 @@ impl Deck {
             Side::USSR => &self.ussr_hand,
             Side::Neutral => unimplemented!(),
         }
+    }
+    pub fn hand_mut(&mut self, side: Side) -> &mut Vec<Card> {
+        match side {
+            Side::US => &mut self.us_hand,
+            Side::USSR => &mut self.ussr_hand,
+            Side::Neutral => unimplemented!(),
+        }
+    }
+    /// Returns a new vector holding all scoring cards in the side's hand.
+    pub fn scoring_cards(&self, side: Side) -> Vec<Card> {
+        self.hand(side).iter().copied().filter(|c| c.is_scoring()).collect()
     }
     pub fn held_scoring(&self, side: Side) -> bool {
         let hand = self.hand(side);
@@ -44,25 +65,18 @@ impl Deck {
                 .fold(0, |acc, x| if x.is_scoring() { acc + 1 } else { acc });
         scoring_count >= ar_left
     }
-    pub fn draw_cards(&mut self, target: usize) {
-        let mut pick_ussr = true;
+    pub fn draw_cards<T: TwilightRand>(&mut self, target: usize, rng: &mut T) {
+        let mut side = Side::USSR;
         // Oscillating is relevant when reshuffles do occur
         while self.ussr_hand.len() < target && self.us_hand.len() < target {
-            let next_card = self.draw_card();
-            if pick_ussr {
-                self.ussr_hand.push(next_card);
-            } else {
-                self.us_hand.push(next_card);
-            }
-            pick_ussr = !pick_ussr;
+            self.draw_card(rng, side);
+            side = side.opposite();
         }
         while self.ussr_hand.len() < target {
-            let c = self.draw_card();
-            self.ussr_hand.push(c);
+            self.draw_card(rng, Side::USSR);
         }
         while self.us_hand.len() < target {
-            let c = self.draw_card();
-            self.us_hand.push(c);
+            self.draw_card(rng, Side::US);
         }
     }
     /// Searches the discard pile for a played card and removes it.
@@ -76,20 +90,45 @@ impl Deck {
             false
         }
     }
-    pub fn random_card(&self, side: Side) -> Option<&Card> {
-        let hand = self.hand(side);
-        let mut rng = thread_rng();
-        hand.choose(&mut rng)
+    pub fn random_card<T: TwilightRand>(&self, side: Side, rng: &mut T) -> Option<Card> {
+        rng.card_from_hand(self, side)
     }
     /// Draws the next card from the draw pile, reshuffling if necessary.
-    fn draw_card(&mut self) -> Card {
-        match self.draw_pile.pop() {
-            Some(c) => c,
-            None => {
-                self.reshuffle();
-                self.draw_card()
-            }
+    fn draw_card<T: TwilightRand>(&mut self, rng: &mut T, side: Side) {
+        rng.draw_card(self, side);
+    }
+    /// Returns a vector of cards which, if played by the given side, will cause
+    /// the opponent's event to fire.
+    pub fn opp_events_fire(&self, side: Side, state: &GameState) -> Vec<Card> {
+        let hand = self.hand(side);
+        let opp = side.opposite();
+        hand.iter().copied().filter(|c| {
+            c.side() == opp && c.can_event(state)
+        }).collect()
+    }
+    /// Returns a vector of cards that the given side can themselves event.
+    pub fn can_event(&self, side: Side, state: &GameState) -> Vec<Card> {
+        let hand = self.hand(side);
+        let opp = side.opposite();
+        hand.iter().copied().filter(|c| {
+            c.side() != opp && c.can_event(state)
+        }).collect()
+    }
+    /// Returns cards that can be played for just ops, i.e. non-scoring cards of
+    /// neutral or allied variety, or those opponent events that won't fire.
+    pub fn can_play_ops(&self, side: Side, state: &GameState) -> Vec<Card> {
+        let hand = self.hand(side);
+        let opp = side.opposite();
+        let mut vec: Vec<_> = hand.iter().copied().filter(|c| {
+            !c.is_scoring() && (c.side() != opp || !c.can_event(state))
+        }).collect();
+        if self.china_available(side) {
+            vec.push(Card::The_China_Card);
         }
+        vec
+    }
+    pub fn pop_draw_pile(&mut self) -> Option<Card> {
+        self.draw_pile.pop()
     }
     pub fn us_hand_mut(&mut self) -> &mut Vec<Card> {
         &mut self.us_hand
@@ -106,8 +145,14 @@ impl Deck {
     pub fn discard_pile(&self) -> &Vec<Card> {
         &self.discard_pile
     }
+    pub fn discard_pile_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.discard_pile
+    }
     pub fn draw_pile(&self) -> &Vec<Card> {
         &self.draw_pile
+    }
+    pub fn draw_pile_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.draw_pile
     }
     pub fn removed(&self) -> &Vec<Card> {
         &self.removed
@@ -139,9 +184,17 @@ impl Deck {
     pub fn china(&self) -> Side {
         self.china
     }
-    fn reshuffle(&mut self) {
-        let mut rng = thread_rng();
-        self.discard_pile.shuffle(&mut rng);
+    pub fn recover_card(&mut self, side: Side, card: Card) {
+        // Todo figure out error handling
+        let index = self.discard_pile.iter().copied().position(|c| c == card);
+        self.discard_pile.swap_remove(index.unwrap());
+        let hand = self.hand_mut(side);
+        hand.push(card);
+    }
+    pub fn reset_draw_pile(&mut self) {
         self.draw_pile.append(&mut self.discard_pile);
+    }
+    pub fn reshuffle<T: TwilightRand>(&mut self, rng: &mut T) {
+        rng.reshuffle(self);
     }
 }

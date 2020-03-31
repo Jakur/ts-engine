@@ -1,13 +1,13 @@
-use crate::action::{Action, Decision, Restriction};
-use crate::agent::{Actors, Agent};
+use crate::action::{Action, Allowed, Decision, EventTime, Restriction};
 use crate::card::*;
 use crate::country::*;
+use crate::tensor::DecodedChoice;
 
 use counter::Counter;
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
 
 use std::collections::HashSet;
+mod random;
+pub use random::{DebugRand, InternalRand, TwilightRand};
 
 #[derive(Clone)]
 pub struct GameState {
@@ -22,9 +22,11 @@ pub struct GameState {
     space_attempts: [i8; 2],
     pub us_effects: Vec<Effect>,
     pub ussr_effects: Vec<Effect>,
-    pub rng: SmallRng,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
+    pub current_event: Option<Card>,
+    pub vietnam: bool,
+    pub china: bool,
 }
 
 impl GameState {
@@ -34,17 +36,31 @@ impl GameState {
             vp: 0,
             defcon: 5,
             turn: 1, // Todo make compatible with initial placements
-            ar: 1,
+            ar: 0,
             side: Side::USSR,
             space: [0, 0],
             mil_ops: [0, 0],
             space_attempts: [0, 0],
             us_effects: Vec::new(),
             ussr_effects: Vec::new(),
-            rng: SmallRng::from_entropy(),
             deck: Deck::new(),
             restrict: None,
+            current_event: None,
+            vietnam: false,
+            china: false,
         }
+    }
+    pub fn four_four_two() -> GameState {
+        use crate::country::CName::*;
+        let mut state = GameState::new();
+        let c = &mut state.countries;
+        c[Italy as usize].us = 4;
+        c[WGermany as usize].us = 4;
+        c[Iran as usize].us = 2;
+        c[EGermany as usize].ussr = 4;
+        c[Poland as usize].ussr = 4;
+        c[Austria as usize].ussr = 1;
+        state
     }
     pub fn advance_ply(&mut self) -> Option<Side> {
         let win = self.check_win();
@@ -68,481 +84,242 @@ impl GameState {
     pub fn side(&self) -> &Side {
         &self.side
     }
+    pub fn max_ar(&self, side: Side) -> i8 {
+        if self.turn <= 3 {
+            6
+        } else if self.space[side as usize] == 8 {
+            8
+        } else if side == Side::US && self.has_effect(side, Effect::NorthSeaOil) {
+            8
+        } else {
+            7
+        }
+    }
     pub fn valid_countries(&self) -> &[Country] {
         let len = self.countries.len();
         &self.countries[0..len - 2]
     }
-    pub fn roll(&mut self) -> i8 {
-        self.rng.gen_range(1, 7)
-    }
-    pub fn choose_card<A: Agent, B: Agent>(
-        &self,
-        actors: &Actors<A, B>,
-        can_pass: bool,
-    ) -> Option<Card> {
-        let agent = actors.get(self.side);
-        let hand = self.deck.hand(self.side);
-        let china = self.deck.china_available(self.side);
-        let (card, _eval) = agent.decide_card(&self, &hand[..], china, true, can_pass);
-        card
-    }
-    pub fn use_card(&mut self, card: Card, pending_actions: &mut Vec<Decision>) {
-        use std::iter::repeat;
-        // Todo unusual actions, discards, etc.
-        let d = Decision::new_no_allowed;
-        let mut vec = Vec::new();
-        // Event
-        if card.side() != self.side.opposite() && card.can_event(&self) {
-            let side = if card == Card::Olympic_Games {
-                // Todo more special cases?
-                self.side.opposite()
-            } else {
-                self.side
-            };
-            vec.push(vec![d(side, Action::Event(card, None))]);
-        }
-        if !card.is_scoring() {
-            let op_event = card.side() == self.side.opposite() && card.can_event(&self);
-            let ops = card.ops() + self.base_ops_offset(self.side);
-            if op_event {
-                // Standard Influence Placement
-                let event = d(self.side.opposite(), Action::Event(card, None));
-                let inf = repeat(d(self.side, Action::StandardOps)).take(ops as usize);
-                let mut x: Vec<_> = inf.clone().collect();
-                x.push(event.clone());
-                let mut y = vec![event.clone()];
-                y.extend(inf);
-                vec.push(x);
-                vec.push(y);
-                // Coup
-                // Todo cuban missile
-                vec.push(vec![d(self.side, Action::Coup(ops, false)), event.clone()]);
-                vec.push(vec![event.clone(), d(self.side, Action::Coup(ops, false))]);
-                // Realignment
-                let realign = repeat(d(self.side, Action::Realignment)).take(ops as usize);
-                x = realign.clone().collect();
-                x.push(event.clone());
-                let mut y = vec![event];
-                y.extend(realign);
-                vec.push(x);
-                vec.push(y);
-            } else {
-                // Standard Influence Placement
-                vec.push(
-                    repeat(d(self.side, Action::StandardOps))
-                        .take(ops as usize)
-                        .collect(),
-                );
-                // Coup
-                vec.push(vec![d(self.side, Action::Coup(ops, false))]); // Todo Cuban Missile
-
-                // Realignment
-                vec.push(
-                    repeat(d(self.side, Action::Realignment))
-                        .take(ops as usize)
-                        .collect(),
-                );
-            }
-
-            // Space
-            if self.can_space(self.side, card.ops()) {
-                vec.push(vec![d(self.side, Action::Space)])
-            }
-        }
-        pending_actions.push(d(self.side, Action::AfterStates(vec)));
-        // Todo make sure agent knows which card is being used
-        self.deck.play_card(self.side, card);
-    }
-    /// Returns the standard allowed actions if they differ from the decision
-    /// slice, or else None.
-    fn standard_allowed(
-        &self,
-        dec: &Decision,
-        history: &[usize],
-        pending_actions: &Vec<Decision>,
-    ) -> Option<Vec<usize>> {
-        let Decision {
-            agent,
-            action,
-            allowed,
-        } = dec;
-        let mut vec = match action {
-            Action::StandardOps => Some(access(self, *agent)),
-            Action::ChinaInf => {
-                let vec = access(self, *agent);
-                Some(
-                    vec.into_iter()
-                        .filter(|x| Region::Asia.has_country(*x))
-                        .collect(),
-                )
-            }
-            Action::VietnamInf => {
-                let vec = access(self, *agent);
-                Some(
-                    vec.into_iter()
-                        .filter(|x| Region::SoutheastAsia.has_country(*x))
-                        .collect(),
-                )
-            }
-            Action::Coup(_, _) | Action::Realignment => {
-                let opp = agent.opposite();
-                let valid = |v: &'static Vec<usize>| {
-                    v.iter().filter_map(|x| {
-                        if self.countries[*x].has_influence(opp) {
-                            Some(*x)
-                        } else {
-                            None
-                        }
-                    })
-                };
-                let mut vec: Vec<usize> = valid(&AFRICA).collect();
-                vec.extend(valid(&CENTRAL_AMERICA));
-                vec.extend(valid(&SOUTH_AMERICA));
-                if self.defcon >= 3 {
-                    vec.extend(valid(&MIDDLE_EAST));
-                }
-                if self.defcon >= 4 {
-                    vec.extend(valid(&ASIA));
-                }
-                if self.defcon >= 5 {
-                    if dec.agent == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some()
-                    {
-                        let mut set: HashSet<usize> = EUROPE
-                            .iter()
-                            .filter_map(|&x| {
-                                let c = &self.countries[x];
-                                if c.has_influence(opp) && c.controller() != Side::US {
-                                    Some(x)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        // Todo other NATO exceptions
-                        let france = &self.countries[CName::France as usize];
-                        if france.controller() == Side::US {
-                            if self.has_effect(Side::USSR, Effect::DeGaulle).is_some() {
-                                set.insert(CName::France as usize);
-                            }
-                        }
-                        vec.extend(set.iter());
-                    } else {
-                        vec.extend(valid(&EUROPE));
-                    }
-                }
-                Some(vec)
-            }
-            Action::Place(side, _, in_opp) if !in_opp => Some(
-                allowed
-                    .iter()
-                    .cloned()
-                    .filter(|x| {
-                        let c = &self.countries[*x];
-                        c.controller() != side.opposite()
-                    })
-                    .collect(),
-            ),
-            Action::War(side, brush) if *brush => {
-                if *side == Side::USSR && self.has_effect(Side::US, Effect::Nato).is_some() {
-                    Some(
-                        BRUSH_TARGETS
-                            .iter()
-                            .copied()
-                            .filter(|&i| {
-                                !(Region::Europe.has_country(i)
-                                    && self.countries[i].controller() == Side::US)
-                            })
-                            .collect(),
-                    )
-                } else {
-                    None // Default
-                }
-            }
-            _ => None,
-        };
-        match action {
-            Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
-                let next_op = pending_actions.last().map(|x| &x.action);
-                if let Some(op) = next_op {
-                    vec = match op {
-                        Action::StandardOps => vec, // No change
-                        Action::ChinaInf => Some(
-                            vec.unwrap()
-                                .into_iter()
-                                .filter(|&x| {
-                                    let c = &self.countries[x];
-                                    c.controller() != agent.opposite()
-                                        || Region::Asia.has_country(x)
-                                })
-                                .collect(),
-                        ),
-                        Action::VietnamInf => Some(
-                            vec.unwrap()
-                                .into_iter()
-                                .filter(|&x| {
-                                    let c = &self.countries[x];
-                                    c.controller() != agent.opposite()
-                                        || Region::SoutheastAsia.has_country(x)
-                                })
-                                .collect(),
-                        ),
-                        _ => Some(
-                            vec.unwrap()
-                                .into_iter()
-                                .filter(|x| {
-                                    let c = &self.countries[*x];
-                                    c.controller() != agent.opposite()
-                                })
-                                .collect(),
-                        ),
-                    }
-                }
-            }
-            _ => {}
-        }
-        // Todo figure out if restriction is always limit
+    pub fn apply_restriction(&self, history: &[DecodedChoice], decision: &mut Decision) {
         if let Some(restrict) = &self.restrict {
             match restrict {
                 Restriction::Limit(num) => {
-                    let counter: Counter<_> = history.iter().copied().collect();
+                    let counter: Counter<usize> = history
+                        .iter()
+                        .filter_map(|x| {
+                            if x.action == decision.action {
+                                x.choice
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
                     let bad: HashSet<_> = counter
                         .into_map()
                         .into_iter()
                         .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
                         .collect();
                     if !bad.is_empty() {
-                        if vec.is_some() {
-                            vec = Some(
-                                vec.unwrap()
-                                    .into_iter()
-                                    .filter(|x| !bad.contains(x))
-                                    .collect(),
-                            );
-                        } else {
-                            vec = Some(
-                                allowed
-                                    .iter()
-                                    .filter_map(|x| if bad.contains(x) { None } else { Some(*x) })
-                                    .collect(),
-                            );
-                        }
+                        let vec: Vec<_> = decision
+                            .allowed
+                            .slice()
+                            .iter()
+                            .copied()
+                            .filter(|x| !bad.contains(x))
+                            .collect();
+                        decision.allowed = vec.into();
                     }
                 }
             }
         }
-        vec
     }
-    pub fn resolve_actions<A: Agent, B: Agent>(
+    pub fn resolve_action<R: TwilightRand>(
         &mut self,
-        actors: &Actors<A, B>,
-        mut pending_actions: Vec<Decision>,
-    ) -> f32 {
-        let mut eval = 0.0;
-        // Todo figure out how to get history out of local
-        let mut history = Vec::new();
-        let mut china_active = pending_actions
-            .iter()
-            .find(|x| {
-                if let Action::ChinaInf = x.action {
-                    true
+        mut decision: Decision,
+        choice: Option<usize>,
+        pending: &mut Vec<Decision>,
+        history: &mut Vec<DecodedChoice>,
+        rng: &mut R,
+    ) -> Option<Decision> {
+        let choice = match choice {
+            Some(c) => c,
+            None => {
+                match decision.action {
+                    Action::Event => 0,
+                    Action::ClearEvent => {
+                        self.current_event = None;
+                        return None;
+                    }
+                    _ => return None, // Pass, implicit or explicit
+                }
+            }
+        };
+        let side = decision.agent;
+        match decision.action {
+            Action::EventOps => {
+                let card = Card::from_index(choice);
+                let ops = card.modified_ops(decision.agent, self);
+                let conduct = Decision::conduct_ops(decision.agent, ops);
+                let event = Decision::new_event(card);
+                pending.push(conduct);
+                pending.push(event);
+            }
+            Action::OpsEvent => {
+                let card = Card::from_index(choice);
+                let ops = card.modified_ops(decision.agent, self);
+                let conduct = Decision::conduct_ops(decision.agent, ops);
+                let event = Decision::new_event(card);
+                pending.push(event);
+                pending.push(conduct);
+                if card == Card::The_China_Card {
+                    self.china = true;
+                }
+            }
+            Action::Ops => {
+                let card = Card::from_index(choice);
+                let mut ops = card.modified_ops(decision.agent, self);
+                if card == Card::The_China_Card {
+                    ops += 1;
+                    self.china = true;
+                }
+                let conduct = Decision::conduct_ops(decision.agent, ops);
+                pending.push(conduct);
+            }
+            Action::Event => {
+                let card = Card::from_index(choice);
+                self.current_event = Some(card);
+                card.event(self, pending, rng);
+            }
+            Action::SpecialEvent => {
+                let card = self.current_event;
+                card.unwrap().special_event(self, choice, pending, rng);
+                // Todo reset current event ?
+            }
+            Action::Space => {
+                let card = Card::from_index(choice);
+                let roll = rng.roll(decision.agent);
+                self.space_card(decision.agent, roll);
+                self.discard_card(decision.agent, card);
+            }
+            Action::Discard => {
+                let card = Card::from_index(choice);
+                let side = decision.agent; // Todo Aldrich Ames
+                                           // Clear Quagmire / Bear Trap if applicable
+                if side == Side::US {
+                    if let Some(index) = self.effect_pos(side, Effect::Quagmire) {
+                        let roll = rng.roll(side);
+                        if roll <= 4 {
+                            self.clear_effect(side, index);
+                        }
+                    }
                 } else {
-                    false
-                }
-            })
-            .is_some();
-        let mut vietnam_active = pending_actions
-            .iter()
-            .find(|&x| {
-                if x.agent == Side::USSR
-                    && self
-                        .has_effect(Side::USSR, Effect::VietnamRevolts)
-                        .is_some()
-                {
-                    // Todo find out if this is correct
-                    match x.action {
-                        Action::StandardOps | Action::Realignment => true,
-                        _ => false,
+                    if let Some(index) = self.effect_pos(side, Effect::BearTrap) {
+                        let roll = rng.roll(side);
+                        if roll <= 4 {
+                            self.clear_effect(side, index);
+                        }
                     }
+                }
+                self.discard_card(side, card);
+            }
+            Action::Coup => {
+                let free_coup = false; // Todo free coup
+                let roll = rng.roll(decision.agent);
+                let mut ops = decision.quantity;
+                if self.china && !Region::Asia.has_country(choice) {
+                    ops -= 1;
+                    self.china = false;
+                }
+                self.take_coup(side, choice, ops, roll, free_coup);
+                decision.quantity = 1; // Use up all of your ops on one action
+            }
+            Action::Place => {
+                let (q, side) = if let Some(card) = self.current_event {
+                    let q = card.influence_quantity(&self, &decision.action, choice);
+                    let side = match card.side() {
+                        s @ Side::US | s @ Side::USSR => s,
+                        Side::Neutral => decision.agent,
+                    };
+                    (q, side)
                 } else {
-                    false
+                    (1, decision.agent)
+                };
+                for _ in 0..q {
+                    self.add_influence(side, choice);
                 }
-            })
-            .is_some();
-        while !pending_actions.is_empty() {
-            let dec = pending_actions.pop().unwrap();
-            // Check for decisions with no agency
-            match dec.action {
-                Action::SetLimit(num) => {
-                    history = Vec::new();
-                    self.restrict = Some(Restriction::Limit(num));
-                    continue;
-                }
-                Action::ClearRestriction => {
-                    history = Vec::new();
-                    self.restrict = None;
-                    continue;
-                }
-                Action::Event(card, num) => {
-                    // Check for branching event decisions
-                    if num.is_none() {
-                        let opts = card.e_choices(self);
-                        if let Some(vec) = opts {
-                            let vec = vec
-                                .into_iter()
-                                .map(|i| {
-                                    vec![Decision::new(
-                                        dec.agent,
-                                        Action::Event(card, Some(i)),
-                                        &[],
-                                    )]
-                                })
-                                .collect();
-                            let a = Decision::new(dec.agent, Action::AfterStates(vec), &[]);
-                            pending_actions.push(a);
-                            continue;
-                        }
-                    }
-                }
-                _ => {}
             }
-            let agent = actors.get(dec.agent);
-            match dec.action {
-                Action::Space => {
-                    let roll = self.roll();
-                    self.space_card(dec.agent, roll);
-                    // No decision necessary, just get eval
-                    return agent.get_eval(&self);
+            Action::Influence => {
+                let cost = self.add_influence(side, choice);
+                if self.china && !Region::Asia.has_country(choice) {
+                    decision.quantity -= 1;
+                    self.china = false;
                 }
-                Action::Discard(side, ops) => {
-                    let allowed = self.cards_at_least(side, ops);
-                    let (choice, eval) = agent.decide_card(&self, &allowed, false, false, false);
-                    if let Some(c) = choice {
-                        self.discard_card(side, c);
-                    }
-                    return eval;
+                if self.vietnam && !Region::SoutheastAsia.has_country(choice) {
+                    decision.quantity -= 1;
+                    self.vietnam = false;
                 }
-                _ => {}
+                if cost == 2 {
+                    decision.quantity -= 1; // Additional 1
+                }
             }
-            let computed_allowed = self.standard_allowed(&dec, &history, &pending_actions);
-            let decision = {
-                match computed_allowed {
-                    Some(vec) => agent.decide_action(&self, &vec[..], dec.action.clone()),
-                    None => agent.decide_action(&self, dec.allowed, dec.action.clone()),
-                }
-            };
-
-            let choice = decision.0;
-            if choice.is_some() {
-                history.push(choice.unwrap());
+            Action::Remove => {
+                let (s, q) = self.current_event.unwrap().remove_quantity(
+                    decision.agent,
+                    &self.countries[choice],
+                    self.period(),
+                );
+                self.remove_influence(s, choice, q);
             }
-            eval = decision.1;
-            match dec.action {
-                Action::StandardOps | Action::ChinaInf | Action::VietnamInf => {
-                    let choice = choice.unwrap(); // Should always be a valid option
-                    let cost = self.add_influence(dec.agent, choice);
-                    if cost == 2 {
-                        pending_actions.pop(); // The earlier check should apply
-                    }
-                    // See if we cancel China or Vietnam Revolts bonuses
-                    if !Region::Asia.has_country(choice) && china_active {
-                        china_active = false;
-                        let index = pending_actions.iter().enumerate().find(|(_i, x)| {
-                            if let Action::ChinaInf = x.action {
-                                true
-                            } else {
-                                false
-                            }
-                        });
-                        if index.is_some() {
-                            let (index, _) = index.unwrap();
-                            pending_actions.remove(index);
-                        }
-                    }
-                    if !Region::SoutheastAsia.has_country(choice) && vietnam_active {
-                        vietnam_active = false;
-                        let index = pending_actions.iter().enumerate().find(|(_i, x)| {
-                            if let Action::VietnamInf = x.action {
-                                true
-                            } else {
-                                false
-                            }
-                        });
-                        if index.is_some() {
-                            let (index, _) = index.unwrap();
-                            pending_actions.remove(index);
-                        }
-                    }
+            Action::War => {
+                let brush = match self.current_event.unwrap() {
+                    // Todo Brush War
+                    _ => false,
+                };
+                let mut roll = rng.roll(side);
+                if brush {
+                    roll += 1;
                 }
-                Action::Coup(ops, free) => {
-                    if let Some(choice) = choice {
-                        let roll = self.roll();
-                        self.take_coup(dec.agent, choice, ops, roll, free);
-                    }
+                self.war_target(side, choice, roll);
+            }
+            Action::Realignment => {
+                let (ussr_roll, us_roll) = (rng.roll(Side::USSR), rng.roll(Side::US));
+                self.take_realign(choice, us_roll, ussr_roll);
+            }
+            Action::CubanMissile => {
+                self.clear_effect(
+                    side,
+                    self.effect_pos(side, Effect::CubanMissileCrisis).unwrap(),
+                );
+                if choice == 0 {
+                    self.remove_influence(Side::USSR, CName::Cuba as usize, 2);
+                } else if choice == 1 {
+                    self.remove_influence(Side::US, CName::WGermany as usize, 2);
+                } else {
+                    self.remove_influence(Side::US, CName::Turkey as usize, 2);
                 }
-                Action::Event(card, num) => {
-                    let went_off = card.event(self, num.unwrap_or(0), &mut pending_actions);
-                    if card.is_starred() && went_off {
-                        self.deck.remove_card(card);
-                    }
-                }
-                Action::Remove(side, num) => {
-                    if let Some(choice) = choice {
-                        self.remove_influence(side, choice, num)
-                    }
-                }
-                Action::RemoveAll(side, _allowed) => {
-                    if let Some(choice) = choice {
-                        self.remove_all(side, choice)
-                    }
-                }
-                Action::Realignment => {
-                    let (us_roll, ussr_roll) = (self.roll(), self.roll());
-                    if let Some(choice) = choice {
-                        self.take_realign(choice, us_roll, ussr_roll);
-                    }
-                }
-                Action::Place(side, num, _allowed) => {
-                    for _ in 0..num {
-                        if let Some(choice) = choice {
-                            self.add_influence(side, choice);
-                        }
-                    }
-                }
-                Action::AfterStates(mut acts) => {
-                    // We can't be functional because float comparison is weird
-                    let mut max_index = 0;
-                    let mut max_val = 0.0;
-                    for (i, v) in acts.iter().enumerate() {
-                        let mut x = self.clone();
-                        let mut y = pending_actions.clone();
-                        y.extend_from_slice(&v[..]);
-                        let value = x.resolve_actions(actors, y);
-                        if value > max_val {
-                            max_val = value;
-                            max_index = i;
-                        }
-                    }
-                    // Add the best found line to the actions queue to be executed
-                    pending_actions.append(&mut acts[max_index]);
-                }
-                Action::War(side, brush) => {
-                    let mut roll = self.roll();
-                    if brush {
-                        roll += 1;
-                    }
-                    self.war_target(side, choice.unwrap(), roll);
-                }
-                Action::ClearRestriction
-                | Action::SetLimit(_)
-                | Action::Space
-                | Action::Discard(_, _) => unreachable!(), // We should remove these earlier
+            }
+            Action::RecoverCard => {
+                self.deck.recover_card(side, Card::from_index(choice));
+            }
+            Action::ChangeDefcon => self.defcon = choice as i8,
+            Action::BeginAr | Action::ConductOps | Action::Pass | Action::ClearEvent => {
+                unreachable!()
             }
         }
-        // self.pending_actions = Vec::new();
-        return eval;
+        let decoded = DecodedChoice::new(decision.action, Some(choice));
+        history.push(decoded);
+        decision.next_decision(&history, self)
     }
-    /// Returns the index of the effect if it is in play, or else None
-    pub fn has_effect(&self, side: Side, effect: Effect) -> Option<usize> {
+    /// Return true if the side has the effect, else false.
+    pub fn has_effect(&self, side: Side, effect: Effect) -> bool {
+        let vec = match side {
+            Side::US => &self.us_effects,
+            Side::USSR => &self.ussr_effects,
+            _ => unimplemented!(),
+        };
+        vec.iter().any(|e| *e == effect)
+    }
+    /// Returns the index of the effect if it is in play, or else None.
+    pub fn effect_pos(&self, side: Side, effect: Effect) -> Option<usize> {
         let vec = match side {
             Side::US => &self.us_effects,
             Side::USSR => &self.ussr_effects,
@@ -623,6 +400,16 @@ impl GameState {
                 c.ussr = 0;
             }
             Side::Neutral => unimplemented!(),
+        }
+    }
+    /// Returns which period of the war the game is in
+    pub fn period(&self) -> Period {
+        if self.turn <= 3 {
+            Period::Early
+        } else if self.turn <= 7 {
+            Period::Middle
+        } else {
+            Period::Late
         }
     }
     /// Calculates the number of adjacent controlled countries for use in wars.
@@ -724,27 +511,19 @@ impl GameState {
     pub fn discard_card(&mut self, side: Side, card: Card) {
         self.deck.play_card(side, card);
     }
-    /// Filters cards greater than or equal to a certain value, as could be relevant
-    /// to discarding or spacing.
+    /// Returns cards in hand at least the given value. China is never
+    /// included.
     pub fn cards_at_least(&self, side: Side, val: i8) -> Vec<Card> {
         let cards = self.deck.hand(side);
         let offset = self.base_ops_offset(side);
         cards
             .iter()
             .copied()
-            .filter(|c| {
-                let mut x = c.ops() + offset;
-                if x < 1 {
-                    x = 1;
-                } else if x > 4 {
-                    x = 4;
-                }
-                x >= val
-            })
+            .filter(|c| c.ops(offset) >= val)
             .collect()
     }
     /// Calculates the base offset to card ops, as influenced by Containment,
-    /// Brezhnez, and RSP.
+    /// Brezhnev, and RSP.
     pub fn base_ops_offset(&self, side: Side) -> i8 {
         let mut offset = 0;
         match side {
@@ -844,100 +623,264 @@ impl GameState {
         }
         success
     }
-    /// Creates and resolves the initial USSR and US influence placements.
-    pub fn initial_placement<A: Agent, B: Agent>(&mut self, actors: &Actors<A, B>) {
-        // USSR
-        let mut pending_actions = Vec::new();
-        for _ in 0..6 {
-            let x = Decision::new(
-                Side::USSR,
-                Action::Place(Side::USSR, 1, false),
-                &EASTERN_EUROPE,
-            );
-            pending_actions.push(x);
+    pub fn legal_space(&self, side: Side) -> Vec<usize> {
+        let mut vec = Vec::new();
+        let hand = self.deck.hand(side);
+        let ops_offset = self.base_ops_offset(side);
+        for &c in hand.iter() {
+            if self.can_space(self.side, c.ops(ops_offset)) {
+                vec.push(c as usize);
+            }
         }
-        self.resolve_actions(&actors, pending_actions);
-        // US
-        pending_actions = Vec::new();
-        for _ in 0..7 {
-            let x = Decision::new(Side::US, Action::Place(Side::US, 1, false), &WESTERN_EUROPE);
-            pending_actions.push(x);
+        if self.deck.china_available(side) {
+            let china = Card::The_China_Card;
+            if self.can_space(side, china.base_ops() + ops_offset) {
+                vec.push(china as usize) // Legal, if not advisable
+            }
         }
-        self.resolve_actions(&actors, pending_actions);
-        // US Bonus + 2
-        for _ in 0..2 {
-            let mut pa = Vec::new();
-            let mem: Vec<_> = self
-                .valid_countries()
-                .iter()
-                .enumerate()
-                .filter_map(|(i, x)| {
-                    // Apparently bonus influence cannot exceed stab + 2
-                    if x.us > 0 && x.us < x.stability + 2 {
-                        Some(i)
-                    } else {
-                        None
+        vec
+    }
+    pub fn legal_coup_realign(&self, side: Side) -> Vec<usize> {
+        let opp = side.opposite();
+        let valid = |v: &'static Vec<usize>| {
+            v.iter().filter_map(|x| {
+                if self.countries[*x].has_influence(opp) {
+                    Some(*x)
+                } else {
+                    None
+                }
+            })
+        };
+        let mut vec: Vec<usize> = valid(&AFRICA).collect();
+        vec.extend(valid(&CENTRAL_AMERICA));
+        vec.extend(valid(&SOUTH_AMERICA));
+        if self.defcon >= 3 {
+            vec.extend(valid(&MIDDLE_EAST));
+        }
+        if self.defcon >= 4 {
+            vec.extend(valid(&ASIA));
+        }
+        if self.defcon >= 5 {
+            if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
+                let mut set: HashSet<usize> = EUROPE
+                    .iter()
+                    .filter_map(|&x| {
+                        let c = &self.countries[x];
+                        if c.has_influence(opp) && c.controller() != Side::US {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                // Todo other NATO exceptions
+                let france = &self.countries[CName::France as usize];
+                if france.controller() == Side::US {
+                    if self.has_effect(Side::USSR, Effect::DeGaulle) {
+                        set.insert(CName::France as usize);
                     }
+                }
+                vec.extend(set.iter());
+            } else {
+                vec.extend(valid(&EUROPE));
+            }
+        }
+        vec
+    }
+    pub fn legal_influence(&self, agent: Side, ops: i8) -> Vec<usize> {
+        let china = self.china;
+        let vietnam = self.vietnam;
+        let real_ops = ops - (china as i8) - (vietnam as i8);
+        let a = access(self, agent);
+        if real_ops > 1 {
+            // Doesn't need to tap into bonus influence
+            a
+        } else if ops <= 1 {
+            // Cannot break control anywhere
+            assert!(ops > 0);
+            a.into_iter()
+                .filter(|x| {
+                    let c = &self.countries[*x];
+                    c.controller() != agent.opposite()
+                })
+                .collect()
+        } else if china {
+            // If China is in play, vietnam revolts is irrelevant for legality
+            // since no action costs more than 2 ops and Southeast Asia
+            // is a subset of Asia
+            if ops >= 2 {
+                // Can break across Asia, but cannot elsewhere
+                a.into_iter()
+                    .filter(|x| {
+                        let c = &self.countries[*x];
+                        c.controller() != agent.opposite() || Region::Asia.has_country(*x)
+                    })
+                    .collect()
+            } else {
+                // Can only place in uncontrolled Asia
+                a.into_iter()
+                    .filter(|x| {
+                        let c = &self.countries[*x];
+                        c.controller() != agent.opposite() && Region::Asia.has_country(*x)
+                    })
+                    .collect()
+            }
+        } else if vietnam {
+            if ops >= 2 {
+                // Can break in SE Asia, but cannot elsewhere
+                a.into_iter()
+                    .filter(|x| {
+                        let c = &self.countries[*x];
+                        c.controller() != agent.opposite() || Region::SoutheastAsia.has_country(*x)
+                    })
+                    .collect()
+            } else {
+                // Can only place in uncontrolled SE Asia
+                a.into_iter()
+                    .filter(|x| {
+                        let c = &self.countries[*x];
+                        c.controller() != agent.opposite() && Region::SoutheastAsia.has_country(*x)
+                    })
+                    .collect()
+            }
+        } else {
+            unreachable!() // Todo figure out if this is actually unreachable
+        }
+    }
+    // pub fn legal_special_event(&self, side: Side) -> Vec<Card> {
+    //     let hand = self.deck.hand(side);
+    //     hand.iter().copied().filter(|x| {
+    //         x.max_e_choices() > 1
+    //     }).collect()
+    // }
+    pub fn legal_war(&self, side: Side) -> Allowed {
+        if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
+            let vec: Vec<_> = BRUSH_TARGETS
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    !(Region::Europe.has_country(i) && self.countries[i].controller() == Side::US)
                 })
                 .collect();
-            let dec = Decision::new(Side::US, Action::Place(Side::US, 1, false), &mem);
-            pa.push(dec);
-            self.resolve_actions(&actors, pa);
+            Allowed::new_owned(vec)
+        } else {
+            Allowed::new_slice(&BRUSH_TARGETS[..])
         }
+    }
+    pub fn legal_cuban(&self, side: Side) -> Allowed {
+        match side {
+            Side::USSR => {
+                if self.countries[CName::Cuba as usize].ussr >= 2 {
+                    Allowed::new_owned(vec![0])
+                } else {
+                    Allowed::new_empty()
+                }
+            }
+            Side::US => {
+                let mut vec = Vec::new();
+                if self.countries[CName::WGermany as usize].us >= 2 {
+                    vec.push(1);
+                }
+                if self.countries[CName::Turkey as usize].us >= 2 {
+                    vec.push(2);
+                }
+                if vec.is_empty() {
+                    Allowed::new_empty()
+                } else {
+                    Allowed::new_owned(vec)
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+    pub fn mil_ops(&self, side: Side) -> i8 {
+        self.mil_ops[side as usize]
     }
     pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
         self.restrict = Some(Restriction::Limit(limit));
-        pending_actions.push(Decision::restriction_clear());
+        // Todo restriction clear more nicely
     }
     pub fn is_final_scoring(&self) -> bool {
         self.turn > 10
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum Period {
+    Early,
+    Middle,
+    Late,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::{RandAgent, ScriptedAgent};
+    use crate::country;
+    use crate::game::Game;
+    use crate::tensor::OutputIndex;
     #[test]
-    fn basic_actions() {
-        use crate::agent;
-        let template = GameState::new();
-        let agent = agent::DebugAgent::new(
-            Action::Coup(0, false),
-            Card::De_Stalinization,
-            &[CName::UK as usize, CName::Canada as usize],
-        );
-        let agents = Actors::new(agent.clone(), agent.clone());
-        let mut a = template.clone();
-        let mut pending = Vec::new();
-        Card::Socialist_Governments.event(&mut a, 0, &mut pending);
-        a.resolve_actions(&agents, pending);
-        assert_eq!(a.countries[CName::UK as usize].us, 3);
-        assert_eq!(a.countries[CName::Canada as usize].us, 1);
-        a.defcon = 2;
-        for (x, y) in [(Side::US, 0), (Side::USSR, 2)].into_iter() {
-            let allowed = a.standard_allowed(
-                &Decision::new_no_allowed(*x, Action::Coup(1, false)),
-                &[],
-                &vec![],
-            );
-            assert_eq!(*y, allowed.unwrap().len());
-        }
+    fn test_influence() {
+        // let mut state = GameState::four_four_two();
+        // state.control(Side::USSR, CName::Vietnam);
+        // state.control(Side::US, CName::Thailand);
+        // // state.add_effect(Side::USSR, Effect::VietnamRevolts);
+        // // Todo determine this better
+        // state.china = true;
+        // state.vietnam = true;
+        // state.current_event = Some(Card::The_China_Card);
+        // state.ar = 1;
+        // state.turn = 1;
+        // let test: Vec<_> = country::access(&state, Side::USSR).into_iter().map(|x| {
+        //     CName::from_index(x)
+        // }).collect();
+        // // Todo determine ops automatically
+        // let d = Decision::determine(Side::USSR, Action::Influence, 6, &state);
+        // let laos = influence_in(CName::LaosCambodia);
+        // let thai = influence_in(CName::Thailand); // US Controlled
+        // let afghan = influence_in(CName::Afghanistan);
+        // let poland = influence_in(CName::Poland);
+        // let okay = vec![
+        //     vec![laos, laos, laos, thai, laos],
+        //     vec![afghan, afghan, afghan, laos, laos],
+        //     vec![poland, laos, poland, laos],
+        // ];
+        // let nok = vec![
+        //     vec![laos, laos, laos, laos, laos, thai],
+        //     vec![poland, laos, laos, laos, laos],
+        //     vec![afghan, afghan, afghan, afghan, thai],
+        // ];
+        // let rng = DebugRand::new_empty();
+        // for x in okay {
+        //     let mut s = state.clone();
+        //     let us_agent = ScriptedAgent::new(x);
+        //     let mut game = Game::new(agent, RandAgent::new(), s, rng.clone());
+        //     agent.legal_line(&mut game, 1, 1);
+        // }
+        // for y in nok {
+        //     let mut s = state.clone();
+        //     let agent = ScriptedAgent::new(y);
+        //     assert!(!agent.legal_line(&mut s, vec![d.clone()], rng.clone()))
+        // }
+    }
+    fn influence_in(country: CName) -> OutputIndex {
+        OutputIndex::new(Action::Influence.offset() + country as usize)
     }
     #[test]
     fn count_actions() {
-        let mut state = GameState::new();
-        let cards = &[Card::Duck_and_Cover, Card::Arab_Israeli_War, Card::Blockade];
-        let sizes = &[7, 5, 4];
-        for (&c, &s) in cards.into_iter().zip(sizes.into_iter()) {
-            // Todo allow for play where we only simulate one side
-            state.deck.ussr_hand_mut().push(c);
-            let mut pending = Vec::new();
-            state.use_card(c, &mut pending);
-            let x = &pending.pop().unwrap();
-            match &x.action {
-                Action::AfterStates(vec) => assert_eq!(vec.len(), s),
-                _ => assert!(false),
-            }
-        }
+        // let mut state = GameState::new();
+        // let cards = &[Card::Duck_and_Cover, Card::Arab_Israeli_War, Card::Blockade];
+        // let sizes = &[7, 5, 4];
+        // for (&c, &s) in cards.into_iter().zip(sizes.into_iter()) {
+        //     // Todo allow for play where we only simulate one side
+        //     state.deck.ussr_hand_mut().push(c);
+        //     let mut pending = Vec::new();
+        //     state.use_card(c, &mut pending);
+        //     let x = &pending.pop().unwrap();
+        //     // match &x.action {
+        //     //     Action::AfterStates(vec) => assert_eq!(vec.len(), s),
+        //     //     _ => assert!(false),
+        //     // }
+        // }
     }
 }
