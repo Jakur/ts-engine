@@ -1,8 +1,8 @@
 use crate::card::Effect;
 use crate::state::GameState;
 
-use std::collections::HashSet;
 use num_traits::FromPrimitive;
+use std::collections::HashSet;
 
 pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
 pub const US_INDEX: usize = CName::US as usize;
@@ -124,7 +124,14 @@ pub enum Status {
 impl Region {
     pub fn major_regions() -> Vec<Region> {
         use Region::*;
-        vec![Europe, MiddleEast, Asia, Africa, CentralAmerica, SouthAmerica]
+        vec![
+            Europe,
+            MiddleEast,
+            Asia,
+            Africa,
+            CentralAmerica,
+            SouthAmerica,
+        ]
     }
     /// Returns the status of both sides in the region, and the battleground difference
     pub fn status(&self, state: &GameState, use_shuttle: bool) -> ([Status; 2], i8) {
@@ -510,7 +517,7 @@ pub fn standard_start() -> Vec<Country> {
         (3, NKorea),
         (3, EGermany),
         (1, Finland),
-        (6, USSR)
+        (6, USSR),
     ];
     let us = [
         (2, Canada),
@@ -523,7 +530,7 @@ pub fn standard_start() -> Vec<Country> {
         (1, Panama),
         (1, SouthAfrica),
         (5, UK),
-        (6, US)
+        (6, US),
     ];
     for (x, y) in ussr.iter() {
         c[*y as usize].ussr += x;
@@ -534,7 +541,7 @@ pub fn standard_start() -> Vec<Country> {
     c
 }
 
-fn countries() -> Vec<Country> {
+pub fn countries() -> Vec<Country> {
     use CName::*;
     let mut countries = vec![Country::new_non(0); NUM_COUNTRIES];
     let bgs = [

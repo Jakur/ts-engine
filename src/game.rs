@@ -203,7 +203,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         &mut self,
         mut decision: Decision,
         pending: &mut Vec<Decision>,
-        history: &mut Vec<usize>,
+        history: &mut Vec<DecodedChoice>,
     ) -> Option<Decision> {
         // Do not call eval if there are only 0 or 1 decisions
         let legal = decision.encode(&self.state);
@@ -230,8 +230,11 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             decision =
                 Decision::with_quantity(decision.agent, action, new_legal, decision.quantity);
         }
-        self.state
-            .resolve_action(decision, choice, pending, history, &mut self.rng)
+        let res = self
+            .state
+            .resolve_action(decision, choice, pending, history, &mut self.rng);
+        dbg!(history);
+        res
     }
     fn final_scoring(&mut self) -> (Side, i8) {
         use crate::country::Region::*;

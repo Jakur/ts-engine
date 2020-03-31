@@ -1,48 +1,56 @@
-use crate::card::Card;
-use crate::country::{Side, CName};
 use crate::action::Action;
-use crate::tensor::OutputIndex;
 use crate::agent::ScriptedAgent;
-use crate::state::{GameState, DebugRand};
+use crate::card::Card;
+use crate::country::{CName, Side};
 use crate::game::Game;
+use crate::state::{DebugRand, GameState};
+use crate::tensor::OutputIndex;
 use nom::{
     self,
+    bytes::complete::{is_a, is_not, tag},
+    combinator::{map, opt},
     error::ErrorKind,
+    sequence::tuple,
     Err::Error,
     IResult,
-    bytes::complete::{is_not, is_a, tag},
-    combinator::{map, opt},
-    sequence::tuple};
+};
 use std::collections::HashMap;
 
-lazy_static!{
+lazy_static! {
     static ref CARDS: HashMap<String, Card> = {
-        (1..Card::total()).map(|i| {
-            let c = Card::from_index(i);
-            (format!("{:?}", c), c)
-        }).collect()
+        (1..Card::total())
+            .map(|i| {
+                let c = Card::from_index(i);
+                (format!("{:?}", c), c)
+            })
+            .collect()
     };
     static ref COUNTRIES: HashMap<String, CName> = {
-        (1..CName::total()).map(|i| {
-            let c = CName::from_index(i);
-            (format!("{:?}", c), c)
-        }).collect()
+        (1..CName::total())
+            .map(|i| {
+                let c = CName::from_index(i);
+                (format!("{:?}", c), c)
+            })
+            .collect()
     };
 }
 
 // Todo real error handling?
 macro_rules! become_err {
-    ($e:expr) => {Err(Error(($e, ErrorKind::Fix)))};
+    ($e:expr) => {
+        Err(Error(($e, ErrorKind::Fix)))
+    };
 }
 
 fn side(x: &str) -> IResult<&str, Side> {
-    let p = map(nom::branch::alt((tag("USSR"), tag("US"))), |s: &str| {
-        match s {
+    let p = map(
+        nom::branch::alt((tag("USSR"), tag("US"))),
+        |s: &str| match s {
             "USSR" => Side::USSR,
             "US" => Side::US,
             _ => unreachable!(),
-        }
-    });
+        },
+    );
     p(x)
 }
 
@@ -76,7 +84,7 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "Special" => MetaAction::Real(Action::SpecialEvent),
         "Remove" => MetaAction::Real(Action::Remove),
         "Roll" => MetaAction::Roll,
-        "HL" => MetaAction::Real(Action::Event), // Headline 
+        "HL" => MetaAction::Real(Action::Event), // Headline
         "OE" => MetaAction::Real(Action::OpsEvent),
         "EO" => MetaAction::Real(Action::EventOps),
         "E" => MetaAction::Real(Action::Event),
@@ -102,7 +110,7 @@ fn choices(x: &str) -> IResult<&str, Vec<usize>> {
                 if let Ok(ex) = expanded {
                     output.extend(ex.1.into_iter());
                 } else {
-                    return become_err![x]
+                    return become_err![x];
                 }
             }
         }
@@ -114,13 +122,11 @@ fn expand_country(x: &str) -> IResult<&str, Vec<usize>> {
     let (left, (first, _, country_str)) = tuple((is_not("-"), is_a("-"), is_not(" ")))(x)?;
     let num: usize = match first.parse() {
         Ok(n) => n,
-        _ => {
-            return become_err![x]
-        }
+        _ => return become_err![x],
     };
     let country_index = match COUNTRIES.get(country_str) {
         Some(c) => *c as usize,
-        _ => return become_err![x]
+        _ => return become_err![x],
     };
     let vec: Vec<_> = std::iter::repeat(country_index).take(num).collect();
     Ok((left, vec))
@@ -143,14 +149,15 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
         opt(space),
         opt(action),
         opt(space),
-        opt(choices)
-    ))(line).ok()?;
+        opt(choices),
+    ))(line)
+    .ok()?;
     let side = side.unwrap_or(last_side);
     let act = act.unwrap_or(MetaAction::Unknown);
     let act = if let MetaAction::Unknown = act {
         if let Some(c) = card {
             // Opponent card
-            if c.side() == side.opposite() { 
+            if c.side() == side.opposite() {
                 MetaAction::Real(Action::OpsEvent) // Default way of playing opp card
             } else {
                 MetaAction::Real(Action::Ops)
@@ -161,7 +168,12 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
     } else {
         act
     };
-    Some(Parsed {side, card, action: act, choices})
+    Some(Parsed {
+        side,
+        card,
+        action: act,
+        choices,
+    })
 }
 
 pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
@@ -173,7 +185,7 @@ pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand
     let mut choices = [Vec::new(), Vec::new()];
     for line in string.lines() {
         if line.starts_with("#") {
-            continue
+            continue;
         }
         if let Some(parsed) = parse_line(line, last_side) {
             dbg!(&line);
@@ -187,24 +199,22 @@ pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand
                         Side::USSR => ussr_rolls.push(roll),
                         _ => unimplemented!(),
                     }
-                },
-                MetaAction::Real(act) => {
-                    match act {
-                        Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => {
-                            let card = parsed.card.unwrap();
-                            match parsed.side {
-                                Side::US => us_cards.push(card),
-                                Side::USSR => ussr_cards.push(card),
-                                _ => unimplemented!(),
-                            }
-                            let x = OutputIndex::encode_single(act, card as usize);
+                }
+                MetaAction::Real(act) => match act {
+                    Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => {
+                        let card = parsed.card.unwrap();
+                        match parsed.side {
+                            Side::US => us_cards.push(card),
+                            Side::USSR => ussr_cards.push(card),
+                            _ => unimplemented!(),
+                        }
+                        let x = OutputIndex::encode_single(act, card as usize);
+                        choices[parsed.side as usize].push(x);
+                    }
+                    _ => {
+                        for choice in parsed.choices.unwrap() {
+                            let x = OutputIndex::encode_single(act, choice);
                             choices[parsed.side as usize].push(x);
-                        },
-                        _ => {
-                            for choice in parsed.choices.unwrap() {
-                                let x = OutputIndex::encode_single(act, choice);
-                                choices[parsed.side as usize].push(x);
-                            }
                         }
                     }
                 },
@@ -215,6 +225,9 @@ pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand
             unimplemented!();
         }
     }
+    // Reverse rolls since we remove them LIFO instead of FIFO
+    us_rolls = us_rolls.into_iter().rev().collect();
+    ussr_rolls = ussr_rolls.into_iter().rev().collect();
     let us_agent = ScriptedAgent::new(&choices[Side::US as usize]);
     let ussr_agent = ScriptedAgent::new(&choices[Side::USSR as usize]);
     let rng = DebugRand::new(us_rolls, ussr_rolls, vec![], us_cards, ussr_cards);
@@ -227,9 +240,15 @@ mod tests {
     #[test]
     fn basic_parse() {
         assert_eq!(side("USSR Place 20 20"), Ok((" Place 20 20", Side::USSR)));
-        assert_eq!(side("US Warsaw_Pact_Formed OE"), Ok((" Warsaw_Pact_Formed OE", Side::US)));
+        assert_eq!(
+            side("US Warsaw_Pact_Formed OE"),
+            Ok((" Warsaw_Pact_Formed OE", Side::US))
+        );
         assert!(side("IDK").is_err());
-        assert_eq!(card("Warsaw_Pact_Formed OE"), Ok((" OE", Card::Warsaw_Pact_Formed)));
+        assert_eq!(
+            card("Warsaw_Pact_Formed OE"),
+            Ok((" OE", Card::Warsaw_Pact_Formed))
+        );
         assert!(card("NotNATO").is_err());
         let (empty, c) = choices("20 40 60").unwrap();
         assert_eq!(empty, "");
@@ -248,7 +267,8 @@ mod tests {
     #[test]
     fn line_parse() {
         let input = "US Warsaw_Pact_Formed OE";
-        let (_, (side, _, card, _, act)) = tuple((side, space, card, space, action))(input).unwrap();
+        let (_, (side, _, card, _, act)) =
+            tuple((side, space, card, space, action))(input).unwrap();
         dbg!(side);
         dbg!(card);
         dbg!(act);

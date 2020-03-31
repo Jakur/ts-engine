@@ -1,12 +1,12 @@
-use crate::action::{Decision, Action};
+use crate::action::{Action, Decision};
 use crate::card::Card;
 use crate::country::Side;
 use crate::game::Game;
-use crate::state::{GameState, DebugRand, TwilightRand};
-use crate::tensor::{TensorOutput, OutputVec, OutputIndex, DecodedChoice};
+use crate::state::{DebugRand, GameState, TwilightRand};
+use crate::tensor::{DecodedChoice, OutputIndex, OutputVec, TensorOutput};
 
-use rand::prelude::*;
 use crossbeam_queue::ArrayQueue;
+use rand::prelude::*;
 
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
@@ -65,9 +65,7 @@ impl ScriptedAgent {
         for c in choices.iter().copied() {
             queue.push(c).unwrap();
         }
-        ScriptedAgent {
-            choices: queue,
-        }
+        ScriptedAgent { choices: queue }
     }
     pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
         let (_win, _pts) = game.play(goal_t, Some(goal_ar));
@@ -83,8 +81,8 @@ impl Agent for ScriptedAgent {
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let next = self.next().unwrap();
+        // dbg!(&legal);
         dbg!(next);
-        dbg!(&legal);
         assert!(legal.contains(next));
         next.decode()
     }
@@ -104,7 +102,7 @@ impl Agent for RandAgent {
     fn get_eval(&self, _state: &GameState) -> f32 {
         thread_rng().gen()
     }
-    fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice { 
+    fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let mut rng = thread_rng();
         let x = legal.data().choose(&mut rng);
         if let Some(choice) = x {

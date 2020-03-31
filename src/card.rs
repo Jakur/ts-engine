@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use crate::action::{self, Action, Decision, EventTime};
-use crate::country::{self, Country, CName, Region, Side, Status};
+use crate::country::{self, CName, Country, Region, Side, Status};
 use crate::state::{GameState, Period, TwilightRand};
 
 use num_traits::FromPrimitive;
@@ -13,12 +13,12 @@ pub use effect::*;
 
 const NUM_CARDS: usize = Card::Summit as usize + 1;
 
-const IND_REDS: [CName; 5] = [
-    CName::Yugoslavia,
-    CName::Romania,
-    CName::Bulgaria,
-    CName::Hungary,
-    CName::Czechoslovakia,
+const IND_REDS: [usize; 5] = [
+    CName::Yugoslavia as usize,
+    CName::Romania as usize,
+    CName::Bulgaria as usize,
+    CName::Hungary as usize,
+    CName::Czechoslovakia as usize,
 ];
 
 lazy_static! {
@@ -100,7 +100,7 @@ fn init_cards() -> Vec<Attributes> {
         c(USSR, 3).star(),
         c(Neutral, 3).star(),
         c(US, 3).star(),
-        c(Neutral, 1) // Summit
+        c(Neutral, 1), // Summit
     ];
     x
 }
@@ -151,7 +151,7 @@ pub enum Card {
     Quagmire,
     SALT_Negotiations,
     Bear_Trap,
-    Summit
+    Summit,
 }
 
 impl Card {
@@ -179,46 +179,31 @@ impl Card {
         match self {
             Blockade => {
                 if state.cards_at_least(Side::US, 3).is_empty() {
-                    Some(vec![0])   
+                    Some(vec![0])
                 } else {
                     Some(vec![0, 1])
                 }
             }
             Olympic_Games => Some(vec![0, 1]),
-            Independent_Reds => {
-                let vec: Vec<_> = IND_REDS
-                    .iter()
-                    .filter_map(|c| {
-                        let i = *c as usize;
-                        if state.countries[i].has_influence(Side::USSR) {
-                            Some(i)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                Some(vec)
-            }
             _ => None,
         }
     }
     pub fn influence_quantity(&self, state: &GameState, action: &Action, choice: usize) -> i8 {
         use Card::*;
         match self {
-            Independent_Reds => {
-                state.countries[choice].ussr
-            },
+            Independent_Reds => state.countries[choice].ussr,
             East_European_Unrest => {
                 if state.ar >= 8 {
                     2
                 } else {
                     1
                 }
-            },
+            }
             Warsaw_Pact_Formed => {
                 if let Action::Place = action {
                     1
-                } else { // Remove all
+                } else {
+                    // Remove all
                     state.countries[choice].us
                 }
             }
@@ -229,37 +214,33 @@ impl Card {
         use Card::*;
         let s = match self {
             De_Stalinization => Side::USSR,
-            _ => agent
+            _ => agent.opposite(),
         };
         let q = match self {
-            Warsaw_Pact_Formed => target.influence(s.opposite()),
-            Truman_Doctrine => target.influence(s.opposite()),
+            Warsaw_Pact_Formed | Truman_Doctrine => target.influence(s),
             East_European_Unrest => {
                 if let Period::Late = p {
                     2
                 } else {
                     1
                 }
-            },
+            }
             _ => 1,
         };
-        let q = std::cmp::max(q, target.influence(s.opposite()));
+        let q = std::cmp::min(q, target.influence(s));
         (s, q)
-    }
-    pub fn place_quantity(&self, agent: Side, target: &Country) -> i8 {
-        1
     }
     pub fn special_event<R: TwilightRand>(
         &self,
         state: &mut GameState,
         choice: usize,
         pending_actions: &mut Vec<Decision>,
-        rng: &mut R
+        rng: &mut R,
     ) -> bool {
         use Card::*;
         let side = match self.side() {
             s @ Side::US | s @ Side::USSR => s,
-            Side::Neutral => *state.side()
+            Side::Neutral => *state.side(),
         };
         if !self.can_event(state) {
             return false;
@@ -269,12 +250,15 @@ impl Card {
                 if choice == 0 {
                     state.remove_all(Side::US, CName::WGermany);
                 } else {
-                    let cards: Vec<_> = state.cards_at_least(Side::US, 3)
-                        .into_iter().map(|c| c as usize).collect();
+                    let cards: Vec<_> = state
+                        .cards_at_least(Side::US, 3)
+                        .into_iter()
+                        .map(|c| c as usize)
+                        .collect();
                     let d = Decision::new(Side::US, Action::Discard, cards);
                     pending_actions.push(d);
                 }
-            },
+            }
             Warsaw_Pact_Formed => {
                 if !state.us_effects.contains(&Effect::AllowNato) {
                     state.us_effects.push(Effect::AllowNato);
@@ -284,7 +268,7 @@ impl Card {
                         Side::USSR,
                         Action::Remove,
                         not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
-                        4
+                        4,
                     );
                     pending_actions.push(x);
                 } else {
@@ -293,11 +277,11 @@ impl Card {
                         Side::USSR,
                         Action::Place,
                         &country::EASTERN_EUROPE[..],
-                        4
+                        4,
                     );
                     pending_actions.push(x);
                 }
-            },
+            }
             Olympic_Games => {
                 if choice == 0 {
                     let mut ussr_roll = 0;
@@ -321,11 +305,6 @@ impl Card {
                     let x = Decision::conduct_ops(side, 4);
                     pending_actions.push(x);
                 }
-            },
-            Independent_Reds => {
-                let c_name = IND_REDS[choice];
-                let c = &mut state.countries[c_name as usize];
-                c.us = c.ussr;
             }
             _ => unimplemented!(),
         }
@@ -335,12 +314,12 @@ impl Card {
         &self,
         state: &mut GameState,
         pending_actions: &mut Vec<Decision>,
-        rng: &mut R
+        rng: &mut R,
     ) -> bool {
         use Card::*;
         let side = match self.side() {
             s @ Side::US | s @ Side::USSR => s,
-            Side::Neutral => *state.side()
+            Side::Neutral => *state.side(),
         };
         if self.is_special() {
             let legal = self.e_choices(state).unwrap();
@@ -353,7 +332,7 @@ impl Card {
             let clear = Decision::new(side, Action::ClearEvent, &[]);
             pending_actions.push(clear);
             pending_actions.push(d);
-            return true
+            return true;
         }
         if !self.can_event(state) {
             return false;
@@ -381,8 +360,11 @@ impl Card {
                         // Todo find out of the US really has agency in these decisions?
                         // Just Chernobyl?
                         let d = if card.is_special() {
-                            Decision::new(Side::US, Action::SpecialEvent, 
-                                card.e_choices(state).unwrap_or_else(|| vec![]))
+                            Decision::new(
+                                Side::US,
+                                Action::SpecialEvent,
+                                card.e_choices(state).unwrap_or_else(|| vec![]),
+                            )
                         } else {
                             Decision::new(Side::US, Action::Event, &[])
                         };
@@ -397,7 +379,7 @@ impl Card {
                     Side::USSR,
                     Action::Remove,
                     opp_has_inf(&country::WESTERN_EUROPE[..], Side::USSR, &state),
-                    3
+                    3,
                 );
                 state.set_limit(2, pending_actions);
                 pending_actions.push(x);
@@ -436,7 +418,7 @@ impl Card {
                     Side::USSR,
                     Action::Place,
                     not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
-                    4
+                    4,
                 );
                 state.set_limit(1, pending_actions);
                 pending_actions.push(x);
@@ -464,6 +446,11 @@ impl Card {
             NATO => {
                 state.us_effects.push(Effect::Nato);
             }
+            Independent_Reds => {
+                let allowed = opp_has_inf(&IND_REDS, Side::US, state);
+                let x = Decision::new(Side::US, Action::Place, allowed);
+                pending_actions.push(x);
+            }
             Marshall_Plan => {
                 if !state.us_effects.contains(&Effect::AllowNato) {
                     state.us_effects.push(Effect::AllowNato);
@@ -473,7 +460,7 @@ impl Card {
                     Side::US,
                     Action::Place,
                     not_opp_cont(&country::WESTERN_EUROPE[..], side, state),
-                    7
+                    7,
                 );
                 pending_actions.push(x);
             }
@@ -498,7 +485,7 @@ impl Card {
                     Side::USSR,
                     Action::Remove,
                     opp_has_inf(&country::SUEZ[..], side, state),
-                    4
+                    4,
                 );
                 state.set_limit(2, pending_actions);
                 pending_actions.push(x);
@@ -509,51 +496,60 @@ impl Card {
                     Side::US,
                     Action::Remove,
                     opp_has_inf(&country::EASTERN_EUROPE[..], side, state),
-                    3
+                    3,
                 );
                 pending_actions.push(x);
             }
             Decolonization => {
                 state.set_limit(1, pending_actions);
-                let x = Decision::with_quantity(
-                    Side::USSR,
-                    Action::Place,
-                    &country::DECOL[..],
-                    4
-                );
+                let x = Decision::with_quantity(Side::USSR, Action::Place, &country::DECOL[..], 4);
                 pending_actions.push(x);
             }
             Red_Scare_Purge => state.add_effect(*state.side(), Effect::RedScarePurge),
             UN_Intervention => {
                 let hand = state.deck.hand(side);
                 let opp = side.opposite();
-                let vec: Vec<_> = hand.iter().copied().filter_map(|c| {
-                    if c.side() == opp {
-                        Some(c as usize)
-                    } else {
-                        None
-                    }
-                }).collect();
+                let vec: Vec<_> = hand
+                    .iter()
+                    .copied()
+                    .filter_map(|c| {
+                        if c.side() == opp {
+                            Some(c as usize)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
                 let d = Decision::new(side, Action::Ops, vec);
                 pending_actions.push(d);
             }
             De_Stalinization => {
                 state.set_limit(2, pending_actions);
-                let dest: Vec<_> = state.valid_countries().iter().enumerate().filter_map(|(i, c)| {
-                    if c.controller() != Side::US {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                }).collect();
+                let dest: Vec<_> = state
+                    .valid_countries()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, c)| {
+                        if c.controller() != Side::US {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
                 let x = Decision::with_quantity(Side::USSR, Action::Place, dest, 4);
-                let source: Vec<_> = state.valid_countries().iter().enumerate().filter_map(|(i, c)| {
-                    if c.has_influence(Side::USSR) {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                }).collect();
+                let source: Vec<_> = state
+                    .valid_countries()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, c)| {
+                        if c.has_influence(Side::USSR) {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
                 let y = Decision::with_quantity(Side::USSR, Action::Remove, source, 4);
                 pending_actions.push(x);
                 pending_actions.push(y);
@@ -568,9 +564,15 @@ impl Card {
                 state.defcon = std::cmp::min(5, state.defcon + 2);
             }
             Formosan_Resolution => state.us_effects.push(Effect::FormosanResolution),
-            Brush_War => pending_actions.push(Decision::new(side, Action::War, state.legal_war(side))),
-            Central_America_Scoring => {Region::CentralAmerica.score(state);},
-            Southeast_Asia_Scoring => {Region::SoutheastAsia.score(state);},
+            Brush_War => {
+                pending_actions.push(Decision::new(side, Action::War, state.legal_war(side)))
+            }
+            Central_America_Scoring => {
+                Region::CentralAmerica.score(state);
+            }
+            Southeast_Asia_Scoring => {
+                Region::SoutheastAsia.score(state);
+            }
             Arms_Race => {
                 if state.mil_ops(side) > state.mil_ops(side.opposite()) {
                     if state.mil_ops(side) >= state.defcon {
@@ -578,23 +580,26 @@ impl Card {
                     } else {
                         state.vp += 1
                     }
-                } 
-            },
+                }
+            }
             Cuban_Missile_Crisis => {
                 state.defcon = 2;
                 state.add_effect(side.opposite(), Effect::CubanMissileCrisis);
-            },
+            }
             Nuclear_Subs => state.add_effect(side, Effect::NuclearSubs),
             Quagmire => state.add_effect(side.opposite(), Effect::Quagmire),
             SALT_Negotiations => {
                 state.add_effect(side, Effect::SALT);
                 state.add_effect(side.opposite(), Effect::SALT);
-                let allowed: Vec<_> = state.deck.discard_pile().iter().map(|c| {
-                    *c as usize
-                }).collect();
+                let allowed: Vec<_> = state
+                    .deck
+                    .discard_pile()
+                    .iter()
+                    .map(|c| *c as usize)
+                    .collect();
                 let d = Decision::new(side, Action::RecoverCard, allowed);
                 pending_actions.push(d)
-            },
+            }
             Bear_Trap => state.add_effect(side.opposite(), Effect::BearTrap),
             Summit => {
                 let mut ussr_roll = rng.roll(Side::USSR);
@@ -603,21 +608,24 @@ impl Card {
                     let (status, _) = r.status(state, false);
                     match status[Side::US as usize] {
                         Status::Domination | Status::Control => us_roll += 1,
-                        _ => {},
+                        _ => {}
                     }
                     match status[Side::USSR as usize] {
                         Status::Domination | Status::Control => ussr_roll += 1,
-                        _ => {},
+                        _ => {}
                     }
                 }
                 let defcon: Vec<_> = [state.defcon - 1, state.defcon, state.defcon + 1]
-                    .iter().copied().filter_map(|x| {
+                    .iter()
+                    .copied()
+                    .filter_map(|x| {
                         if 1 <= x && x <= 5 {
                             Some(x as usize)
                         } else {
                             None
                         }
-                    }).collect();
+                    })
+                    .collect();
                 if us_roll > ussr_roll {
                     state.vp += 2;
                     pending_actions.push(Decision::new(Side::US, Action::ChangeDefcon, defcon));
@@ -626,8 +634,8 @@ impl Card {
                     pending_actions.push(Decision::new(Side::USSR, Action::ChangeDefcon, defcon));
                 }
             }
-            The_China_Card => {},
-            Olympic_Games | Blockade | Warsaw_Pact_Formed | Independent_Reds => unimplemented!(),
+            The_China_Card => {}
+            Olympic_Games | Blockade | Warsaw_Pact_Formed => unimplemented!(),
         }
         return true;
     }
@@ -681,20 +689,26 @@ impl Card {
 }
 
 fn not_opp_cont(slice: &[usize], side: Side, state: &GameState) -> Vec<usize> {
-    slice.iter().copied().filter(|&x| {
-        !state.is_controlled(side.opposite(), x)
-    }).collect()
+    slice
+        .iter()
+        .copied()
+        .filter(|&x| !state.is_controlled(side.opposite(), x))
+        .collect()
 }
 
 fn opp_has_inf(slice: &[usize], side: Side, state: &GameState) -> Vec<usize> {
     let opp = side.opposite();
-    slice.iter().copied().filter(|&x| {
-        state.countries[x].has_influence(opp)
-    }).collect()
+    slice
+        .iter()
+        .copied()
+        .filter(|&x| state.countries[x].has_influence(opp))
+        .collect()
 }
 
 impl From<Card> for usize {
-    fn from(c: Card) -> Self { c as usize }
+    fn from(c: Card) -> Self {
+        c as usize
+    }
 }
 
 #[cfg(test)]
