@@ -11,6 +11,7 @@ fn load_file(name: &str) -> String {
 
 #[test]
 fn parse_one_turn() {
+    use ts_engine::card::Card;
     use ts_engine::country::{self, countries, CName::*, Side};
     let s = load_file("tests/Brashers_Ziemovit2020.record");
     let mut game = ts_engine::record::parse_lines(&s);
@@ -75,4 +76,28 @@ fn parse_one_turn() {
     assert_eq!(game.state.space[Side::USSR as usize], 0);
     assert_eq!(game.state.mil_ops[Side::US as usize], 0);
     assert_eq!(game.state.mil_ops[Side::USSR as usize], 0);
+    assert_eq!(
+        game.state.deck.removed(),
+        &vec![
+            Card::Captured_Nazi_Scientist,
+            Card::Suez_Crisis,
+            Card::Fidel,
+            Card::Independent_Reds,
+        ]
+    );
+    assert!(game.state.deck.china_available(Side::US));
+    assert_eq!(
+        game.state.deck.discard_pile(),
+        &vec![
+            Card::Olympic_Games,
+            Card::NATO,
+            Card::Warsaw_Pact_Formed,
+            Card::Arab_Israeli_War,
+            Card::Formosan_Resolution,
+            Card::Korean_War,
+            Card::UN_Intervention,
+            Card::Indo_Pakistani_War,
+            Card::East_European_Unrest
+        ]
+    );
 }

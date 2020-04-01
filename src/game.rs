@@ -147,7 +147,10 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.state.defcon = std::cmp::min(defcon + 1, 5);
         self.state.mil_ops[0] = 0;
         self.state.mil_ops[1] = 0;
-        self.state.check_win()
+        // Check win before cleanup due to scoring cards held
+        let win = self.state.check_win();
+        self.state.deck.end_turn_cleanup();
+        win
     }
     fn headline(&mut self) {
         // Todo see headline ability, can event card

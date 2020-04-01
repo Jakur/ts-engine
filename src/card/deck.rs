@@ -27,7 +27,7 @@ impl Deck {
         for c_index in 1..Card::Formosan_Resolution as usize + 1 {
             let card = Card::from_index(c_index);
             if card == Card::The_China_Card {
-                continue
+                continue;
             }
             deck.draw_pile.push(card);
         }
@@ -47,9 +47,17 @@ impl Deck {
             Side::Neutral => unimplemented!(),
         }
     }
+    pub fn end_turn_cleanup(&mut self) {
+        self.china_up = true;
+        // Todo draw cards
+    }
     /// Returns a new vector holding all scoring cards in the side's hand.
     pub fn scoring_cards(&self, side: Side) -> Vec<Card> {
-        self.hand(side).iter().copied().filter(|c| c.is_scoring()).collect()
+        self.hand(side)
+            .iter()
+            .copied()
+            .filter(|c| c.is_scoring())
+            .collect()
     }
     pub fn held_scoring(&self, side: Side) -> bool {
         let hand = self.hand(side);
@@ -80,14 +88,14 @@ impl Deck {
         }
     }
     /// Searches the discard pile for a played card and removes it.
-    pub fn remove_card(&mut self, card: Card) -> bool {
+    pub fn remove_card(&mut self, card: Card) -> Result<(), DeckError> {
         let found = self.discard_pile.iter().rposition(|&c| c == card);
         if let Some(i) = found {
             let c = self.discard_pile.remove(i); // Should be fast since i should be near the end
             self.removed.push(c);
-            true
+            Ok(())
         } else {
-            false
+            Err(DeckError::CannotFind)
         }
     }
     pub fn random_card<T: TwilightRand>(&self, side: Side, rng: &mut T) -> Option<Card> {
@@ -102,26 +110,30 @@ impl Deck {
     pub fn opp_events_fire(&self, side: Side, state: &GameState) -> Vec<Card> {
         let hand = self.hand(side);
         let opp = side.opposite();
-        hand.iter().copied().filter(|c| {
-            c.side() == opp && c.can_event(state)
-        }).collect()
+        hand.iter()
+            .copied()
+            .filter(|c| c.side() == opp && c.can_event(state))
+            .collect()
     }
     /// Returns a vector of cards that the given side can themselves event.
     pub fn can_event(&self, side: Side, state: &GameState) -> Vec<Card> {
         let hand = self.hand(side);
         let opp = side.opposite();
-        hand.iter().copied().filter(|c| {
-            c.side() != opp && c.can_event(state)
-        }).collect()
+        hand.iter()
+            .copied()
+            .filter(|c| c.side() != opp && c.can_event(state))
+            .collect()
     }
     /// Returns cards that can be played for just ops, i.e. non-scoring cards of
     /// neutral or allied variety, or those opponent events that won't fire.
     pub fn can_play_ops(&self, side: Side, state: &GameState) -> Vec<Card> {
         let hand = self.hand(side);
         let opp = side.opposite();
-        let mut vec: Vec<_> = hand.iter().copied().filter(|c| {
-            !c.is_scoring() && (c.side() != opp || !c.can_event(state))
-        }).collect();
+        let mut vec: Vec<_> = hand
+            .iter()
+            .copied()
+            .filter(|c| !c.is_scoring() && (c.side() != opp || !c.can_event(state)))
+            .collect();
         if self.china_available(side) {
             vec.push(Card::The_China_Card);
         }
@@ -178,6 +190,22 @@ impl Deck {
             self.discard_pile.push(card);
         }
     }
+    pub fn try_discard(&mut self, card: Card) -> Result<(), DeckError> {
+        // Should only need to check end, to not duplicate discarding actions
+        // Todo check edge cases like reshuffle midturn
+        if card == Card::The_China_Card {
+            self.china = self.china.opposite();
+            self.china_up = false;
+            return Err(DeckError::ChinaException);
+        }
+        let contains = self.discard_pile.iter().rev().take(3).find(|c| **c == card);
+        if contains.is_some() {
+            Err(DeckError::AlreadyContains)
+        } else {
+            self.discard_pile.push(card);
+            Ok(())
+        }
+    }
     pub fn china_available(&self, side: Side) -> bool {
         self.china == side && self.china_up
     }
@@ -197,4 +225,11 @@ impl Deck {
     pub fn reshuffle<T: TwilightRand>(&mut self, rng: &mut T) {
         rng.reshuffle(self);
     }
+}
+
+#[derive(Debug)]
+pub enum DeckError {
+    AlreadyContains,
+    CannotFind,
+    ChinaException,
 }
