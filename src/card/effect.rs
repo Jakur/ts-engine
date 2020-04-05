@@ -20,4 +20,23 @@ pub enum Effect {
     SALT,
     BearTrap,
     NorthSeaOil,
+    NoOpec,
+}
+
+impl Effect {
+    pub fn permanent(&self) -> bool {
+        use Effect::*;
+        match self {
+            ShuttleDiplomacy => true,
+            FormosanResolution => true,
+            IronLady => true,
+            CampDavid => true,
+            AllowNato => true,
+            DeGaulle => true,
+            Nato => true,
+            BearTrap | Quagmire => true, // Can span multiple turns
+            NoOpec => true,              // The lasting part of North Sea Oil
+            _ => false,
+        }
+    }
 }

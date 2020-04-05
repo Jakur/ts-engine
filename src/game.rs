@@ -150,6 +150,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         // Check win before cleanup due to scoring cards held
         let win = self.state.check_win();
         self.state.deck.end_turn_cleanup();
+        self.state.turn_effect_clear();
         win
     }
     fn headline(&mut self) {

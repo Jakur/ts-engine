@@ -409,6 +409,21 @@ impl GameState {
             Side::Neutral => unimplemented!(),
         }
     }
+    /// Clears all effects that are meant to only last for a single turn.
+    pub fn turn_effect_clear(&mut self) {
+        self.us_effects = self
+            .us_effects
+            .iter()
+            .copied()
+            .filter(|e| e.permanent())
+            .collect();
+        self.ussr_effects = self
+            .ussr_effects
+            .iter()
+            .copied()
+            .filter(|e| e.permanent())
+            .collect();
+    }
     /// Returns which period of the war the game is in
     pub fn period(&self) -> Period {
         if self.turn <= 3 {
@@ -754,12 +769,6 @@ impl GameState {
             unreachable!() // Todo figure out if this is actually unreachable
         }
     }
-    // pub fn legal_special_event(&self, side: Side) -> Vec<Card> {
-    //     let hand = self.deck.hand(side);
-    //     hand.iter().copied().filter(|x| {
-    //         x.max_e_choices() > 1
-    //     }).collect()
-    // }
     pub fn legal_war(&self, side: Side) -> Allowed {
         if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
             let vec: Vec<_> = BRUSH_TARGETS
