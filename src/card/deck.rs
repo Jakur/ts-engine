@@ -173,29 +173,38 @@ impl Deck {
         self.china = self.china.opposite();
         self.china_up = false;
     }
-    pub fn play_card(&mut self, side: Side, card: Card) {
-        let hand = match side {
-            Side::US => &mut self.us_hand,
-            Side::USSR => &mut self.ussr_hand,
-            Side::Neutral => unimplemented!(),
-        };
+    pub fn play_card(&mut self, side: Side, card: Card) -> Result<(), DeckError> {
+        dbg!(card);
         if let Card::The_China_Card = card {
             self.play_china();
+            Ok(())
         } else {
-            let index = hand
-                .iter()
-                .position(|&c| c == card)
-                .expect("Valid card in hand");
-            let card = hand.swap_remove(index);
-            self.discard_pile.push(card);
+            match side {
+                s @ Side::US | s @ Side::USSR => {
+                    let hand = self.hand_mut(s);
+                    let index = hand
+                        .iter()
+                        .position(|&c| c == card)
+                        .ok_or(DeckError::CannotFind)?;
+                    let _card = hand.swap_remove(index);
+                    Ok(())
+                }
+                Side::Neutral => {
+                    if self.play_card(Side::US, card).is_err()
+                        && self.play_card(Side::USSR, card).is_err()
+                    {
+                        Err(DeckError::CannotFind)
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
         }
     }
     pub fn try_discard(&mut self, card: Card) -> Result<(), DeckError> {
         // Should only need to check end, to not duplicate discarding actions
         // Todo check edge cases like reshuffle midturn
         if card == Card::The_China_Card {
-            self.china = self.china.opposite();
-            self.china_up = false;
             return Err(DeckError::ChinaException);
         }
         let contains = self.discard_pile.iter().rev().take(3).find(|c| **c == card);

@@ -162,6 +162,7 @@ impl GameState {
                 let event = Decision::new_event(card);
                 pending.push(conduct);
                 pending.push(event);
+                self.deck.play_card(side, card);
                 let _ = self.deck.try_discard(card);
             }
             Action::OpsEvent => {
@@ -174,6 +175,7 @@ impl GameState {
                 if card == Card::The_China_Card {
                     self.china = true;
                 }
+                self.deck.play_card(side, card);
                 let _ = self.deck.try_discard(card);
             }
             Action::Ops => {
@@ -185,11 +187,13 @@ impl GameState {
                 }
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 pending.push(conduct);
+                self.deck.play_card(side, card);
                 let _ = self.deck.try_discard(card);
             }
             Action::Event => {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
+                self.deck.play_card(side, card);
                 let _ = self.deck.try_discard(card);
                 if card.event(self, pending, rng) && card.is_starred() {
                     let removed = self.deck.remove_card(card);

@@ -5,8 +5,8 @@ use crate::game::Game;
 use crate::state::{DebugRand, GameState, TwilightRand};
 use crate::tensor::{DecodedChoice, OutputIndex, OutputVec, TensorOutput};
 
-use crossbeam_queue::ArrayQueue;
 use rand::prelude::*;
+use std::sync::Mutex;
 
 pub struct Actors<A: Agent, B: Agent> {
     pub ussr_agent: A,
@@ -53,25 +53,26 @@ pub trait Agent {
     fn side(&self) -> Side;
     /// Returns just the evaluation of the given position
     fn get_eval(&self, state: &GameState) -> f32;
+    /// Handles a trivial action
+    fn trivial_action(&self, _action: Option<OutputIndex>) {}
 }
 
 pub struct ScriptedAgent {
-    pub choices: ArrayQueue<OutputIndex>,
+    pub choices: Mutex<Vec<OutputIndex>>,
 }
 
 impl ScriptedAgent {
     pub fn new(choices: &Vec<OutputIndex>) -> Self {
-        let queue = ArrayQueue::new(choices.len());
-        for c in choices.iter().copied() {
-            queue.push(c).unwrap();
+        let v = choices.iter().copied().rev().collect();
+        ScriptedAgent {
+            choices: Mutex::new(v),
         }
-        ScriptedAgent { choices: queue }
     }
     pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
         let (_win, _pts) = game.play(goal_t, Some(goal_ar));
     }
     fn next(&self) -> Option<OutputIndex> {
-        self.choices.pop().ok()
+        self.choices.lock().unwrap().pop()
     }
 }
 
@@ -81,11 +82,23 @@ impl Agent for ScriptedAgent {
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let next = self.next().unwrap();
+        // dbg!(next);
+        // dbg!(&legal);
         assert!(legal.contains(next));
         next.decode()
     }
     fn side(&self) -> Side {
         unimplemented!()
+    }
+    fn trivial_action(&self, action: Option<OutputIndex>) {
+        let mut choices = self.choices.lock().unwrap();
+        let should_pop = match (choices.last(), action) {
+            (Some(next), Some(taken)) => taken == *next,
+            _ => false,
+        };
+        if should_pop {
+            choices.pop();
+        }
     }
 }
 

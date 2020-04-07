@@ -1,0 +1,34 @@
+USSR Place 4-Poland 1-EGermany 1-Austria
+US Place 4-WGermany 3-Italy
+Place 1-Italy 1-Iran
+US Red_Scare_Purge HL
+USSR Olympic_Games HL
+US Special 1
+#3 ops
+USSR Coup Panama
+Roll 2
+Nasser E
+US Middle_East_Scoring E
+USSR Suez_Crisis E
+Remove 2-UK
+US Marshall_Plan E 
+Place UK Canada France Italy WGermany SpainPortugal Greece
+USSR De_Gaulle_Leads_France E
+US US_Japan_Mutual_Defense_Pact E
+USSR Comecon E
+Place EGermany Poland Austria Yugoslavia
+US Nuclear_Test_Ban E
+USSR Decolonization E
+Place Angola Malaysia Burma SouthAfrica
+US Indo_Pakistani_War E
+War India
+Roll 4
+USSR Warsaw_Pact_Formed E 
+Special 1
+Place 2-Austria 2-Yugoslavia 1-Hungary
+US UN_Intervention E
+#Check required syntax for UN Intervention
+Romanian_Abdication O
+Inf SKorea
+#Defcon 4
+#Points +4 ?

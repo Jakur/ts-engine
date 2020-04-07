@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::prelude::*;
 use ts_engine;
+use ts_engine::country::{self, CName};
+use ts_engine::state::GameState;
 
 fn load_file(name: &str) -> String {
     let mut string = String::new();
@@ -9,17 +11,82 @@ fn load_file(name: &str) -> String {
     string
 }
 
+fn check_countries(state: &GameState, us: &[(CName, i8)], ussr: &[(CName, i8)]) {
+    let mut all_countries = country::countries();
+    for (c, inf) in us.iter() {
+        all_countries[*c as usize].us = *inf;
+    }
+    for (c, inf) in ussr.iter() {
+        all_countries[*c as usize].ussr = *inf;
+    }
+    // Exclude USSR and US
+    for index in 0..country::NUM_COUNTRIES - 2 {
+        let expected = &all_countries[index];
+        let game = &state.countries[index];
+        // dbg!(CName::from_index(index));
+        assert_eq!(expected.us, game.us);
+        assert_eq!(expected.ussr, game.ussr);
+    }
+}
+
+#[test]
+fn events1() {
+    use ts_engine::country::{CName::*, Side};
+    let s = load_file("tests/Events1.record");
+    let mut game = ts_engine::record::parse_lines(&s);
+    game.setup();
+    dbg!(game.state.turn);
+    let (s, _) = game.play(1, None);
+    assert_eq!(Side::Neutral, s);
+    let us = [
+        (Canada, 3),
+        (UK, 4),
+        (SpainPortugal, 1),
+        (Italy, 5),
+        (WGermany, 5),
+        (Greece, 1),
+        (Iran, 2),
+        (SKorea, 2),
+        (Japan, 4),
+        (Philippines, 1),
+        (Australia, 4),
+        (SouthAfrica, 1),
+    ];
+    let ussr = [
+        (EGermany, 5),
+        (Poland, 5),
+        (Austria, 4),
+        (Yugoslavia, 3),
+        (Hungary, 1),
+        (Finland, 1),
+        (France, 1),
+        (Egypt, 2),
+        (Syria, 1),
+        (Iraq, 1),
+        (NKorea, 3),
+        (Burma, 1),
+        (Malaysia, 1),
+        (Angola, 1),
+        (SouthAfrica, 1),
+    ];
+    check_countries(&game.state, &us, &ussr);
+    // dbg!(game.state.ar);
+    assert_eq!(game.state.turn, 2);
+    // assert_eq!(game.state.defcon, 4);
+    // assert_eq!(game.state.vp, 0);
+}
+
 #[test]
 fn parse_one_turn() {
     use ts_engine::card::Card;
-    use ts_engine::country::{self, countries, CName::*, Side};
+    use ts_engine::country::{CName::*, Side};
     let s = load_file("tests/Brashers_Ziemovit2020.record");
     let mut game = ts_engine::record::parse_lines(&s);
     assert_eq!(game.rng.us_rolls, vec![6, 1]);
     game.setup();
     game.play(1, None);
     let us = [
-        (Canada, 2i8),
+        (Canada, 2),
         (UK, 3),
         (France, 1),
         (WGermany, 4),
@@ -39,7 +106,7 @@ fn parse_one_turn() {
         (Panama, 1),
     ];
     let ussr = [
-        (Finland, 1i8),
+        (Finland, 1),
         (Poland, 4),
         (EGermany, 4),
         (Austria, 1),
@@ -52,21 +119,7 @@ fn parse_one_turn() {
         (Afghanistan, 2),
         (Cuba, 3),
     ];
-    let mut all_countries = countries();
-    for (c, inf) in us.iter() {
-        all_countries[*c as usize].us = *inf;
-    }
-    for (c, inf) in ussr.iter() {
-        all_countries[*c as usize].ussr = *inf;
-    }
-    // Exclude USSR and US
-    for index in 0..country::NUM_COUNTRIES - 2 {
-        let c1 = &all_countries[index];
-        let c2 = &game.state.countries[index];
-        // dbg!(CName::from_index(index));
-        assert_eq!(c1.us, c2.us);
-        assert_eq!(c1.ussr, c2.ussr);
-    }
+    check_countries(&game.state, &us, &ussr);
     assert_eq!(game.state.turn, 2);
     assert_eq!(game.state.defcon, 3);
     assert_eq!(game.state.vp, 0);

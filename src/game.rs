@@ -125,6 +125,8 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 return win;
             }
         }
+        dbg!(self.state.deck.hand(Side::US));
+        dbg!(self.state.deck.hand(Side::USSR));
         let us_held = self.state.deck.held_scoring(Side::US);
         let ussr_held = self.state.deck.held_scoring(Side::USSR);
         // Holding cards is illegal, but it's possible in the physical game
@@ -218,13 +220,18 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         pending: &mut Vec<Decision>,
         history: &mut Vec<DecodedChoice>,
     ) -> Option<Decision> {
-        // Do not call eval if there are only 0 or 1 decisions
+        use crate::tensor::OutputIndex;
+
         let legal = decision.encode(&self.state);
+        // Do not call eval if there are only 0 or 1 decisions
         let (action, choice) = if legal.is_trivial() {
-            (
-                decision.action,
-                decision.allowed.slice().iter().cloned().next(),
-            )
+            let choice = decision.allowed.slice().iter().cloned().next();
+            if decision.agent != Side::Neutral {
+                let agent = self.actors.get(decision.agent);
+                let index = choice.map(|i| OutputIndex::new(decision.action.offset() + i));
+                agent.trivial_action(index);
+            }
+            (decision.action, choice)
         } else {
             let agent = self.actors.get(decision.agent);
             let x = agent.decide(&self.state, legal);
@@ -291,9 +298,9 @@ mod tests {
         assert_eq!(x, Action::Event);
         let defcon_one = OutputIndex::new(Action::ChangeDefcon.offset() + 1);
         let ussr = &mut game.actors.ussr_mut().choices;
-        ussr.push(summit_play).unwrap(); // Buffer is okay due to init influence
+        ussr.lock().unwrap().push(summit_play);
         let us = &mut game.actors.us_mut().choices;
-        us.push(defcon_one).unwrap(); // Buffer is okay due to init influence
+        us.lock().unwrap().push(defcon_one);
         game.rng.us_rolls = vec![5];
         game.rng.ussr_rolls = vec![3];
         assert_eq!(game.do_ply().unwrap(), Side::US);

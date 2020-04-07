@@ -89,6 +89,7 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "EO" => MetaAction::Real(Action::EventOps),
         "E" => MetaAction::Real(Action::Event),
         "O" => MetaAction::Real(Action::Ops),
+        "War" => MetaAction::Real(Action::War),
         _ => MetaAction::Unknown, // Always a play card ?
     };
     Ok((left, meta))

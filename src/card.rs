@@ -165,6 +165,7 @@ impl Card {
         match self {
             Card::Blockade => 2,
             Card::Olympic_Games => 2,
+            Card::Warsaw_Pact_Formed => 2,
             _ => 1,
         }
     }
@@ -185,6 +186,7 @@ impl Card {
                 }
             }
             Olympic_Games => Some(vec![0, 1]),
+            Warsaw_Pact_Formed => Some(vec![0, 1]),
             _ => None,
         }
     }
@@ -277,7 +279,7 @@ impl Card {
                         Side::USSR,
                         Action::Place,
                         &country::EASTERN_EUROPE[..],
-                        4,
+                        5,
                     );
                     pending_actions.push(x);
                 }
@@ -302,7 +304,12 @@ impl Card {
                     }
                 } else {
                     state.defcon -= 1;
-                    let x = Decision::conduct_ops(side, 4);
+                    let modifier = state.base_ops_offset(side);
+                    let x = if modifier < 0 {
+                        Decision::conduct_ops(side, 4 + modifier)
+                    } else {
+                        Decision::conduct_ops(side, 4)
+                    };
                     pending_actions.push(x);
                 }
             }
@@ -649,6 +656,15 @@ impl Card {
             Socialist_Governments => !state.has_effect(Side::US, Effect::IronLady),
             Arab_Israeli_War => !state.has_effect(Side::US, Effect::CampDavid),
             NATO => state.has_effect(Side::US, Effect::AllowNato),
+            UN_Intervention => {
+                let opp = state.side().opposite();
+                // Eventable if the side has any card with an opponent's event
+                state
+                    .deck
+                    .hand(*state.side())
+                    .iter()
+                    .any(|c| c.side() == opp)
+            }
             _ => true, // todo make this accurate
         }
     }
