@@ -224,7 +224,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
 
         let legal = decision.encode(&self.state);
         // Do not call eval if there are only 0 or 1 decisions
-        let (action, choice) = if legal.is_trivial() {
+        let (action, choice) = if legal.len() <= 1 {
             let choice = decision.allowed.slice().iter().cloned().next();
             if decision.agent != Side::Neutral {
                 let agent = self.actors.get(decision.agent);

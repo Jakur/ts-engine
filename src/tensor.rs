@@ -11,20 +11,21 @@ lazy_static! {
     };
     static ref CARD_OFFSET: IndexMap<Card, usize> = {
         let mut sum = 0;
-        let x = (1..Card::total()).filter_map(|c| {
-            let c = Card::from_index(c);
-            let choices = c.max_e_choices();
-            if choices <= 1 {
-                None
-            } else {
-                let x = Some((c, sum));
-                sum += choices;
-                x
-            }
-        }).collect();
+        let x = (1..Card::total())
+            .filter_map(|c| {
+                let c = Card::from_index(c);
+                let choices = c.max_e_choices();
+                if choices <= 1 {
+                    None
+                } else {
+                    let x = Some((c, sum));
+                    sum += choices;
+                    x
+                }
+            })
+            .collect();
         IndexMap::new(x)
     };
-
 }
 pub struct DecodedChoice {
     pub action: Action,
@@ -33,7 +34,7 @@ pub struct DecodedChoice {
 
 impl DecodedChoice {
     pub fn new(action: Action, choice: Option<usize>) -> Self {
-        Self {action, choice}
+        Self { action, choice }
     }
 }
 
@@ -42,8 +43,12 @@ impl std::fmt::Debug for DecodedChoice {
         use Action::*;
         if let Some(c) = self.choice {
             let c_str = match self.action {
-                Ops | OpsEvent | Event | EventOps | Space | Discard => format!("{:?}", Card::from_index(c)),
-                Influence | Coup | Realignment | Place | Remove | War => format!("{:?}", CName::from_index(c)),
+                Ops | OpsEvent | Event | EventOps | Space | Discard => {
+                    format!("{:?}", Card::from_index(c))
+                }
+                Influence | Coup | Realignment | Place | Remove | War => {
+                    format!("{:?}", CName::from_index(c))
+                }
                 _ => format!("{:?}", c),
             };
             write!(f, "[{:?}: {:?}]", self.action, c_str)
@@ -53,29 +58,10 @@ impl std::fmt::Debug for DecodedChoice {
     }
 }
 
-#[derive(Debug)]
-pub struct OutputVec {
-    data: Vec<OutputIndex>
-}
+pub type OutputVec = Vec<OutputIndex>;
 
-impl OutputVec {
-    pub fn new(data: Vec<usize>) -> OutputVec {
-        OutputVec{data: data.into_iter().map(|x| OutputIndex::new(x)).collect()}
-    }
-    pub fn data(&self) -> &Vec<OutputIndex> {
-        &self.data
-    }
-    pub fn extend(&mut self, new_data: OutputVec) {
-        for x in new_data.data.into_iter() {
-            self.data.push(x);
-        }
-    }
-    pub fn contains(&self, value: OutputIndex) -> bool {
-        self.data.iter().find(|x| **x == value).is_some()
-    }
-    pub fn is_trivial(&self) -> bool {
-        self.data.len() <= 1
-    }
+fn encode_offsets(data: Vec<usize>) -> OutputVec {
+    data.into_iter().map(|x| OutputIndex::new(x)).collect()
 }
 
 pub(crate) trait TensorOutput {
@@ -86,54 +72,44 @@ impl TensorOutput for Decision {
     fn encode(&self, state: &GameState) -> OutputVec {
         let begin = self.action.offset();
         let out = match self.action {
-            // Action::SpecialEvent => {
-            //     let legal = state.legal_special_event(self.agent);
-            //     let mut vec = Vec::new();
-            //     for card in legal {
-            //         let choices = card.e_choices(state);
-            //         let card_offset = CARD_OFFSET.get(card).unwrap();
-            //         if let Some(v) = choices {
-            //             vec.extend(v.into_iter().map(|x| x + card_offset));
-            //         }
-            //     } 
-            //     OutputVec::new(vec)
-            // }
             Action::BeginAr => {
                 let side = self.agent;
                 // Quagmire / Bear Trap
-                if (side == Side::US && state.has_effect(side, Effect::Quagmire)) ||
-                    (side == Side::USSR && state.has_effect(side, Effect::BearTrap)) {
+                if (side == Side::US && state.has_effect(side, Effect::Quagmire))
+                    || (side == Side::USSR && state.has_effect(side, Effect::BearTrap))
+                {
                     let can_discard = state.cards_at_least(state.side, 2);
                     if can_discard.is_empty() {
                         // Must play scoring cards then pass
                         let scoring = state.deck.scoring_cards(side);
                         if scoring.is_empty() {
-                            return OutputVec::new(vec![Action::Pass.offset()])
+                            return encode_offsets(vec![Action::Pass.offset()]);
                         } else {
                             let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
                             let d = Decision::new(side, Action::Event, scoring);
-                            return d.encode(state)
+                            return d.encode(state);
                         }
                     } else {
                         // If must play scoring cards for the rest of the turn
-                        if state.deck.must_play_scoring(side, state.max_ar(side) - state.ar) {
+                        if state
+                            .deck
+                            .must_play_scoring(side, state.max_ar(side) - state.ar)
+                        {
                             let scoring = state.deck.scoring_cards(side);
                             let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
                             let x = Decision::new(side, Action::Event, scoring);
-                            return x.encode(state)
+                            return x.encode(state);
                         }
                         // Else discard normally
                         let legal: Vec<_> = can_discard.into_iter().map(|x| x as usize).collect();
                         let x = Decision::new(state.side, Action::Discard, legal);
-                        return x.encode(state)
+                        return x.encode(state);
                     }
-                } 
+                }
                 let space = state.legal_space(self.agent);
                 let space_d = Decision::new(self.agent, Action::Space, space);
                 let mut out = space_d.encode(state);
-                let cc = |vec: Vec<Card>| {
-                    vec.into_iter().map(|c| c as usize).collect::<Vec<_>>()
-                };
+                let cc = |vec: Vec<Card>| vec.into_iter().map(|c| c as usize).collect::<Vec<_>>();
                 let before_after = cc(state.deck.opp_events_fire(side, state));
                 let event = cc(state.deck.can_event(side, state));
                 let ops = cc(state.deck.can_play_ops(side, state));
@@ -147,7 +123,7 @@ impl TensorOutput for Decision {
                 out.extend(ops.encode(state));
                 // Todo rarer things like discarding with space power
                 out
-            },
+            }
             Action::ConductOps => {
                 let inf = state.legal_influence(self.agent, self.quantity);
                 let inf_d = Decision::new(self.agent, Action::Influence, inf);
@@ -161,28 +137,36 @@ impl TensorOutput for Decision {
                 let realign_d = Decision::new(self.agent, Action::Realignment, coup_realign);
                 out.extend(realign_d.encode(state));
                 out
-            },
+            }
             Action::CubanMissile => {
                 // This is somewhat clunky, but should work
                 // Todo include pass or empty
                 let pass = Action::Pass.offset();
-                let mut out = OutputVec::new(vec![pass]);
+                let mut out = encode_offsets(vec![pass]);
                 let cuban_offset = self.action.offset();
-                let remove = self.allowed.slice().iter().copied().map(|x| {
-                    x + cuban_offset
-                }).collect();
-                out.extend(OutputVec::new(remove));
+                let remove = self
+                    .allowed
+                    .slice()
+                    .iter()
+                    .copied()
+                    .map(|x| x + cuban_offset)
+                    .collect();
+                out.extend(encode_offsets(remove));
                 out
-            },
+            }
             Action::Coup if state.has_effect(self.agent, Effect::CubanMissileCrisis) => {
                 // Todo include pass or empty?
-                OutputVec::new(vec![Action::Pass.offset()])
+                encode_offsets(vec![Action::Pass.offset()])
             }
             _ => {
-                let v = self.allowed.slice().iter().copied().map(|x|{
-                    x + begin
-                }).collect();
-                OutputVec::new(v)
+                let v = self
+                    .allowed
+                    .slice()
+                    .iter()
+                    .copied()
+                    .map(|x| x + begin)
+                    .collect();
+                encode_offsets(v)
             }
         };
         out
@@ -196,9 +180,9 @@ pub struct OutputIndex {
 
 impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
-        OutputIndex {data}
+        OutputIndex { data }
     }
-    // Encode a single action-choice pair. 
+    // Encode a single action-choice pair.
     pub fn encode_single(action: Action, choice: usize) -> Self {
         Self::new(action.offset() + choice)
     }
@@ -233,7 +217,7 @@ impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
             }
             values[k] = Some(v);
         }
-        IndexMap {keys, values}
+        IndexMap { keys, values }
     }
     pub fn get(&self, key: K) -> Option<&V> {
         let key = key.into();
@@ -246,11 +230,14 @@ impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
     #[cfg(test)]
     pub fn find_key(&self, value: &V) -> K {
         // let index = self.values.binary_search(value)?;
-        let index = self.keys.binary_search_by_key(value, |k| {
-            let i: usize = (*k).into();
-            let v = self.values[i];
-            v.unwrap()
-        }).unwrap();
+        let index = self
+            .keys
+            .binary_search_by_key(value, |k| {
+                let i: usize = (*k).into();
+                let v = self.values[i];
+                v.unwrap()
+            })
+            .unwrap();
         self.keys[index]
     }
     pub fn last_value(&self) -> &V {
@@ -296,15 +283,16 @@ mod tests {
         let output_vec = d.encode(&state);
         let mut events = 0;
         let mut spaces = 0;
-        for out in output_vec.data() {
+        let out_vec_len = output_vec.len();
+        for out in output_vec {
             let decoded = out.decode();
             match decoded.action {
                 Action::Event => events += 1,
                 Action::Space => spaces += 1,
-                _ => {},
+                _ => {}
             }
         }
-        assert_eq!(output_vec.data.len(), 15 + 4);
+        assert_eq!(out_vec_len, 15 + 4);
         assert_eq!(events, 4);
         assert_eq!(spaces, 4);
     }
@@ -318,12 +306,31 @@ mod tests {
         let output_vec = d.encode(&state);
         let mut coup = 0;
         let mut realign = 0;
-        let mut inf: HashSet<_> = vec![Finland, Sweden, EGermany, Romania, Poland, Czechoslovakia,
-            Austria, Hungary, Turkey, Syria, Lebanon, Israel, Iraq, Jordan, SaudiaArabia,
-            GulfStates, Afghanistan, NKorea, SKorea].into_iter().map(|x| {
-                x as usize
-            }).collect();
-        for out in output_vec.data() {
+        let mut inf: HashSet<_> = vec![
+            Finland,
+            Sweden,
+            EGermany,
+            Romania,
+            Poland,
+            Czechoslovakia,
+            Austria,
+            Hungary,
+            Turkey,
+            Syria,
+            Lebanon,
+            Israel,
+            Iraq,
+            Jordan,
+            SaudiaArabia,
+            GulfStates,
+            Afghanistan,
+            NKorea,
+            SKorea,
+        ]
+        .into_iter()
+        .map(|x| x as usize)
+        .collect();
+        for out in output_vec {
             let decoded = out.decode();
             match decoded.action {
                 Action::Coup => coup += 1,
@@ -332,7 +339,7 @@ mod tests {
                     let in_set = inf.remove(&decoded.choice.unwrap());
                     assert!(in_set);
                 }
-                _ => {},
+                _ => {}
             }
         }
         assert_eq!(coup, 12);

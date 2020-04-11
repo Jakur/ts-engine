@@ -84,7 +84,7 @@ impl Agent for ScriptedAgent {
         let next = self.next().unwrap();
         // dbg!(next);
         // dbg!(&legal);
-        assert!(legal.contains(next));
+        assert!(legal.contains(&next));
         next.decode()
     }
     fn side(&self) -> Side {
@@ -115,7 +115,7 @@ impl Agent for RandAgent {
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
         let mut rng = thread_rng();
-        let x = legal.data().choose(&mut rng);
+        let x = legal.choose(&mut rng);
         if let Some(choice) = x {
             choice.decode()
         } else {
