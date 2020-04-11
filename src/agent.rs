@@ -1,4 +1,4 @@
-use crate::action::{Action, Decision};
+use crate::action::{self, Action, Decision};
 use crate::card::Card;
 use crate::country::Side;
 use crate::game::Game;
@@ -74,6 +74,9 @@ impl ScriptedAgent {
     fn next(&self) -> Option<OutputIndex> {
         self.choices.lock().unwrap().pop()
     }
+    fn peek(&self) -> Option<OutputIndex> {
+        self.choices.lock().unwrap().last().map(|x| *x)
+    }
 }
 
 impl Agent for ScriptedAgent {
@@ -81,6 +84,20 @@ impl Agent for ScriptedAgent {
         todo!()
     }
     fn decide(&self, _state: &GameState, legal: OutputVec) -> DecodedChoice {
+        // Check for Cuban Missile Crisis action and Pass if we do not resolve it
+        if 2 <= legal.len() && legal.len() <= 4 {
+            let first_non = legal.iter().find(|x| x.inner() != action::PASS);
+            if let Some(x) = first_non {
+                if action::CUBAN_OFFSET <= x.inner() && x.inner() <= action::CUBAN_OFFSET + 3 {
+                    let peek = self.peek().unwrap();
+                    if legal.contains(&peek) {
+                        return self.next().unwrap().decode();
+                    } else {
+                        return OutputIndex::new(action::PASS).decode();
+                    }
+                }
+            }
+        }
         let next = self.next().unwrap();
         // dbg!(next);
         // dbg!(&legal);

@@ -20,6 +20,8 @@ lazy_static! {
 }
 
 pub const NUM_ACTIONS: usize = Action::Pass as usize + 1;
+pub const CUBAN_OFFSET: usize = Action::CubanMissile as usize;
+pub const PASS: usize = Action::Pass as usize;
 
 #[derive(Clone, Debug)]
 pub struct Decision {

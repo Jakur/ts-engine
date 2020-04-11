@@ -190,6 +190,9 @@ impl OutputIndex {
         let x = Action::action_from_offset(self.data);
         DecodedChoice::new(x.0, Some(x.1))
     }
+    pub fn inner(&self) -> usize {
+        self.data
+    }
 }
 
 impl std::fmt::Debug for OutputIndex {
