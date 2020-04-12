@@ -154,6 +154,10 @@ impl GameState {
             }
         };
         let side = decision.agent;
+        // Check WWBY
+        if side == Side::US {
+            self.wwby(decision.action == Action::Event && choice == Card::UN_Intervention as usize);
+        }
         match decision.action {
             Action::EventOps => {
                 let card = Card::from_index(choice);
@@ -162,7 +166,7 @@ impl GameState {
                 let event = Decision::new_event(card);
                 pending.push(conduct);
                 pending.push(event);
-                self.deck.play_card(side, card);
+                self.deck.play_card(side, card).expect("Found");
                 let _ = self.deck.try_discard(card);
             }
             Action::OpsEvent => {
@@ -175,7 +179,7 @@ impl GameState {
                 if card == Card::The_China_Card {
                     self.china = true;
                 }
-                self.deck.play_card(side, card);
+                self.deck.play_card(side, card).expect("Found");
                 let _ = self.deck.try_discard(card);
             }
             Action::Ops => {
@@ -187,13 +191,13 @@ impl GameState {
                 }
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 pending.push(conduct);
-                self.deck.play_card(side, card);
+                self.deck.play_card(side, card).expect("Found");
                 let _ = self.deck.try_discard(card);
             }
             Action::Event => {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
-                self.deck.play_card(side, card);
+                self.deck.play_card(side, card).expect("Found");
                 let _ = self.deck.try_discard(card);
                 if card.event(self, pending, rng) && card.is_starred() {
                     let removed = self.deck.remove_card(card);
@@ -233,7 +237,15 @@ impl GameState {
                 self.discard_card(side, card);
             }
             Action::Coup => {
-                let free_coup = false; // Todo free coup
+                // Todo other free coups
+                let free_coup = if let Some(e) = self.current_event {
+                    match e {
+                        Card::Junta => true,
+                        _ => false,
+                    }
+                } else {
+                    false
+                };
                 let roll = rng.roll(decision.agent);
                 let mut ops = decision.quantity;
                 if self.china && !Region::Asia.has_country(choice) {
@@ -273,12 +285,13 @@ impl GameState {
                 }
             }
             Action::Remove => {
-                let (s, q) = self.current_event.unwrap().remove_quantity(
-                    decision.agent,
-                    &self.countries[choice],
-                    self.period(),
-                );
-                self.remove_influence(s, choice, q);
+                let event = self.current_event.unwrap();
+                let remove_quantity = event.influence_quantity(self, &Action::Remove, choice);
+                let remove_side = match event {
+                    Card::De_Stalinization => Side::USSR,
+                    _ => side.opposite(),
+                };
+                self.remove_influence(remove_side, choice, remove_quantity);
             }
             Action::War => {
                 let brush = match self.current_event.unwrap() {
@@ -319,6 +332,14 @@ impl GameState {
         let decoded = DecodedChoice::new(decision.action, Some(choice));
         history.push(decoded);
         decision.next_decision(&history, self)
+    }
+    fn wwby(&mut self, safe: bool) {
+        if let Some(pos) = self.effect_pos(Side::US, Effect::WWBY) {
+            if !safe {
+                self.vp -= 3;
+            }
+            self.us_effects.swap_remove(pos);
+        }
     }
     /// Return true if the side has the effect, else false.
     pub fn has_effect(&self, side: Side, effect: Effect) -> bool {
@@ -477,7 +498,8 @@ impl GameState {
         }
     }
     pub fn add_mil_ops(&mut self, side: Side, amount: i8) {
-        self.mil_ops[side as usize] += amount;
+        let mil_ops = self.mil_ops[side as usize];
+        self.mil_ops[side as usize] = std::cmp::min(5, mil_ops + amount);
     }
     pub fn take_realign(&mut self, country_index: usize, mut us_roll: i8, mut ussr_roll: i8) {
         // This should include superpowers as well

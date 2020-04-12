@@ -18,6 +18,11 @@ lazy_static! {
     pub static ref SOUTH_AMERICA: Vec<usize> = Region::SouthAmerica.all_countries();
     pub static ref CENTRAL_AMERICA: Vec<usize> = Region::CentralAmerica.all_countries();
     pub static ref SOUTHEAST_ASIA: Vec<usize> = Region::SoutheastAsia.all_countries();
+    pub static ref LATIN_AMERICA: Vec<usize> = {
+        let mut v = SOUTH_AMERICA.clone();
+        v.extend(CENTRAL_AMERICA.iter().copied());
+        v
+    };
     pub static ref INDIA_PAKISTAN: Vec<usize> =
         vec![CName::India as usize, CName::Pakistan as usize];
     pub static ref SUEZ: Vec<usize> = vec![

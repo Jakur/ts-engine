@@ -1,8 +1,7 @@
-use crate::action::{self, Action, Decision};
-use crate::card::Card;
+use crate::action::{self, Decision};
 use crate::country::Side;
 use crate::game::Game;
-use crate::state::{DebugRand, GameState, TwilightRand};
+use crate::state::{DebugRand, GameState};
 use crate::tensor::{DecodedChoice, OutputIndex, OutputVec, TensorOutput};
 
 use rand::prelude::*;

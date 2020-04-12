@@ -152,6 +152,11 @@ pub enum Card {
     SALT_Negotiations,
     Bear_Trap,
     Summit,
+    How_I_Learned_To_Stop_Worrying, // I'm sorry this is so long
+    Junta,
+    Kitchen_Debates,
+    Missile_Envy,
+    We_Will_Bury_You = 50,
 }
 
 impl Card {
@@ -161,34 +166,8 @@ impl Card {
     pub fn total() -> usize {
         NUM_CARDS
     }
-    pub fn max_e_choices(&self) -> usize {
-        match self {
-            Card::Blockade => 2,
-            Card::Olympic_Games => 2,
-            Card::Warsaw_Pact_Formed => 2,
-            _ => 1,
-        }
-    }
     pub fn is_special(&self) -> bool {
         self.max_e_choices() > 1
-    }
-    /// Returns the list of event options an agent can select from this given
-    /// card. If the return is None, the default behavior of just picking
-    /// option 0 is sufficient.
-    pub fn e_choices(&self, state: &GameState) -> Option<Vec<usize>> {
-        use Card::*;
-        match self {
-            Blockade => {
-                if state.cards_at_least(Side::US, 3).is_empty() {
-                    Some(vec![0])
-                } else {
-                    Some(vec![0, 1])
-                }
-            }
-            Olympic_Games => Some(vec![0, 1]),
-            Warsaw_Pact_Formed => Some(vec![0, 1]),
-            _ => None,
-        }
     }
     pub fn influence_quantity(&self, state: &GameState, action: &Action, choice: usize) -> i8 {
         use Card::*;
@@ -209,28 +188,37 @@ impl Card {
                     state.countries[choice].us
                 }
             }
+            Junta => 2,
             _ => 1,
         }
     }
-    pub fn remove_quantity(&self, agent: Side, target: &Country, p: Period) -> (Side, i8) {
+    pub fn max_e_choices(&self) -> usize {
+        match self {
+            Card::Blockade => 2,
+            Card::Olympic_Games => 2,
+            Card::Warsaw_Pact_Formed => 2,
+            Card::Junta => 2,
+            _ => 1,
+        }
+    }
+    /// Returns the list of event options an agent can select from this given
+    /// card. If the return is None, the default behavior of just picking
+    /// option 0 is sufficient.
+    pub fn e_choices(&self, state: &GameState) -> Option<Vec<usize>> {
         use Card::*;
-        let s = match self {
-            De_Stalinization => Side::USSR,
-            _ => agent.opposite(),
-        };
-        let q = match self {
-            Warsaw_Pact_Formed | Truman_Doctrine => target.influence(s),
-            East_European_Unrest => {
-                if let Period::Late = p {
-                    2
+        match self {
+            Blockade => {
+                if state.cards_at_least(Side::US, 3).is_empty() {
+                    Some(vec![0])
                 } else {
-                    1
+                    Some(vec![0, 1])
                 }
             }
-            _ => 1,
-        };
-        let q = std::cmp::min(q, target.influence(s));
-        (s, q)
+            Olympic_Games => Some(vec![0, 1]),
+            Warsaw_Pact_Formed => Some(vec![0, 1]),
+            Junta => Some(vec![0, 1]),
+            _ => None,
+        }
     }
     pub fn special_event<R: TwilightRand>(
         &self,
@@ -312,6 +300,19 @@ impl Card {
                     };
                     pending_actions.push(x);
                 }
+            }
+            Junta => {
+                let action = if choice == 0 {
+                    Action::Coup
+                } else {
+                    Action::Realignment
+                };
+                let legal = opp_has_inf(&country::LATIN_AMERICA, side, state);
+                let ops = self.modified_ops(side, state);
+                let d2 = Decision::with_quantity(side, action, legal, ops);
+                pending_actions.push(d2);
+                let d1 = Decision::new(side, Action::Place, &country::LATIN_AMERICA[..]);
+                pending_actions.push(d1);
             }
             _ => unimplemented!(),
         }
@@ -641,8 +642,19 @@ impl Card {
                     pending_actions.push(Decision::new(Side::USSR, Action::ChangeDefcon, defcon));
                 }
             }
+            How_I_Learned_To_Stop_Worrying => {
+                let d = Decision::new(side, Action::ChangeDefcon, vec![1, 2, 3, 4, 5]);
+                state.add_mil_ops(side, 5);
+                pending_actions.push(d);
+            }
+            Missile_Envy => todo!(),
+            We_Will_Bury_You => {
+                state.defcon -= 1;
+                state.us_effects.push(Effect::WWBY);
+            }
+            Kitchen_Debates => state.vp += 2,
             The_China_Card => {}
-            Olympic_Games | Blockade | Warsaw_Pact_Formed => unimplemented!(),
+            Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta => unimplemented!(),
         }
         return true;
     }
@@ -664,6 +676,19 @@ impl Card {
                     .hand(*state.side())
                     .iter()
                     .any(|c| c.side() == opp)
+            }
+            Kitchen_Debates => {
+                // Todo figure out if it's worth caching the bg list
+                let us_lead = state
+                    .valid_countries()
+                    .iter()
+                    .filter(|c| c.bg)
+                    .fold(0, |acc, c| match c.controller() {
+                        Side::US => acc + 1,
+                        Side::USSR => acc - 1,
+                        _ => acc,
+                    });
+                us_lead > 0
             }
             _ => true, // todo make this accurate
         }

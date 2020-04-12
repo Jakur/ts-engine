@@ -21,6 +21,7 @@ pub enum Effect {
     BearTrap,
     NorthSeaOil,
     NoOpec,
+    WWBY,
 }
 
 impl Effect {
