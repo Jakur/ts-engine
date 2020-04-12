@@ -125,8 +125,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 return win;
             }
         }
-        dbg!(self.state.deck.hand(Side::US));
-        dbg!(self.state.deck.hand(Side::USSR));
         let us_held = self.state.deck.held_scoring(Side::US);
         let ussr_held = self.state.deck.held_scoring(Side::USSR);
         // Holding cards is illegal, but it's possible in the physical game
@@ -168,7 +166,10 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         let ussr_card = Card::from_index(ussr_decoded.choice.unwrap());
 
         // Hands cannot be empty at the HL phase
-        let decisions = (Decision::new_event(ussr_card), Decision::new_event(us_card));
+        let decisions = (
+            Decision::new_event(Side::USSR, ussr_card),
+            Decision::new_event(Side::US, us_card),
+        );
 
         // Headline order
         if us_card.base_ops() >= ussr_card.base_ops() {

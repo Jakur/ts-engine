@@ -6,6 +6,7 @@ pub struct Deck {
     us_hand: Vec<Card>,
     ussr_hand: Vec<Card>,
     discard_pile: Vec<Card>,
+    pending_discard: Vec<Card>,
     draw_pile: Vec<Card>,
     removed: Vec<Card>,
     china: Side,
@@ -18,6 +19,7 @@ impl Deck {
             us_hand: Vec::new(),
             ussr_hand: Vec::new(),
             discard_pile: Vec::new(),
+            pending_discard: Vec::new(),
             draw_pile: Vec::new(),
             removed: Vec::new(),
             china: Side::USSR,
@@ -87,16 +89,19 @@ impl Deck {
             self.draw_card(rng, Side::US);
         }
     }
-    /// Searches the discard pile for a played card and removes it.
+    /// Searches the pending discard pile for a played card and removes it.
     pub fn remove_card(&mut self, card: Card) -> Result<(), DeckError> {
-        let found = self.discard_pile.iter().rposition(|&c| c == card);
+        let found = self.pending_discard.iter().position(|&c| c == card);
         if let Some(i) = found {
-            let c = self.discard_pile.remove(i); // Should be fast since i should be near the end
+            let c = self.pending_discard.swap_remove(i);
             self.removed.push(c);
             Ok(())
         } else {
             Err(DeckError::CannotFind)
         }
+    }
+    pub fn flush_pending(&mut self) {
+        self.discard_pile.append(&mut self.pending_discard);
     }
     pub fn random_card<T: TwilightRand>(&self, side: Side, rng: &mut T) -> Option<Card> {
         rng.card_from_hand(self, side)
@@ -174,30 +179,26 @@ impl Deck {
         self.china_up = false;
     }
     pub fn play_card(&mut self, side: Side, card: Card) -> Result<(), DeckError> {
-        dbg!(card);
         if let Card::The_China_Card = card {
             self.play_china();
             Ok(())
         } else {
+            // Already ready to be discarded
+            if self.pending_discard.contains(&card) {
+                return Ok(());
+            }
             match side {
-                s @ Side::US | s @ Side::USSR => {
-                    let hand = self.hand_mut(s);
+                Side::US | Side::USSR => {
+                    let hand = self.hand_mut(side);
                     let index = hand
                         .iter()
                         .position(|&c| c == card)
                         .ok_or(DeckError::CannotFind)?;
-                    let _card = hand.swap_remove(index);
+                    let card = hand.swap_remove(index);
+                    self.pending_discard.push(card);
                     Ok(())
                 }
-                Side::Neutral => {
-                    if self.play_card(Side::US, card).is_err()
-                        && self.play_card(Side::USSR, card).is_err()
-                    {
-                        Err(DeckError::CannotFind)
-                    } else {
-                        Ok(())
-                    }
-                }
+                Side::Neutral => Err(DeckError::CannotFind),
             }
         }
     }

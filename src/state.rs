@@ -68,6 +68,7 @@ impl GameState {
             self.ar += 1;
         }
         self.side = self.side.opposite();
+        self.deck.flush_pending();
         win
     }
     pub fn check_win(&self) -> Option<Side> {
@@ -163,24 +164,22 @@ impl GameState {
                 let card = Card::from_index(choice);
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
-                let event = Decision::new_event(card);
+                let event = Decision::new_event(side, card);
                 pending.push(conduct);
                 pending.push(event);
                 self.deck.play_card(side, card).expect("Found");
-                let _ = self.deck.try_discard(card);
             }
             Action::OpsEvent => {
                 let card = Card::from_index(choice);
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
-                let event = Decision::new_event(card);
+                let event = Decision::new_event(side, card);
                 pending.push(event);
                 pending.push(conduct);
                 if card == Card::The_China_Card {
                     self.china = true;
                 }
                 self.deck.play_card(side, card).expect("Found");
-                let _ = self.deck.try_discard(card);
             }
             Action::Ops => {
                 let card = Card::from_index(choice);
@@ -192,16 +191,13 @@ impl GameState {
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 pending.push(conduct);
                 self.deck.play_card(side, card).expect("Found");
-                let _ = self.deck.try_discard(card);
             }
             Action::Event => {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
                 self.deck.play_card(side, card).expect("Found");
-                let _ = self.deck.try_discard(card);
                 if card.event(self, pending, rng) && card.is_starred() {
-                    let removed = self.deck.remove_card(card);
-                    assert!(removed.is_ok());
+                    self.deck.remove_card(card).expect("Remove Failure");
                 }
             }
             Action::SpecialEvent => {
@@ -286,12 +282,8 @@ impl GameState {
             }
             Action::Remove => {
                 let event = self.current_event.unwrap();
-                let remove_quantity = event.influence_quantity(self, &Action::Remove, choice);
-                let remove_side = match event {
-                    Card::De_Stalinization => Side::USSR,
-                    _ => side.opposite(),
-                };
-                self.remove_influence(remove_side, choice, remove_quantity);
+                let (rs, rq) = event.remove_quantity(side, &self.countries[choice], self.period());
+                self.remove_influence(rs, choice, rq);
             }
             Action::War => {
                 let brush = match self.current_event.unwrap() {
@@ -557,7 +549,7 @@ impl GameState {
         }
     }
     pub fn discard_card(&mut self, side: Side, card: Card) {
-        self.deck.play_card(side, card);
+        self.deck.play_card(side, card).expect("Found");
     }
     /// Returns cards in hand at least the given value. China is never
     /// included.

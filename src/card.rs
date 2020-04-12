@@ -192,6 +192,26 @@ impl Card {
             _ => 1,
         }
     }
+    pub fn remove_quantity(&self, agent: Side, target: &Country, p: Period) -> (Side, i8) {
+        use Card::*;
+        let s = match self {
+            De_Stalinization => Side::USSR,
+            _ => agent.opposite(),
+        };
+        let q = match self {
+            Warsaw_Pact_Formed | Truman_Doctrine => target.influence(s),
+            East_European_Unrest => {
+                if let Period::Late = p {
+                    2
+                } else {
+                    1
+                }
+            }
+            _ => 1,
+        };
+        let q = std::cmp::min(q, target.influence(s));
+        (s, q)
+    }
     pub fn max_e_choices(&self) -> usize {
         match self {
             Card::Blockade => 2,

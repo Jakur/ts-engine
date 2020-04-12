@@ -58,8 +58,8 @@ impl Decision {
         }
     }
     /// Creates a (trivial) decision for eventing a single given card
-    pub fn new_event(card: Card) -> Self {
-        Decision::new(card.side(), Action::Event, vec![card as usize])
+    pub fn new_event(caller: Side, card: Card) -> Self {
+        Decision::new(caller, Action::Event, vec![card as usize])
     }
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);
