@@ -64,6 +64,61 @@ fn encode_offsets(data: Vec<usize>) -> OutputVec {
     data.into_iter().map(|x| OutputIndex::new(x)).collect()
 }
 
+impl Decision {
+    fn encode_begin_ar(&self, state: &GameState) -> OutputVec {
+        let side = self.agent;
+        // Quagmire / Bear Trap
+        if (side == Side::US && state.has_effect(side, Effect::Quagmire))
+            || (side == Side::USSR && state.has_effect(side, Effect::BearTrap))
+        {
+            let can_discard = state.cards_at_least(state.side, 2);
+            if can_discard.is_empty() {
+                // Must play scoring cards then pass
+                let scoring = state.deck.scoring_cards(side);
+                if scoring.is_empty() {
+                    return encode_offsets(vec![Action::Pass.offset()]);
+                } else {
+                    let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
+                    let d = Decision::new(side, Action::Event, scoring);
+                    return d.encode(state);
+                }
+            } else {
+                // If must play scoring cards for the rest of the turn
+                if state
+                    .deck
+                    .must_play_scoring(side, state.max_ar(side) - state.ar)
+                {
+                    let scoring = state.deck.scoring_cards(side);
+                    let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
+                    let x = Decision::new(side, Action::Event, scoring);
+                    return x.encode(state);
+                }
+                // Else discard normally
+                let legal: Vec<_> = can_discard.into_iter().map(|x| x as usize).collect();
+                let x = Decision::new(state.side, Action::Discard, legal);
+                return x.encode(state);
+            }
+        }
+        let space = state.legal_space(self.agent);
+        let space_d = Decision::new(self.agent, Action::Space, space);
+        let mut out = space_d.encode(state);
+        let cc = |vec: Vec<Card>| vec.into_iter().map(|c| c as usize).collect::<Vec<_>>();
+        let before_after = cc(state.deck.opp_events_fire(side, state));
+        let event = cc(state.deck.can_event(side, state));
+        let ops = cc(state.deck.can_play_ops(side, state));
+        let e_ops = Decision::new(self.agent, Action::EventOps, before_after.clone());
+        let ops_e = Decision::new(self.agent, Action::OpsEvent, before_after);
+        let e = Decision::new(self.agent, Action::Event, event);
+        let ops = Decision::new(self.agent, Action::Ops, ops);
+        out.extend(e_ops.encode(state));
+        out.extend(ops_e.encode(state));
+        out.extend(e.encode(state));
+        out.extend(ops.encode(state));
+        // Todo rarer things like discarding with space power
+        out
+    }
+}
+
 pub(crate) trait TensorOutput {
     fn encode(&self, state: &GameState) -> OutputVec;
 }
@@ -73,56 +128,38 @@ impl TensorOutput for Decision {
         let begin = self.action.offset();
         let out = match self.action {
             Action::BeginAr => {
-                let side = self.agent;
-                // Quagmire / Bear Trap
-                if (side == Side::US && state.has_effect(side, Effect::Quagmire))
-                    || (side == Side::USSR && state.has_effect(side, Effect::BearTrap))
+                let mut standard = if state.has_effect(self.agent, Effect::MissileEnvy) {
+                    let d =
+                        Decision::new(self.agent, Action::Ops, vec![Card::Missile_Envy as usize]);
+                    d.encode(state)
+                } else {
+                    self.encode_begin_ar(state)
+                };
+                if state
+                    .deck
+                    .must_play_scoring(self.agent, state.ar_left(self.agent))
                 {
-                    let can_discard = state.cards_at_least(state.side, 2);
-                    if can_discard.is_empty() {
-                        // Must play scoring cards then pass
-                        let scoring = state.deck.scoring_cards(side);
-                        if scoring.is_empty() {
-                            return encode_offsets(vec![Action::Pass.offset()]);
+                    // Check to see if we're already allowed to play a scoring card
+                    let scoring_play = standard.iter().any(|x| {
+                        let decoded = x.decode();
+                        if decoded.action == Action::Event {
+                            let card = decoded.choice.map(|i| Card::from_index(i)).unwrap();
+                            card.is_scoring()
                         } else {
-                            let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
-                            let d = Decision::new(side, Action::Event, scoring);
-                            return d.encode(state);
+                            false
                         }
-                    } else {
-                        // If must play scoring cards for the rest of the turn
-                        if state
-                            .deck
-                            .must_play_scoring(side, state.max_ar(side) - state.ar)
-                        {
-                            let scoring = state.deck.scoring_cards(side);
-                            let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
-                            let x = Decision::new(side, Action::Event, scoring);
-                            return x.encode(state);
-                        }
-                        // Else discard normally
-                        let legal: Vec<_> = can_discard.into_iter().map(|x| x as usize).collect();
-                        let x = Decision::new(state.side, Action::Discard, legal);
-                        return x.encode(state);
+                    });
+                    if !scoring_play {
+                        // If not add scoring card events to our legal list
+                        let scoring = state.deck.scoring_cards(self.agent);
+                        standard.extend(scoring.into_iter().map(|card| {
+                            let a = Action::Event;
+                            let offset = card as usize;
+                            OutputIndex::new(a.offset() + offset)
+                        }));
                     }
                 }
-                let space = state.legal_space(self.agent);
-                let space_d = Decision::new(self.agent, Action::Space, space);
-                let mut out = space_d.encode(state);
-                let cc = |vec: Vec<Card>| vec.into_iter().map(|c| c as usize).collect::<Vec<_>>();
-                let before_after = cc(state.deck.opp_events_fire(side, state));
-                let event = cc(state.deck.can_event(side, state));
-                let ops = cc(state.deck.can_play_ops(side, state));
-                let e_ops = Decision::new(self.agent, Action::EventOps, before_after.clone());
-                let ops_e = Decision::new(self.agent, Action::OpsEvent, before_after);
-                let e = Decision::new(self.agent, Action::Event, event);
-                let ops = Decision::new(self.agent, Action::Ops, ops);
-                out.extend(e_ops.encode(state));
-                out.extend(ops_e.encode(state));
-                out.extend(e.encode(state));
-                out.extend(ops.encode(state));
-                // Todo rarer things like discarding with space power
-                out
+                standard
             }
             Action::ConductOps => {
                 let inf = state.legal_influence(self.agent, self.quantity);

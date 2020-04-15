@@ -132,18 +132,19 @@ pub enum Action {
     Coup,
     Space,
     Realignment,
-    Place,   //Side, amount, can place in opponent controlled
-    Remove,  // Side, remove all
-    Discard, // Side
+    Place,
+    Remove,
+    Discard,
     Ops,
     OpsEvent,
     EventOps,
     Event,
     SpecialEvent,
-    War, // Side, is brush war?
+    War,
     CubanMissile,
     RecoverCard, // SALT
     ChangeDefcon,
+    ChooseCard, // Generic choice over cards for unusual events
     Pass,
 }
 
@@ -166,6 +167,7 @@ impl Action {
             CubanMissile => 3,
             RecoverCard => cards,
             ChangeDefcon => 6, // Todo avoid DEFCON 0?
+            ChooseCard => cards,
             Pass => 1,
         }
     }

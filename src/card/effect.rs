@@ -21,6 +21,7 @@ pub enum Effect {
     BearTrap,
     NorthSeaOil,
     NoOpec,
+    MissileEnvy,
     WWBY,
 }
 
@@ -37,6 +38,7 @@ impl Effect {
             Nato => true,
             BearTrap | Quagmire => true, // Can span multiple turns
             NoOpec => true,              // The lasting part of North Sea Oil
+            MissileEnvy => true,         // Can span multiple turns, technically
             _ => false,
         }
     }

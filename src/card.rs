@@ -667,7 +667,17 @@ impl Card {
                 state.add_mil_ops(side, 5);
                 pending_actions.push(d);
             }
-            Missile_Envy => todo!(),
+            Missile_Envy => {
+                let allowed: Vec<_> = state
+                    .deck
+                    .highest_ops(side.opposite())
+                    .into_iter()
+                    .map(|c| c as usize)
+                    .collect();
+                let d = Decision::new(side.opposite(), Action::ChooseCard, allowed);
+                pending_actions.push(d);
+                // Set missile envy effect when the above decision resolves
+            }
             We_Will_Bury_You => {
                 state.defcon -= 1;
                 state.us_effects.push(Effect::WWBY);

@@ -75,6 +75,20 @@ impl Deck {
                 .fold(0, |acc, x| if x.is_scoring() { acc + 1 } else { acc });
         scoring_count >= ar_left
     }
+    /// Returns a vector of the cards with the highest ops value in the side's
+    /// hand, excluding the China Card.
+    pub fn highest_ops(&self, side: Side) -> Vec<Card> {
+        let hand = self.hand(side);
+        let max_val = hand.iter().map(|c| c.base_ops()).max();
+        match max_val {
+            Some(max) => hand
+                .iter()
+                .copied()
+                .filter(|c| c.base_ops() == max)
+                .collect(),
+            None => Vec::new(),
+        }
+    }
     pub fn draw_cards<T: TwilightRand>(&mut self, target: usize, rng: &mut T) {
         let mut side = Side::USSR;
         // Oscillating is relevant when reshuffles do occur

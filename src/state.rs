@@ -316,6 +316,32 @@ impl GameState {
             Action::RecoverCard => {
                 self.deck.recover_card(side, Card::from_index(choice));
             }
+            Action::ChooseCard => {
+                let event = self.current_event.expect("Some event");
+                match event {
+                    Card::Missile_Envy => {
+                        let chosen_card = Card::from_index(choice);
+                        self.deck.play_card(side, chosen_card).expect("Has card");
+                        if chosen_card.side() == side {
+                            // Opponent Card -> Ops
+                            let ops = chosen_card.modified_ops(side.opposite(), self);
+                            let dec = Decision::with_quantity(
+                                side.opposite(),
+                                Action::ConductOps,
+                                &[],
+                                ops,
+                            );
+                            pending.push(dec);
+                        } else {
+                            // ME eventer side card, or neutral
+                            let dec = Decision::new_event(side.opposite(), chosen_card);
+                            pending.push(dec);
+                        }
+                        self.add_effect(side, Effect::MissileEnvy);
+                    }
+                    _ => unimplemented!(),
+                }
+            }
             Action::ChangeDefcon => self.defcon = choice as i8,
             Action::BeginAr | Action::ConductOps | Action::Pass | Action::ClearEvent => {
                 unreachable!()
@@ -833,6 +859,23 @@ impl GameState {
     pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
         self.restrict = Some(Restriction::Limit(limit));
         // Todo restriction clear more nicely
+    }
+    pub fn ar_left(&self, side: Side) -> i8 {
+        let goal = match self.period() {
+            Period::Early => 6,
+            _ => 7,
+        };
+        match side {
+            Side::US => goal - self.ar + 1,
+            Side::USSR => {
+                if self.side == Side::US {
+                    goal - self.ar
+                } else {
+                    goal - self.ar + 1
+                }
+            }
+            _ => unimplemented!(),
+        }
     }
     pub fn is_final_scoring(&self) -> bool {
         self.turn > 10
