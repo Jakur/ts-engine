@@ -11,7 +11,7 @@ pub mod effect;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Summit as usize + 1;
+const NUM_CARDS: usize = Card::Willy_Brandt as usize + 1;
 
 const IND_REDS: [usize; 5] = [
     CName::Yugoslavia as usize,
@@ -833,6 +833,18 @@ mod tests {
         let cards: Vec<_> = (1..NUM_CARDS).map(|x| Card::from_u8(x as u8)).collect();
         for c in cards {
             assert!(c.is_some());
+        }
+    }
+    #[test]
+    fn check_special_cards() {
+        let state = GameState::new();
+        for c in (1..Card::total()).map(|i| Card::from_index(i)) {
+            let e_choices = c.e_choices(&state);
+            if c.is_special() {
+                assert!(e_choices.is_some()); // Some, even in dummy state
+            } else {
+                assert!(e_choices.is_none());
+            }
         }
     }
 }
