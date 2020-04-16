@@ -101,6 +101,16 @@ fn init_cards() -> Vec<Attributes> {
         c(Neutral, 3).star(),
         c(US, 3).star(),
         c(Neutral, 1), // Summit
+        c(Neutral, 2).star(),
+        c(Neutral, 2),
+        c(US, 1).star(),
+        c(Neutral, 2),
+        c(USSR, 4).star(),
+        c(USSR, 3).star(),
+        c(USSR, 2).star(),
+        c(USSR, 2),
+        c(USSR, 1).star(),
+        c(USSR, 2).star(), // Willy
     ];
     x
 }
@@ -157,6 +167,11 @@ pub enum Card {
     Kitchen_Debates,
     Missile_Envy,
     We_Will_Bury_You = 50,
+    Brezhnev_Doctrine,
+    Portuguese_Empire_Crumbles,
+    South_African_Unrest,
+    Allende,
+    Willy_Brandt,
 }
 
 impl Card {
@@ -218,6 +233,7 @@ impl Card {
             Card::Olympic_Games => 2,
             Card::Warsaw_Pact_Formed => 2,
             Card::Junta => 2,
+            Card::South_African_Unrest => 2,
             _ => 1,
         }
     }
@@ -237,6 +253,7 @@ impl Card {
             Olympic_Games => Some(vec![0, 1]),
             Warsaw_Pact_Formed => Some(vec![0, 1]),
             Junta => Some(vec![0, 1]),
+            South_African_Unrest => Some(vec![0, 1]),
             _ => None,
         }
     }
@@ -333,6 +350,15 @@ impl Card {
                 pending_actions.push(d2);
                 let d1 = Decision::new(side, Action::Place, &country::LATIN_AMERICA[..]);
                 pending_actions.push(d1);
+            }
+            South_African_Unrest => {
+                if choice == 0 {
+                    state.countries[CName::SouthAfrica as usize].ussr += 2;
+                } else {
+                    let allowed = vec![CName::Angola as usize, CName::Botswana as usize];
+                    let d = Decision::with_quantity(Side::USSR, Action::Place, allowed, 2);
+                    pending_actions.push(d);
+                }
             }
             _ => unimplemented!(),
         }
@@ -683,8 +709,21 @@ impl Card {
                 state.us_effects.push(Effect::WWBY);
             }
             Kitchen_Debates => state.vp += 2,
+            Brezhnev_Doctrine => state.ussr_effects.push(Effect::Brezhnev),
+            Portuguese_Empire_Crumbles => {
+                state.countries[CName::Angola as usize].ussr += 2;
+                state.countries[CName::SEAfricanStates as usize].ussr += 2;
+            }
+            Allende => state.countries[CName::Chile as usize].ussr += 2,
+            Willy_Brandt => {
+                state.vp -= 1;
+                state.countries[CName::WGermany as usize].ussr += 1;
+                state.ussr_effects.push(Effect::WillyBrandt);
+            }
             The_China_Card => {}
-            Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta => unimplemented!(),
+            Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
+                unimplemented!()
+            }
         }
         return true;
     }
@@ -720,6 +759,7 @@ impl Card {
                     });
                 us_lead > 0
             }
+            Willy_Brandt => !state.has_effect(Side::US, Effect::TearDown),
             _ => true, // todo make this accurate
         }
     }

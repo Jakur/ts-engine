@@ -8,9 +8,9 @@ pub enum Effect {
     Containment,
     Brezhnev,
     CampDavid,
-    AllowNato,
-    DeGaulle,
-    Nato,
+    AllowNato, // NATO
+    DeGaulle,  // NATO
+    Nato,      // NATO
     US_Hand_Revealed,
     USSR_Hand_Revealed,
     US_Japan,
@@ -23,6 +23,8 @@ pub enum Effect {
     NoOpec,
     MissileEnvy,
     WWBY,
+    WillyBrandt, // NATO
+    TearDown,
 }
 
 impl Effect {
@@ -39,6 +41,7 @@ impl Effect {
             BearTrap | Quagmire => true, // Can span multiple turns
             NoOpec => true,              // The lasting part of North Sea Oil
             MissileEnvy => true,         // Can span multiple turns, technically
+            WillyBrandt => true,
             _ => false,
         }
     }
