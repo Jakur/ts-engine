@@ -219,6 +219,9 @@ impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
         OutputIndex { data }
     }
+    pub fn pass() -> OutputIndex {
+        OutputIndex::new(Action::Pass.offset())
+    }
     // Encode a single action-choice pair.
     pub fn encode_single(action: Action, choice: usize) -> Self {
         Self::new(action.offset() + choice)

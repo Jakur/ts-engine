@@ -383,7 +383,7 @@ impl Card {
             } else {
                 Decision::new(side, Action::SpecialEvent, legal)
             };
-            let clear = Decision::new(side, Action::ClearEvent, &[]);
+            let clear = Decision::new(Side::Neutral, Action::ClearEvent, &[]);
             pending_actions.push(clear);
             pending_actions.push(d);
             return true;
@@ -391,7 +391,7 @@ impl Card {
         if !self.can_event(state) {
             return false;
         }
-        let clear = Decision::new(side, Action::ClearEvent, &[]);
+        let clear = Decision::new(Side::Neutral, Action::ClearEvent, &[]);
         pending_actions.push(clear);
         match self {
             Asia_Scoring => {

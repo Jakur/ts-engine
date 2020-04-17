@@ -71,7 +71,38 @@ impl GameState {
         self.deck.flush_pending();
         win
     }
+    pub fn advance_turn(&mut self) -> Option<Side> {
+        use std::cmp::max;
+        let us_held = self.deck.held_scoring(Side::US);
+        let ussr_held = self.deck.held_scoring(Side::USSR);
+        // Holding cards is illegal, but it's possible in the physical game
+        if us_held && ussr_held {
+            return Some(Side::US); // US wins if both players cheat
+        } else if us_held {
+            return Some(Side::USSR);
+        } else if ussr_held {
+            return Some(Side::US);
+        }
+        // Mil ops
+        let defcon = self.defcon;
+        let us_pen = max(defcon - self.mil_ops[Side::US as usize], 0);
+        let ussr_pen = max(defcon - self.mil_ops[Side::USSR as usize], 0);
+        // These are penalties, so the signs are reversed from usual
+        self.vp -= us_pen;
+        self.vp += ussr_pen;
+        self.turn += 1;
+        // Reset Defcon and Mil ops for next turn
+        self.defcon = std::cmp::min(defcon + 1, 5);
+        self.mil_ops[0] = 0;
+        self.mil_ops[1] = 0;
+        // Check win before cleanup due to scoring cards held
+        let win = self.check_win();
+        self.deck.end_turn_cleanup();
+        self.turn_effect_clear();
+        win
+    }
     pub fn check_win(&self) -> Option<Side> {
+        dbg!(self.defcon);
         if self.defcon < 2 {
             return Some(self.side.opposite());
         }

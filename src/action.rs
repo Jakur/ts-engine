@@ -174,6 +174,9 @@ impl Action {
     pub fn offset(&self) -> usize {
         OFFSETS[*self as usize]
     }
+    pub fn from_index(index: usize) -> Action {
+        Action::from_usize(index).unwrap()
+    }
     pub fn action_index(data: usize) -> usize {
         let res = OFFSETS.binary_search(&data);
         match res {
