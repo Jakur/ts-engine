@@ -6,7 +6,9 @@ use crate::tensor::DecodedChoice;
 use counter::Counter;
 
 use std::collections::HashSet;
+mod pending;
 mod random;
+pub use pending::Pending;
 pub use random::{DebugRand, InternalRand, TwilightRand};
 
 #[derive(Clone)]
@@ -62,26 +64,26 @@ impl GameState {
         c[Austria as usize].ussr = 1;
         state
     }
-    pub fn advance_ply(&mut self) -> Option<Side> {
-        let win = self.check_win();
+    pub fn advance_ply(&mut self) -> Result<(), Win> {
+        self.check_win()?;
         if let Side::US = self.side {
             self.ar += 1;
         }
         self.side = self.side.opposite();
         self.deck.flush_pending();
-        win
+        Ok(())
     }
-    pub fn advance_turn(&mut self) -> Option<Side> {
+    pub fn advance_turn(&mut self) -> Result<(), Win> {
         use std::cmp::max;
         let us_held = self.deck.held_scoring(Side::US);
         let ussr_held = self.deck.held_scoring(Side::USSR);
         // Holding cards is illegal, but it's possible in the physical game
         if us_held && ussr_held {
-            return Some(Side::US); // US wins if both players cheat
+            return Err(Win::HeldScoring(Side::US)); // US wins if both players cheat
         } else if us_held {
-            return Some(Side::USSR);
+            return Err(Win::HeldScoring(Side::USSR));
         } else if ussr_held {
-            return Some(Side::US);
+            return Err(Win::HeldScoring(Side::US));
         }
         // Mil ops
         let defcon = self.defcon;
@@ -96,22 +98,23 @@ impl GameState {
         self.mil_ops[0] = 0;
         self.mil_ops[1] = 0;
         // Check win before cleanup due to scoring cards held
-        let win = self.check_win();
+        self.check_win()?;
         self.deck.end_turn_cleanup();
         self.turn_effect_clear();
-        win
+        Ok(())
     }
-    pub fn check_win(&self) -> Option<Side> {
+    pub fn check_win(&self) -> Result<(), Win> {
         dbg!(self.defcon);
         if self.defcon < 2 {
-            return Some(self.side.opposite());
+            let side = self.side.opposite();
+            return Err(Win::Defcon(side));
         }
         if self.vp >= 20 {
-            return Some(Side::US);
+            return Err(Win::Vp(Side::US));
         } else if self.vp <= -20 {
-            return Some(Side::USSR);
+            return Err(Win::Vp(Side::USSR));
         }
-        None
+        Ok(())
     }
     pub fn side(&self) -> &Side {
         &self.side
@@ -162,6 +165,16 @@ impl GameState {
                     }
                 }
             }
+        }
+    }
+    pub fn resolve_neutral(&mut self, action: Action) -> Result<(), Win> {
+        match action {
+            Action::EndAr => self.advance_ply(),
+            Action::ClearEvent => {
+                self.current_event = None;
+                self.check_win()
+            }
+            _ => unimplemented!(),
         }
     }
     pub fn resolve_action<R: TwilightRand>(
@@ -918,6 +931,13 @@ pub enum Period {
     Early,
     Middle,
     Late,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Win {
+    Defcon(Side),
+    Vp(Side),
+    HeldScoring(Side),
 }
 
 #[cfg(test)]

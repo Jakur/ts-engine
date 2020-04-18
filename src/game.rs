@@ -2,8 +2,22 @@ use crate::action::{Action, Decision};
 use crate::agent::{Actors, Agent, ScriptedAgent};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::{DebugRand, GameState, TwilightRand};
+use crate::state::{DebugRand, GameState, TwilightRand, Win};
 use crate::tensor::{DecodedChoice, OutputIndex, TensorOutput};
+
+#[derive(Clone, Copy)]
+enum Blocked {
+    US,
+    USSR,
+    Both, // Only possible in the headline
+    Ready,
+}
+
+#[derive(Clone, Copy)]
+enum Status {
+    HL,
+    AR,
+}
 
 pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     pub actors: Actors<A, B>,
@@ -11,6 +25,8 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     pub rng: R,
     pending_actions: Vec<Decision>,
     ply_history: Vec<DecodedChoice>,
+    us_buf: Vec<DecodedChoice>,
+    ussr_buf: Vec<DecodedChoice>,
 }
 
 impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
@@ -22,6 +38,8 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             rng,
             pending_actions: Vec::new(),
             ply_history: Vec::new(),
+            us_buf: Vec::new(),
+            ussr_buf: Vec::new(),
         }
     }
     pub fn setup(&mut self) {
@@ -29,7 +47,26 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.state.deck.draw_cards(8, &mut self.rng);
         self.initial_placement();
     }
-    pub fn consume_action(&mut self, decoded: DecodedChoice) -> Option<Side> {
+    pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<(), Win> {
+        let goal = if self.state.turn <= 3 { 6 } else { 8 };
+
+        let win = self.consume(decoded)?;
+        if self.state.ar > goal {
+            self.state.advance_turn()?;
+            if self.state.turn > 10 {
+                // Final scoring
+                todo!()
+            }
+            self.pending_actions = self.hl_order();
+        } else {
+            if self.state.ar > self.goal_ar(self.state.side) {
+                // Done for the turn
+                self.state.advance_ply()?;
+            }
+        }
+        Ok(())
+    }
+    fn consume(&mut self, decoded: DecodedChoice) -> Result<(), Win> {
         let mut decision = match self.pending_actions.pop() {
             Some(d) => d,
             _ => todo!(),
@@ -65,7 +102,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                         let second = Decision::new_event(decision.agent, card);
                         let first = self.pending_actions.pop().unwrap();
                         self.pending_actions = vec![second, first];
-                        return None;
+                        todo!()
                     } else {
                         // One has already decided, thus find resolution order
                         let d = Decision::new_event(decision.agent, card);
@@ -101,28 +138,31 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             dbg!(&x);
             self.pending_actions.push(x);
         } else {
-            dbg!(&self.pending_actions);
-            if self.state.ar == 0 && !self.pending_actions.is_empty() {
-                let win = self.state.check_win();
-                return win;
+            while let Side::Neutral = decision.agent {
+                self.state.resolve_neutral(decision.action)?;
             }
-            if self.pending_actions.is_empty() {
-                let win = self.state.advance_ply();
-                dbg!(win);
-                if self.state.ar > self.goal_ar() {
-                    let win = self.state.advance_turn();
-                    self.pending_actions = self.hl_order();
-                    return win;
-                } else {
-                    self.pending_actions
-                        .push(Decision::begin_ar(self.state.side));
-                }
-                return win;
-            }
+            // dbg!(&self.pending_actions);
+            // if self.state.ar == 0 && !self.pending_actions.is_empty() {
+            //     let win = self.state.check_win();
+            //     return win;
+            // }
+            // if self.pending_actions.is_empty() {
+            //     let win = self.state.advance_ply();
+            //     dbg!(win);
+            //     if self.state.ar > self.goal_ar() {
+            //         let win = self.state.advance_turn();
+            //         self.pending_actions = self.hl_order();
+            //         return win;
+            //     } else {
+            //         self.pending_actions
+            //             .push(Decision::begin_ar(self.state.side));
+            //     }
+            //     return win;
+            // }
         }
-        None
+        Ok(())
     }
-    fn resolve_neutral(&mut self) -> Option<Side> {
+    fn resolve_neutral(&mut self) -> Result<(), Win> {
         let decision = match self.pending_actions.pop() {
             Some(d) => d,
             _ => todo!(),
@@ -140,19 +180,30 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             panic!("Expected neutral side!");
         }
     }
-    fn goal_ar(&self) -> i8 {
+    fn goal_ar(&self, side: Side) -> i8 {
         use crate::card::Effect;
         if self.state.turn <= 3 {
             6
         } else {
-            if self.state.space[0] == 8
-                || self.state.space[1] == 8
-                || self.state.has_effect(Side::US, Effect::NorthSeaOil)
-            {
-                8
-            } else {
-                7
+            let mut goal = 7;
+            let us_space = self.state.space[Side::US as usize];
+            let ussr_space = self.state.space[Side::USSR as usize];
+            match side {
+                Side::US => {
+                    if (us_space == 8 && us_space > ussr_space)
+                        || self.state.has_effect(Side::US, Effect::NorthSeaOil)
+                    {
+                        goal += 1;
+                    }
+                }
+                Side::USSR => {
+                    if ussr_space == 8 && ussr_space > us_space {
+                        goal += 1;
+                    }
+                }
+                _ => unimplemented!(),
             }
+            goal
         }
     }
     fn hl_order(&self) -> Vec<Decision> {

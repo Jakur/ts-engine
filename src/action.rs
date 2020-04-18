@@ -50,6 +50,12 @@ impl Decision {
     where
         T: Into<Allowed>,
     {
+        match action {
+            Action::BeginAr | Action::EndAr | Action::ClearEvent => {
+                assert_eq!(agent, Side::Neutral)
+            }
+            _ => assert_ne!(agent, Side::Neutral),
+        }
         Decision {
             agent,
             action,
@@ -126,8 +132,9 @@ impl Decision {
 #[derive(Clone, Copy, FromPrimitive, Debug, PartialEq)]
 pub enum Action {
     BeginAr = 0,
-    ConductOps,
+    EndAr,
     ClearEvent,
+    ConductOps,
     Influence,
     Coup,
     Space,
@@ -158,7 +165,7 @@ impl Action {
         let countries = crate::country::NUM_COUNTRIES - 2;
         let cards = Card::total();
         match self {
-            ConductOps | BeginAr | ClearEvent => 1, // meta action or dummy
+            ConductOps | BeginAr | ClearEvent | EndAr => 1, // meta action or dummy
             Influence | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
