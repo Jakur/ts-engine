@@ -10,7 +10,9 @@ pub struct Pending {
 impl Pending {
     pub fn add(&mut self, state: &GameState, decision: Decision) {
         // After
-        match decision.action {
+        let act = decision.action;
+        let side = decision.agent;
+        match act {
             Action::Event => {
                 self.pending
                     .push(Decision::new(Side::Neutral, Action::ClearEvent, &[]))
@@ -18,19 +20,21 @@ impl Pending {
             Action::BeginAr => self
                 .pending
                 .push(Decision::new(Side::Neutral, Action::EndAr, &[])),
+            _ => {}
         }
 
         self.pending.push(decision);
 
         // Before
-        match decision.action {
+        match act {
             Action::Coup | Action::ConductOps => {
-                if state.has_effect(decision.agent, Effect::CubanMissileCrisis) {
-                    let legal = state.legal_cuban(decision.agent);
+                if state.has_effect(side, Effect::CubanMissileCrisis) {
+                    let legal = state.legal_cuban(side);
                     self.pending
-                        .push(Decision::new(decision.agent, Action::CubanMissile, legal));
+                        .push(Decision::new(side, Action::CubanMissile, legal));
                 }
             }
+            _ => {}
         }
     }
     pub fn remove(&mut self) -> Option<Decision> {

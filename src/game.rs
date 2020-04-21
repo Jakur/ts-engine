@@ -138,9 +138,11 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             dbg!(&x);
             self.pending_actions.push(x);
         } else {
-            while let Side::Neutral = decision.agent {
-                self.state.resolve_neutral(decision.action)?;
-            }
+            todo!();
+            // while let Side::Neutral = decision.agent {
+            //     todo!()
+            //     // self.state.resolve_neutral(decision.action)?;
+            // }
             // dbg!(&self.pending_actions);
             // if self.state.ar == 0 && !self.pending_actions.is_empty() {
             //     let win = self.state.check_win();
@@ -221,16 +223,16 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         }
     }
     pub fn do_ply(&mut self) -> Option<Side> {
-        let pending = vec![Decision::begin_ar(self.state.side)];
-        self.resolve_actions(pending);
-        let win = self.state.advance_ply();
-        win
+        todo!();
+        // let pending = vec![Decision::begin_ar(self.state.side)];
+        // self.resolve_actions(pending);
+        // let win = self.state.advance_ply();
+        // win
     }
-    pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> (Side, i8) {
+    pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> Result<(), Win> {
         // self.initial_placement();
-        let mut instant_win = None;
         self.pending_actions = self.hl_order();
-        while instant_win.is_none() && self.state.turn <= goal_turn {
+        while self.state.turn <= goal_turn {
             let next = self.pending_actions.last().unwrap();
             let agent = self.actors.get(next.agent);
             let legal = next.encode(&self.state);
@@ -243,188 +245,59 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 agent.decide(&self.state, legal)
             };
             dbg!(&decoded);
-            instant_win = self.consume_action(decoded);
-            if let Some(winner) = instant_win {
-                let amt = if let Side::US = winner { 20 } else { -20 };
-                return (winner, amt);
-            } else {
-                while let Some(d) = self.pending_actions.last() {
-                    if d.agent != Side::Neutral {
-                        break;
-                    }
-                    instant_win = self.resolve_neutral();
+            self.consume_action(decoded)?;
+
+            while let Some(d) = self.pending_actions.last() {
+                if d.agent != Side::Neutral {
+                    break;
                 }
-            }
-            dbg!(instant_win);
-        }
-        if let Some(winner) = instant_win {
-            // Always make instant wins 20 point victories
-            if let Side::USSR = winner {
-                (winner, -20)
-            } else {
-                (winner, 20)
-            }
-        } else {
-            if self.state.turn >= 10 {
-                self.final_scoring()
-            } else {
-                (Side::Neutral, self.state.vp)
+                let pass = DecodedChoice::new(Action::Pass, None);
+                self.consume_action(pass)?;
             }
         }
+        if self.state.turn >= 10 {
+            let res = self.final_scoring();
+            return Err(res);
+        }
+        Ok(())
     }
     fn initial_placement(&mut self) {
         use crate::country::{EASTERN_EUROPE, WESTERN_EUROPE};
-        let mut pending_actions = Vec::new();
-        // USSR
-        let x = Decision::with_quantity(Side::USSR, Action::Place, &EASTERN_EUROPE[..], 6);
-        pending_actions.push(x);
-        self.resolve_actions(pending_actions);
-        // US
-        pending_actions = Vec::new();
-        let x = Decision::with_quantity(Side::US, Action::Place, &WESTERN_EUROPE[..], 7);
-        pending_actions.push(x);
-        self.resolve_actions(pending_actions);
-        // US Bonus + 2
-        for _ in 0..2 {
-            let mut pa = Vec::new();
-            let mem: Vec<_> = self
-                .state
-                .valid_countries()
-                .iter()
-                .enumerate()
-                .filter_map(|(i, x)| {
-                    // Apparently bonus influence cannot exceed stab + 2
-                    if x.us > 0 && x.us < x.stability + 2 {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let dec = Decision::new(Side::US, Action::Place, mem);
-            pa.push(dec);
-            self.resolve_actions(pa);
-        }
+        todo!();
+        // let mut pending_actions = Vec::new();
+        // // USSR
+        // let x = Decision::with_quantity(Side::USSR, Action::Place, &EASTERN_EUROPE[..], 6);
+        // pending_actions.push(x);
+        // self.resolve_actions(pending_actions);
+        // // US
+        // pending_actions = Vec::new();
+        // let x = Decision::with_quantity(Side::US, Action::Place, &WESTERN_EUROPE[..], 7);
+        // pending_actions.push(x);
+        // self.resolve_actions(pending_actions);
+        // // US Bonus + 2
+        // for _ in 0..2 {
+        //     let mut pa = Vec::new();
+        //     let mem: Vec<_> = self
+        //         .state
+        //         .valid_countries()
+        //         .iter()
+        //         .enumerate()
+        //         .filter_map(|(i, x)| {
+        //             // Apparently bonus influence cannot exceed stab + 2
+        //             if x.us > 0 && x.us < x.stability + 2 {
+        //                 Some(i)
+        //             } else {
+        //                 None
+        //             }
+        //         })
+        //         .collect();
+        //     let dec = Decision::new(Side::US, Action::Place, mem);
+        //     pa.push(dec);
+        //     self.resolve_actions(pa);
+        // }
     }
-    fn do_turn(&mut self, goal_ar: i8) -> Option<Side> {
-        use std::cmp::max;
-
-        if self.state.ar == 0 {
-            self.state.side = Side::USSR;
-            self.headline();
-            self.state.ar = 1;
-        }
-        self.state.side = Side::USSR;
-        while self.state.ar <= goal_ar {
-            // AR 8 space power
-            // Todo North Sea Oil
-            if self.state.ar == 8 {
-                let space = self.state.space[self.state.side as usize];
-                if space < 8 {
-                    let win = self.state.advance_ply();
-                    if win.is_some() {
-                        return win;
-                    }
-                    continue;
-                }
-            }
-            let pending = vec![Decision::begin_ar(self.state.side)];
-            self.resolve_actions(pending);
-            let win = self.state.advance_ply();
-            if win.is_some() {
-                return win;
-            }
-        }
-        let us_held = self.state.deck.held_scoring(Side::US);
-        let ussr_held = self.state.deck.held_scoring(Side::USSR);
-        // Holding cards is illegal, but it's possible in the physical game
-        if us_held && ussr_held {
-            return Some(Side::US); // US wins if both players cheat
-        } else if us_held {
-            return Some(Side::USSR);
-        } else if ussr_held {
-            return Some(Side::US);
-        }
-        // Mil ops
-        let defcon = self.state.defcon;
-        let us_pen = max(defcon - self.state.mil_ops[Side::US as usize], 0);
-        let ussr_pen = max(defcon - self.state.mil_ops[Side::USSR as usize], 0);
-        // These are penalties, so the signs are reversed from usual
-        self.state.vp -= us_pen;
-        self.state.vp += ussr_pen;
-        self.state.turn += 1;
-        // Reset Defcon and Mil ops for next turn
-        self.state.defcon = std::cmp::min(defcon + 1, 5);
-        self.state.mil_ops[0] = 0;
-        self.state.mil_ops[1] = 0;
-        // Check win before cleanup due to scoring cards held
-        let win = self.state.check_win();
-        self.state.deck.end_turn_cleanup();
-        self.state.turn_effect_clear();
-        win
-    }
-    fn headline(&mut self) {
-        // Todo see headline ability, can event card
-        let us = &self.actors.us_agent;
-        let us_decision = Decision::headline(Side::US, &self.state);
-        let us_decoded = us.decide(&self.state, us_decision.encode(&self.state));
-        let us_card = Card::from_index(us_decoded.choice.unwrap());
-
-        let ussr = &self.actors.ussr_agent;
-        let ussr_decision = Decision::headline(Side::USSR, &self.state);
-        let ussr_decoded = ussr.decide(&self.state, ussr_decision.encode(&self.state));
-        let ussr_card = Card::from_index(ussr_decoded.choice.unwrap());
-
-        // Hands cannot be empty at the HL phase
-        let decisions = (
-            Decision::new_event(Side::USSR, ussr_card),
-            Decision::new_event(Side::US, us_card),
-        );
-
-        // Headline order
-        if us_card.base_ops() >= ussr_card.base_ops() {
-            self.state.side = Side::US;
-            self.resolve_actions(vec![decisions.1]);
-            self.state.side = Side::USSR;
-            self.resolve_actions(vec![decisions.0]);
-        } else {
-            self.state.side = Side::USSR;
-            self.resolve_actions(vec![decisions.0]);
-            self.state.side = Side::US;
-            self.resolve_actions(vec![decisions.1]);
-        }
-    }
-    fn resolve_actions(&mut self, mut pending: Vec<Decision>) {
-        use crate::card::Effect;
-        let mut offered_cuban = false;
-        while let Some(d) = pending.pop() {
-            // let mut history = Vec::new(); // Todo figure out how to handle this
-            // Cuban Missile Crisis
-            if !offered_cuban {
-                match &d.action {
-                    Action::Coup | Action::ConductOps => {
-                        if self.state.has_effect(d.agent, Effect::CubanMissileCrisis) {
-                            let legal_cuban = self.state.legal_cuban(d.agent);
-                            if !legal_cuban.slice().is_empty() {
-                                let cuban_d =
-                                    Decision::new(d.agent, Action::CubanMissile, legal_cuban);
-                                pending.push(d);
-                                pending.push(cuban_d);
-                                offered_cuban = true;
-                                continue;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            let mut decision = Some(d);
-            while let Some(remaining) = decision {
-                // todo!();
-                decision = self.resolve_single(remaining);
-                self.state.china = false; // Todo better place for this?
-            }
-        }
+    fn resolve_actions(vec: Vec<Decision>) {
+        unimplemented!();
     }
     fn resolve_single(&mut self, mut decision: Decision) -> Option<Decision> {
         use crate::tensor::OutputIndex;
@@ -466,7 +339,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         );
         res
     }
-    fn final_scoring(&mut self) -> (Side, i8) {
+    fn final_scoring(&mut self) -> Win {
         use crate::country::Region::*;
         // Score Europe last, to let autoset to +20 vp
         let order = [
@@ -481,9 +354,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             r.score(&mut self.state);
         }
         if self.state.vp >= 0 {
-            (Side::US, self.state.vp)
+            Win::Vp(Side::US)
         } else {
-            (Side::USSR, self.state.vp)
+            Win::Vp(Side::USSR)
         }
     }
 }
@@ -519,7 +392,7 @@ mod tests {
         // game.state.deck.ussr_hand_mut().push(Card::Summot)
         game.pending_actions = vec![Decision::new(Side::USSR, Action::BeginAr, &[])];
         // game.pla
-        assert_eq!(game.play(10, None).0, Side::US);
+        assert_eq!(game.play(10, None), Err(Win::Defcon(Side::US)));
     }
     fn test_traps() {
         // let mut game = standard_start();
@@ -545,6 +418,8 @@ mod tests {
             rng,
             pending_actions: Vec::new(),
             ply_history: Vec::new(),
+            us_buf: Vec::new(),
+            ussr_buf: Vec::new(),
         };
         game.setup();
         game

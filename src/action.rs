@@ -272,6 +272,10 @@ mod tests {
     use super::*;
     use crate::country::CName;
     #[test]
+    fn test_size() {
+        dbg!(std::mem::size_of::<Allowed>());
+    }
+    #[test]
     fn test_action_offsets() {
         let mut last = 0;
         for i in 0..NUM_ACTIONS {

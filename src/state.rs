@@ -387,9 +387,11 @@ impl GameState {
                 }
             }
             Action::ChangeDefcon => self.defcon = choice as i8,
-            Action::BeginAr | Action::ConductOps | Action::Pass | Action::ClearEvent => {
-                unreachable!()
-            }
+            Action::BeginAr
+            | Action::EndAr
+            | Action::ConductOps
+            | Action::Pass
+            | Action::ClearEvent => unreachable!(),
         }
         let decoded = DecodedChoice::new(decision.action, Some(choice));
         history.push(decoded);
@@ -933,7 +935,7 @@ pub enum Period {
     Late,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Win {
     Defcon(Side),
     Vp(Side),

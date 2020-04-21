@@ -68,7 +68,7 @@ impl ScriptedAgent {
         }
     }
     pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
-        let (_win, _pts) = game.play(goal_t, Some(goal_ar));
+        let _x = game.play(goal_t, Some(goal_ar));
     }
     fn next(&self) -> Option<OutputIndex> {
         self.choices.lock().unwrap().pop()
