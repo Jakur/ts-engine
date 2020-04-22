@@ -115,6 +115,15 @@ fn init_cards() -> Vec<Attributes> {
     x
 }
 
+macro_rules! pa {
+    ($s:ident, $d:ident) => {
+        $s.add_pending($d);
+    };
+    ($s:ident, $d:expr) => {
+        $s.add_pending($d);
+    };
+}
+
 #[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum Card {
     Asia_Scoring = 1,
@@ -261,7 +270,6 @@ impl Card {
         &self,
         state: &mut GameState,
         choice: usize,
-        pending_actions: &mut Vec<Decision>,
         rng: &mut R,
     ) -> bool {
         use Card::*;
@@ -283,7 +291,7 @@ impl Card {
                         .map(|c| c as usize)
                         .collect();
                     let d = Decision::new(Side::US, Action::Discard, cards);
-                    pending_actions.push(d);
+                    // pa!(state, d);
                 }
             }
             Warsaw_Pact_Formed => {
@@ -297,16 +305,16 @@ impl Card {
                         not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
                         4,
                     );
-                    pending_actions.push(x);
+                    pa!(state, x);
                 } else {
-                    state.set_limit(2, pending_actions);
+                    state.set_limit(2);
                     let x = Decision::with_quantity(
                         Side::USSR,
                         Action::Place,
                         &country::EASTERN_EUROPE[..],
                         5,
                     );
-                    pending_actions.push(x);
+                    pa!(state, x);
                 }
             }
             Olympic_Games => {
@@ -335,7 +343,7 @@ impl Card {
                     } else {
                         Decision::conduct_ops(side, 4)
                     };
-                    pending_actions.push(x);
+                    pa!(state, x);
                 }
             }
             Junta => {
@@ -347,9 +355,9 @@ impl Card {
                 let legal = opp_has_inf(&country::LATIN_AMERICA, side, state);
                 let ops = self.modified_ops(side, state);
                 let d2 = Decision::with_quantity(side, action, legal, ops);
-                pending_actions.push(d2);
+                pa!(state, d2);
                 let d1 = Decision::new(side, Action::Place, &country::LATIN_AMERICA[..]);
-                pending_actions.push(d1);
+                pa!(state, d1);
             }
             South_African_Unrest => {
                 if choice == 0 {
@@ -357,19 +365,14 @@ impl Card {
                 } else {
                     let allowed = vec![CName::Angola as usize, CName::Botswana as usize];
                     let d = Decision::with_quantity(Side::USSR, Action::Place, allowed, 2);
-                    pending_actions.push(d);
+                    pa!(state, d);
                 }
             }
             _ => unimplemented!(),
         }
         true
     }
-    pub fn event<R: TwilightRand>(
-        &self,
-        state: &mut GameState,
-        pending_actions: &mut Vec<Decision>,
-        rng: &mut R,
-    ) -> bool {
+    pub fn event<R: TwilightRand>(&self, state: &mut GameState, rng: &mut R) -> bool {
         use Card::*;
         let side = match self.side() {
             s @ Side::US | s @ Side::USSR => s,
@@ -384,15 +387,15 @@ impl Card {
                 Decision::new(side, Action::SpecialEvent, legal)
             };
             let clear = Decision::new(Side::Neutral, Action::ClearEvent, &[]);
-            pending_actions.push(clear);
-            pending_actions.push(d);
+            pa!(state, clear);
+            pa!(state, d);
             return true;
         }
         if !self.can_event(state) {
             return false;
         }
         let clear = Decision::new(Side::Neutral, Action::ClearEvent, &[]);
-        pending_actions.push(clear);
+        pa!(state, clear);
         match self {
             Asia_Scoring => {
                 Region::Asia.score(state);
@@ -423,7 +426,7 @@ impl Card {
                             Decision::new(Side::US, Action::Event, &[])
                         };
                         state.current_event = Some(card);
-                        pending_actions.push(d);
+                        pa!(state, d);
                     }
                     state.discard_card(Side::USSR, card);
                 }
@@ -435,8 +438,8 @@ impl Card {
                     opp_has_inf(&country::WESTERN_EUROPE[..], Side::USSR, &state),
                     3,
                 );
-                state.set_limit(2, pending_actions);
-                pending_actions.push(x);
+                state.set_limit(2);
+                pa!(state, x);
             }
             Fidel => {
                 state.remove_all(Side::US, CName::Cuba);
@@ -474,8 +477,8 @@ impl Card {
                     not_opp_cont(&country::EASTERN_EUROPE[..], side, state),
                     4,
                 );
-                state.set_limit(1, pending_actions);
-                pending_actions.push(x);
+                state.set_limit(1);
+                pa!(state, x);
             }
             Nasser => {
                 let c = &mut state.countries[CName::Egypt as usize];
@@ -492,42 +495,44 @@ impl Card {
             Captured_Nazi_Scientist => {
                 state.space_card(*state.side(), 1); // Todo ensure state.side is accurate
             }
-            Truman_Doctrine => pending_actions.push(Decision::new(
-                Side::US,
-                Action::Remove,
-                not_opp_cont(&country::EUROPE[..], side, state),
-            )),
+            Truman_Doctrine => pa!(
+                state,
+                Decision::new(
+                    Side::US,
+                    Action::Remove,
+                    not_opp_cont(&country::EUROPE[..], side, state),
+                )
+            ),
             NATO => {
                 state.us_effects.push(Effect::Nato);
             }
             Independent_Reds => {
                 let allowed = opp_has_inf(&IND_REDS, Side::US, state);
                 let x = Decision::new(Side::US, Action::Place, allowed);
-                pending_actions.push(x);
+                pa!(state, x);
             }
             Marshall_Plan => {
                 if !state.us_effects.contains(&Effect::AllowNato) {
                     state.us_effects.push(Effect::AllowNato);
                 }
-                state.set_limit(1, pending_actions);
+                state.set_limit(1);
                 let x = Decision::with_quantity(
                     Side::US,
                     Action::Place,
                     not_opp_cont(&country::WESTERN_EUROPE[..], side, state),
                     7,
                 );
-                pending_actions.push(x);
+                pa!(state, x);
             }
-            Indo_Pakistani_War => pending_actions.push(Decision::new(
-                *state.side(),
-                Action::War,
-                &country::INDIA_PAKISTAN[..],
-            )),
+            Indo_Pakistani_War => pa!(
+                state,
+                Decision::new(*state.side(), Action::War, &country::INDIA_PAKISTAN[..],)
+            ),
             Containment => state.us_effects.push(Effect::Containment),
             CIA_Created => {
                 let offset = std::cmp::max(0, state.base_ops_offset(Side::US));
                 state.us_effects.push(Effect::USSR_Hand_Revealed);
-                pending_actions.push(Decision::conduct_ops(Side::US, 1 + offset));
+                pa!(state, Decision::conduct_ops(Side::US, 1 + offset));
             }
             US_Japan_Mutual_Defense_Pact => {
                 state.control(Side::US, CName::Japan);
@@ -541,23 +546,23 @@ impl Card {
                     opp_has_inf(&country::SUEZ[..], side, state),
                     4,
                 );
-                state.set_limit(2, pending_actions);
-                pending_actions.push(x);
+                state.set_limit(2);
+                pa!(state, x);
             }
             East_European_Unrest => {
-                state.set_limit(1, pending_actions);
+                state.set_limit(1);
                 let x = Decision::with_quantity(
                     Side::US,
                     Action::Remove,
                     opp_has_inf(&country::EASTERN_EUROPE[..], side, state),
                     3,
                 );
-                pending_actions.push(x);
+                pa!(state, x);
             }
             Decolonization => {
-                state.set_limit(1, pending_actions);
+                state.set_limit(1);
                 let x = Decision::with_quantity(Side::USSR, Action::Place, &country::DECOL[..], 4);
-                pending_actions.push(x);
+                pa!(state, x);
             }
             Red_Scare_Purge => state.add_effect(*state.side(), Effect::RedScarePurge),
             UN_Intervention => {
@@ -575,10 +580,10 @@ impl Card {
                     })
                     .collect();
                 let d = Decision::new(side, Action::Ops, vec);
-                pending_actions.push(d);
+                pa!(state, d);
             }
             De_Stalinization => {
-                state.set_limit(2, pending_actions);
+                state.set_limit(2);
                 let dest: Vec<_> = state
                     .valid_countries()
                     .iter()
@@ -605,8 +610,8 @@ impl Card {
                     })
                     .collect();
                 let y = Decision::with_quantity(Side::USSR, Action::Remove, source, 4);
-                pending_actions.push(x);
-                pending_actions.push(y);
+                pa!(state, x);
+                pa!(state, y);
             }
             Nuclear_Test_Ban => {
                 let vps = state.defcon - 2;
@@ -618,9 +623,10 @@ impl Card {
                 state.defcon = std::cmp::min(5, state.defcon + 2);
             }
             Formosan_Resolution => state.us_effects.push(Effect::FormosanResolution),
-            Brush_War => {
-                pending_actions.push(Decision::new(side, Action::War, state.legal_war(side)))
-            }
+            Brush_War => pa!(
+                state,
+                Decision::new(side, Action::War, state.legal_war(side))
+            ),
             Central_America_Scoring => {
                 Region::CentralAmerica.score(state);
             }
@@ -652,7 +658,7 @@ impl Card {
                     .map(|c| *c as usize)
                     .collect();
                 let d = Decision::new(side, Action::RecoverCard, allowed);
-                pending_actions.push(d)
+                pa!(state, d)
             }
             Bear_Trap => state.add_effect(side.opposite(), Effect::BearTrap),
             Summit => {
@@ -682,16 +688,19 @@ impl Card {
                     .collect();
                 if us_roll > ussr_roll {
                     state.vp += 2;
-                    pending_actions.push(Decision::new(Side::US, Action::ChangeDefcon, defcon));
+                    pa!(state, Decision::new(Side::US, Action::ChangeDefcon, defcon));
                 } else if ussr_roll > us_roll {
                     state.vp -= 2;
-                    pending_actions.push(Decision::new(Side::USSR, Action::ChangeDefcon, defcon));
+                    pa!(
+                        state,
+                        Decision::new(Side::USSR, Action::ChangeDefcon, defcon)
+                    );
                 }
             }
             How_I_Learned_To_Stop_Worrying => {
                 let d = Decision::new(side, Action::ChangeDefcon, vec![1, 2, 3, 4, 5]);
                 state.add_mil_ops(side, 5);
-                pending_actions.push(d);
+                pa!(state, d);
             }
             Missile_Envy => {
                 let allowed: Vec<_> = state
@@ -701,7 +710,7 @@ impl Card {
                     .map(|c| c as usize)
                     .collect();
                 let d = Decision::new(side.opposite(), Action::ChooseCard, allowed);
-                pending_actions.push(d);
+                pa!(state, d);
                 // Set missile envy effect when the above decision resolves
             }
             We_Will_Bury_You => {

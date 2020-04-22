@@ -6,9 +6,7 @@ use crate::tensor::DecodedChoice;
 use counter::Counter;
 
 use std::collections::HashSet;
-mod pending;
 mod random;
-pub use pending::Pending;
 pub use random::{DebugRand, InternalRand, TwilightRand};
 
 #[derive(Clone)]
@@ -29,6 +27,7 @@ pub struct GameState {
     pub current_event: Option<Card>,
     pub vietnam: bool,
     pub china: bool,
+    pending: Vec<Decision>,
 }
 
 impl GameState {
@@ -50,6 +49,7 @@ impl GameState {
             current_event: None,
             vietnam: false,
             china: false,
+            pending: Vec::new(),
         }
     }
     pub fn four_four_two() -> GameState {
@@ -181,7 +181,6 @@ impl GameState {
         &mut self,
         mut decision: Decision,
         choice: Option<usize>,
-        pending: &mut Vec<Decision>,
         history: &mut Vec<DecodedChoice>,
         rng: &mut R,
     ) -> Option<Decision> {
@@ -209,8 +208,8 @@ impl GameState {
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 let event = Decision::new_event(side, card);
-                pending.push(conduct);
-                pending.push(event);
+                self.add_pending(conduct);
+                self.add_pending(event);
                 self.deck.play_card(side, card).expect("Found");
             }
             Action::OpsEvent => {
@@ -218,8 +217,8 @@ impl GameState {
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 let event = Decision::new_event(side, card);
-                pending.push(event);
-                pending.push(conduct);
+                self.add_pending(event);
+                self.add_pending(conduct);
                 if card == Card::The_China_Card {
                     self.china = true;
                 }
@@ -233,20 +232,20 @@ impl GameState {
                     self.china = true;
                 }
                 let conduct = Decision::conduct_ops(decision.agent, ops);
-                pending.push(conduct);
+                self.add_pending(conduct);
                 self.deck.play_card(side, card).expect("Found");
             }
             Action::Event => {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
                 self.deck.play_card(side, card).expect("Found");
-                if card.event(self, pending, rng) && card.is_starred() {
+                if card.event(self, rng) && card.is_starred() {
                     self.deck.remove_card(card).expect("Remove Failure");
                 }
             }
             Action::SpecialEvent => {
                 let card = self.current_event;
-                card.unwrap().special_event(self, choice, pending, rng);
+                card.unwrap().special_event(self, choice, rng);
                 // Todo reset current event ?
             }
             Action::Space => {
@@ -375,11 +374,11 @@ impl GameState {
                                 &[],
                                 ops,
                             );
-                            pending.push(dec);
+                            self.add_pending(dec);
                         } else {
                             // ME eventer side card, or neutral
                             let dec = Decision::new_event(side.opposite(), chosen_card);
-                            pending.push(dec);
+                            self.add_pending(dec);
                         }
                         self.add_effect(side, Effect::MissileEnvy);
                     }
@@ -899,12 +898,54 @@ impl GameState {
             _ => unimplemented!(),
         }
     }
-    pub fn mil_ops(&self, side: Side) -> i8 {
-        self.mil_ops[side as usize]
+    pub fn add_pending(&mut self, decision: Decision) {
+        // After
+        let act = decision.action;
+        let side = decision.agent;
+        match act {
+            Action::Event => {
+                self.pending
+                    .push(Decision::new(Side::Neutral, Action::ClearEvent, &[]))
+            }
+            Action::BeginAr => self
+                .pending
+                .push(Decision::new(Side::Neutral, Action::EndAr, &[])),
+            _ => {}
+        }
+
+        self.pending.push(decision);
+
+        // Before
+        match act {
+            Action::Coup | Action::ConductOps => {
+                if self.has_effect(side, Effect::CubanMissileCrisis) {
+                    let legal = self.legal_cuban(side);
+                    self.pending
+                        .push(Decision::new(side, Action::CubanMissile, legal));
+                }
+            }
+            _ => {}
+        }
     }
-    pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
+    pub fn remove_pending(&mut self) -> Option<Decision> {
+        self.pending.pop()
+    }
+    pub fn peek_pending(&self) -> Option<&Decision> {
+        self.pending.last()
+    }
+    pub fn peek_pending_mut(&mut self) -> Option<&mut Decision> {
+        self.pending.last_mut()
+    }
+    pub fn set_pending(&mut self, pending: Vec<Decision>) {
+        assert!(self.pending.is_empty());
+        self.pending = pending;
+    }
+    pub fn set_limit(&mut self, limit: usize) {
         self.restrict = Some(Restriction::Limit(limit));
         // Todo restriction clear more nicely
+    }
+    pub fn mil_ops(&self, side: Side) -> i8 {
+        self.mil_ops[side as usize]
     }
     pub fn ar_left(&self, side: Side) -> i8 {
         let goal = match self.period() {

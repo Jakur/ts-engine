@@ -23,7 +23,6 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     pub actors: Actors<A, B>,
     pub state: GameState,
     pub rng: R,
-    pending_actions: Vec<Decision>,
     ply_history: Vec<DecodedChoice>,
     us_buf: Vec<DecodedChoice>,
     ussr_buf: Vec<DecodedChoice>,
@@ -36,7 +35,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             actors,
             state,
             rng,
-            pending_actions: Vec::new(),
             ply_history: Vec::new(),
             us_buf: Vec::new(),
             ussr_buf: Vec::new(),
@@ -57,7 +55,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 // Final scoring
                 todo!()
             }
-            self.pending_actions = self.hl_order();
+            self.state.set_pending(self.hl_order());
         } else {
             if self.state.ar > self.goal_ar(self.state.side) {
                 // Done for the turn
@@ -67,7 +65,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         Ok(())
     }
     fn consume(&mut self, decoded: DecodedChoice) -> Result<(), Win> {
-        let mut decision = match self.pending_actions.pop() {
+        let mut decision = match self.state.remove_pending() {
             Some(d) => d,
             _ => todo!(),
         };
@@ -97,16 +95,16 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 // Undecided
                 if decision.allowed.slice().len() > 1 {
                     let card = Card::from_index(choice.unwrap());
-                    if self.pending_actions.last().unwrap().allowed.slice().len() > 1 {
+                    if self.state.peek_pending().unwrap().allowed.slice().len() > 1 {
                         // Both undecided
                         let second = Decision::new_event(decision.agent, card);
-                        let first = self.pending_actions.pop().unwrap();
-                        self.pending_actions = vec![second, first];
+                        let first = self.state.remove_pending().unwrap();
+                        self.state.set_pending(vec![second, first]);
                         todo!()
                     } else {
                         // One has already decided, thus find resolution order
                         let d = Decision::new_event(decision.agent, card);
-                        let d2 = self.pending_actions.pop().unwrap();
+                        let d2 = self.state.remove_pending().unwrap();
                         let card2 = Card::from_index(d2.allowed.slice()[0]);
                         let order = {
                             if card.base_ops() > card2.base_ops() {
@@ -119,24 +117,20 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                                 vec![d, d2]
                             }
                         };
-                        self.pending_actions = order;
+                        self.state.set_pending(order);
                     }
                 } else {
                     self.state.side = decision.agent; // Set phasing side
                 }
             }
         }
-        let next_d = self.state.resolve_action(
-            decision,
-            choice,
-            &mut self.pending_actions,
-            &mut self.ply_history,
-            &mut self.rng,
-        );
+        let next_d =
+            self.state
+                .resolve_action(decision, choice, &mut self.ply_history, &mut self.rng);
         if let Some(x) = next_d {
             // Still resolving parts of this action
             dbg!(&x);
-            self.pending_actions.push(x);
+            self.state.add_pending(x);
         } else {
             todo!();
             // while let Side::Neutral = decision.agent {
@@ -165,18 +159,13 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         Ok(())
     }
     fn resolve_neutral(&mut self) -> Result<(), Win> {
-        let decision = match self.pending_actions.pop() {
+        let decision = match self.state.remove_pending() {
             Some(d) => d,
             _ => todo!(),
         };
         if let Side::Neutral = decision.agent {
-            self.state.resolve_action(
-                decision,
-                None,
-                &mut self.pending_actions,
-                &mut self.ply_history,
-                &mut self.rng,
-            );
+            self.state
+                .resolve_action(decision, None, &mut self.ply_history, &mut self.rng);
             return self.state.check_win();
         } else {
             panic!("Expected neutral side!");
@@ -231,9 +220,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     }
     pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> Result<(), Win> {
         // self.initial_placement();
-        self.pending_actions = self.hl_order();
+        self.state.set_pending(self.hl_order());
         while self.state.turn <= goal_turn {
-            let next = self.pending_actions.last().unwrap();
+            let next = self.state.remove_pending().unwrap();
             let agent = self.actors.get(next.agent);
             let legal = next.encode(&self.state);
             dbg!(&legal);
@@ -247,7 +236,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             dbg!(&decoded);
             self.consume_action(decoded)?;
 
-            while let Some(d) = self.pending_actions.last() {
+            while let Some(d) = self.state.peek_pending() {
                 if d.agent != Side::Neutral {
                     break;
                 }
@@ -330,13 +319,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             decision =
                 Decision::with_quantity(decision.agent, action, new_legal, decision.quantity);
         }
-        let res = self.state.resolve_action(
-            decision,
-            choice,
-            &mut self.pending_actions,
-            &mut self.ply_history,
-            &mut self.rng,
-        );
+        let res = self
+            .state
+            .resolve_action(decision, choice, &mut self.ply_history, &mut self.rng);
         res
     }
     fn final_scoring(&mut self) -> Win {
