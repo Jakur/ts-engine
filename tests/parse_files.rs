@@ -36,8 +36,8 @@ fn events1() {
     let mut game = ts_engine::record::parse_lines(&s);
     game.setup();
     dbg!(game.state.turn);
-    let (s, _) = game.play(1, None);
-    assert_eq!(Side::Neutral, s);
+    let res = game.play(1, None);
+    assert!(res.is_ok());
     let us = [
         (Canada, 3),
         (UK, 4),

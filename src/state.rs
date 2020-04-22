@@ -156,7 +156,7 @@ impl GameState {
                     if !bad.is_empty() {
                         let vec: Vec<_> = decision
                             .allowed
-                            .slice()
+                            .slice(&self)
                             .iter()
                             .copied()
                             .filter(|x| !bad.contains(x))
@@ -940,6 +940,9 @@ impl GameState {
         assert!(self.pending.is_empty());
         self.pending = pending;
     }
+    pub fn empty_pending(&self) -> bool {
+        self.pending.is_empty()
+    }
     pub fn set_limit(&mut self, limit: usize) {
         self.restrict = Some(Restriction::Limit(limit));
         // Todo restriction clear more nicely
@@ -981,6 +984,16 @@ pub enum Win {
     Defcon(Side),
     Vp(Side),
     HeldScoring(Side),
+}
+
+impl Win {
+    pub fn winner(&self) -> Side {
+        match self {
+            Win::Defcon(s) => *s,
+            Win::Vp(s) => *s,
+            Win::HeldScoring(s) => *s,
+        }
+    }
 }
 
 #[cfg(test)]

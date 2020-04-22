@@ -144,6 +144,6 @@ impl Agent for RandAgent {
 }
 
 pub fn legal_headline(agent: Side, state: &GameState) -> OutputVec {
-    let d = Decision::headline(agent, state);
+    let mut d = Decision::headline(agent, state);
     d.encode(state)
 }

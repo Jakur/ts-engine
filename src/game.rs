@@ -48,7 +48,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<(), Win> {
         let goal = if self.state.turn <= 3 { 6 } else { 8 };
 
-        let win = self.consume(decoded)?;
+        self.consume(decoded)?;
         if self.state.ar > goal {
             self.state.advance_turn()?;
             if self.state.turn > 10 {
@@ -93,9 +93,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         if self.state.ar == 0 {
             if let Action::Event = decoded.action {
                 // Undecided
-                if decision.allowed.slice().len() > 1 {
+                if decision.allowed.slice(&self.state).len() > 1 {
                     let card = Card::from_index(choice.unwrap());
-                    if self.state.peek_pending().unwrap().allowed.slice().len() > 1 {
+                    if !decision.is_single_event() {
                         // Both undecided
                         let second = Decision::new_event(decision.agent, card);
                         let first = self.state.remove_pending().unwrap();
@@ -104,8 +104,8 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                     } else {
                         // One has already decided, thus find resolution order
                         let d = Decision::new_event(decision.agent, card);
-                        let d2 = self.state.remove_pending().unwrap();
-                        let card2 = Card::from_index(d2.allowed.slice()[0]);
+                        let mut d2 = self.state.remove_pending().unwrap();
+                        let card2 = Card::from_index(d2.allowed.slice(&self.state)[0]);
                         let order = {
                             if card.base_ops() > card2.base_ops() {
                                 vec![d2, d]
@@ -133,12 +133,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             self.state.add_pending(x);
         } else {
             todo!();
-            // while let Side::Neutral = decision.agent {
-            //     todo!()
-            //     // self.state.resolve_neutral(decision.action)?;
-            // }
-            // dbg!(&self.pending_actions);
-            // if self.state.ar == 0 && !self.pending_actions.is_empty() {
+            // self.resolve_neutral()?;
+            // // dbg!(&self.pending_actions);
+            // if self.state.ar == 0 && !self.state.empty_pending() {
             //     let win = self.state.check_win();
             //     return win;
             // }
@@ -147,11 +144,10 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             //     dbg!(win);
             //     if self.state.ar > self.goal_ar() {
             //         let win = self.state.advance_turn();
-            //         self.pending_actions = self.hl_order();
+            //         self.state.set_pending(self.hl_order());
             //         return win;
             //     } else {
-            //         self.pending_actions
-            //             .push(Decision::begin_ar(self.state.side));
+            //         self.state.add_pending(Decision::begin_ar(self.state.side))
             //     }
             //     return win;
             // }
@@ -159,16 +155,21 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         Ok(())
     }
     fn resolve_neutral(&mut self) -> Result<(), Win> {
-        let decision = match self.state.remove_pending() {
-            Some(d) => d,
-            _ => todo!(),
-        };
-        if let Side::Neutral = decision.agent {
-            self.state
-                .resolve_action(decision, None, &mut self.ply_history, &mut self.rng);
-            return self.state.check_win();
+        while self.neutral_next() {
+            let decision = self.state.remove_pending().unwrap();
+            let next_d =
+                self.state
+                    .resolve_action(decision, None, &mut self.ply_history, &mut self.rng);
+            assert!(next_d.is_none()); // Todo ensure this is the case
+            self.state.check_win()?;
+        }
+        Ok(())
+    }
+    fn neutral_next(&self) -> bool {
+        if let Some(side) = self.state.peek_pending().map(|d| d.agent) {
+            side == Side::Neutral
         } else {
-            panic!("Expected neutral side!");
+            false
         }
     }
     fn goal_ar(&self, side: Side) -> i8 {
@@ -222,7 +223,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         // self.initial_placement();
         self.state.set_pending(self.hl_order());
         while self.state.turn <= goal_turn {
-            let next = self.state.remove_pending().unwrap();
+            let mut next = self.state.remove_pending().unwrap();
             let agent = self.actors.get(next.agent);
             let legal = next.encode(&self.state);
             dbg!(&legal);
@@ -251,39 +252,23 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         Ok(())
     }
     fn initial_placement(&mut self) {
+        use crate::action::Allowed;
         use crate::country::{EASTERN_EUROPE, WESTERN_EUROPE};
-        todo!();
-        // let mut pending_actions = Vec::new();
-        // // USSR
-        // let x = Decision::with_quantity(Side::USSR, Action::Place, &EASTERN_EUROPE[..], 6);
-        // pending_actions.push(x);
-        // self.resolve_actions(pending_actions);
-        // // US
-        // pending_actions = Vec::new();
-        // let x = Decision::with_quantity(Side::US, Action::Place, &WESTERN_EUROPE[..], 7);
-        // pending_actions.push(x);
-        // self.resolve_actions(pending_actions);
-        // // US Bonus + 2
-        // for _ in 0..2 {
-        //     let mut pa = Vec::new();
-        //     let mem: Vec<_> = self
-        //         .state
-        //         .valid_countries()
-        //         .iter()
-        //         .enumerate()
-        //         .filter_map(|(i, x)| {
-        //             // Apparently bonus influence cannot exceed stab + 2
-        //             if x.us > 0 && x.us < x.stability + 2 {
-        //                 Some(i)
-        //             } else {
-        //                 None
-        //             }
-        //         })
-        //         .collect();
-        //     let dec = Decision::new(Side::US, Action::Place, mem);
-        //     pa.push(dec);
-        //     self.resolve_actions(pa);
-        // }
+        let mut pending_actions = Vec::new();
+        // USSR
+        let x = Decision::with_quantity(Side::USSR, Action::Place, &EASTERN_EUROPE[..], 6);
+        pending_actions.push(x);
+        // US
+        let x = Decision::with_quantity(Side::US, Action::Place, &WESTERN_EUROPE[..], 7);
+        pending_actions.push(x);
+        // US Bonus + 2
+        for _ in 0..2 {
+            let allowed = Allowed::new_lazy(legal_bonus_influence);
+            let d = Decision::new(Side::US, Action::Place, allowed);
+            pending_actions.push(d);
+        }
+        pending_actions = pending_actions.into_iter().rev().collect();
+        self.state.set_pending(pending_actions);
     }
     fn resolve_actions(vec: Vec<Decision>) {
         unimplemented!();
@@ -294,7 +279,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         let legal = decision.encode(&self.state);
         // Do not call eval if there are only 0 or 1 decisions
         let (action, choice) = if legal.len() <= 1 {
-            let choice = decision.allowed.slice().iter().cloned().next();
+            let choice = decision.allowed.slice(&self.state).iter().cloned().next();
             if decision.agent != Side::Neutral {
                 let agent = self.actors.get(decision.agent);
                 let index = choice.map(|i| OutputIndex::new(decision.action.offset() + i));
@@ -344,6 +329,22 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             Win::Vp(Side::USSR)
         }
     }
+}
+
+fn legal_bonus_influence(state: &GameState) -> Vec<usize> {
+    state
+        .valid_countries()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| {
+            // Apparently bonus influence cannot exceed stab + 2
+            if x.us > 0 && x.us < x.stability + 2 {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

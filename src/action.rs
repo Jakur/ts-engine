@@ -67,6 +67,15 @@ impl Decision {
     pub fn new_event(caller: Side, card: Card) -> Self {
         Decision::new(caller, Action::Event, vec![card as usize])
     }
+    pub fn is_single_event(&self) -> bool {
+        if self.action != Action::Event {
+            return false;
+        }
+        match self.allowed.allowed {
+            AllowedType::Owned(ref vec) => vec.len() == 1,
+            _ => false,
+        }
+    }
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);
         let vec: Vec<_> = hand
@@ -115,7 +124,7 @@ impl Decision {
             let opp = self.agent.opposite();
             let allowed: Vec<_> = self
                 .allowed
-                .slice()
+                .slice(state)
                 .iter()
                 .copied()
                 .filter(|x| !state.is_controlled(opp, *x))
@@ -232,20 +241,51 @@ impl Allowed {
             allowed: AllowedType::Empty,
         }
     }
-    pub fn slice(&self) -> &[usize] {
-        match &self.allowed {
-            AllowedType::Slice(s) => s,
-            AllowedType::Owned(s) => &s,
-            AllowedType::Empty => &[],
+    pub fn new_lazy(f: fn(&GameState) -> Vec<usize>) -> Allowed {
+        Allowed {
+            allowed: AllowedType::Lazy(f),
+        }
+    }
+    pub fn slice(&mut self, state: &GameState) -> &[usize] {
+        let mut resolved = self.resolve(state);
+        if let Some(ref mut resolved) = resolved {
+            std::mem::swap(self, resolved);
+            self.slice(state)
+        } else {
+            match &self.allowed {
+                AllowedType::Slice(s) => s,
+                AllowedType::Owned(s) => &s,
+                AllowedType::Empty => &[],
+                _ => unreachable!(),
+            }
+        }
+    }
+    fn resolve(&self, state: &GameState) -> Option<Allowed> {
+        if let AllowedType::Lazy(f) = self.allowed {
+            Some(Allowed::new_owned(f(state)))
+        } else {
+            None
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum AllowedType {
     Slice(&'static [usize]),
+    Lazy(fn(&GameState) -> Vec<usize>),
     Owned(Vec<usize>),
     Empty,
+}
+
+impl std::fmt::Debug for AllowedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            AllowedType::Slice(s) => write!(f, "{:?}", s),
+            AllowedType::Owned(v) => write!(f, "{:?}", v),
+            AllowedType::Empty => write!(f, "[]"),
+            AllowedType::Lazy(_) => write!(f, "LAZY"),
+        }
+    }
 }
 
 impl From<Vec<usize>> for Allowed {
@@ -274,6 +314,7 @@ mod tests {
     #[test]
     fn test_size() {
         dbg!(std::mem::size_of::<Allowed>());
+        dbg!(std::mem::size_of::<Decision>());
     }
     #[test]
     fn test_action_offsets() {
