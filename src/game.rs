@@ -49,6 +49,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.state.deck.draw_cards(8, &mut self.rng);
         self.initial_placement();
     }
+    pub fn legal(&mut self) -> Vec<OutputIndex> {
+        self.state.next_legal()
+    }
     /// Consumes an incoming decoded choice from an agent, and resolves until
     /// either the game ends returning an Err(Win) or else until more input
     /// is needed from an agent returning Ok(vp_differential).
@@ -238,26 +241,25 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             vec![us_hl, ussr_hl]
         }
     }
-    pub fn do_ply(&mut self) -> Option<Side> {
-        todo!();
-        // let pending = vec![Decision::begin_ar(self.state.side)];
-        // self.resolve_actions(pending);
-        // let win = self.state.advance_ply();
-        // win
-    }
     pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> Result<(), Win> {
         // self.initial_placement();
-        self.state.set_pending(self.hl_order());
+        // Todo initial conditions
+        if self.state.ar == 0 {
+            self.state.set_pending(self.hl_order());
+        }
         while self.state.turn <= goal_turn {
-            let mut next = self.state.remove_pending().unwrap();
-            let agent = self.actors.get(next.agent);
-            let legal = next.encode(&self.state);
-            dbg!(&legal);
-            let decoded = if legal.len() < 2 {
+            let next = self.state.peek_pending().unwrap();
+            let side = next.agent;
+            let decoded = if next.is_trivial() {
+                let mut x = next.clone(); // This is cheap because next is trivial
+                let legal = x.encode(&self.state);
                 let action = legal.get(0).copied();
+                let agent = self.actors.get(next.agent);
                 agent.trivial_action(action);
                 action.unwrap_or(OutputIndex::pass()).decode()
             } else {
+                let legal = self.legal();
+                let agent = self.actors.get(side);
                 agent.decide(&self.state, legal)
             };
             dbg!(&decoded);
@@ -294,43 +296,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         }
         pending_actions = pending_actions.into_iter().rev().collect();
         self.state.set_pending(pending_actions);
-    }
-    fn resolve_actions(vec: Vec<Decision>) {
-        unimplemented!();
-    }
-    fn resolve_single(&mut self, mut decision: Decision) -> Option<Decision> {
-        let legal = decision.encode(&self.state);
-        // Do not call eval if there are only 0 or 1 decisions
-        let (action, choice) = if legal.len() <= 1 {
-            let choice = decision.allowed.slice(&self.state).iter().cloned().next();
-            if decision.agent != Side::Neutral {
-                let agent = self.actors.get(decision.agent);
-                let index = choice.map(|i| OutputIndex::new(decision.action.offset() + i));
-                agent.trivial_action(index);
-            }
-            (decision.action, choice)
-        } else {
-            let agent = self.actors.get(decision.agent);
-            let x = agent.decide(&self.state, legal);
-            (x.action, x.choice)
-        };
-        // Fix our decision if it was a meta decision that we're now collapsing
-        if action != decision.action {
-            let new_legal = match action {
-                Action::Coup | Action::Realignment => self.state.legal_coup_realign(decision.agent),
-                Action::Influence => self
-                    .state
-                    .legal_influence(decision.agent, decision.quantity),
-                Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => Vec::new(), // Doesn't matter
-                _ => unimplemented!(),
-            };
-            decision =
-                Decision::with_quantity(decision.agent, action, new_legal, decision.quantity);
-        }
-        let res = self
-            .state
-            .resolve_action(decision, choice, &mut self.ply_history, &mut self.rng);
-        res
     }
     fn final_scoring(&mut self) -> Win {
         use crate::country::Region::*;

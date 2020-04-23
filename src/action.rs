@@ -74,6 +74,18 @@ impl Decision {
             _ => false,
         }
     }
+    pub fn is_trivial(&self) -> bool {
+        match self.action {
+            Action::BeginAr | Action::ConductOps => false,
+            _ => {
+                if let AllowedType::Lazy(_) = self.allowed.allowed {
+                    false // Todo decide if we should expand this
+                } else {
+                    self.allowed.simple_slice().unwrap().len() < 2
+                }
+            }
+        }
+    }
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);
         let vec: Vec<_> = hand

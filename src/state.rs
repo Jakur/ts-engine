@@ -1,7 +1,7 @@
-use crate::action::{Action, Allowed, Decision, EventTime, Restriction};
+use crate::action::{Action, Allowed, Decision, Restriction};
 use crate::card::*;
 use crate::country::*;
-use crate::tensor::DecodedChoice;
+use crate::tensor::{DecodedChoice, OutputIndex, TensorOutput};
 
 use counter::Counter;
 
@@ -925,6 +925,16 @@ impl GameState {
                 }
             }
             _ => {}
+        }
+    }
+    pub fn next_legal(&mut self) -> Vec<OutputIndex> {
+        let d = self.pending.pop();
+        if let Some(mut d) = d {
+            let encoded = d.encode(&self);
+            self.pending.push(d);
+            encoded
+        } else {
+            vec![OutputIndex::pass()]
         }
     }
     pub fn pending(&self) -> &[Decision] {
