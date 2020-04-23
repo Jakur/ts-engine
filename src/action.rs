@@ -51,9 +51,7 @@ impl Decision {
         T: Into<Allowed>,
     {
         match action {
-            Action::BeginAr | Action::EndAr | Action::ClearEvent => {
-                assert_eq!(agent, Side::Neutral)
-            }
+            Action::EndAr | Action::ClearEvent => assert_eq!(agent, Side::Neutral),
             _ => assert_ne!(agent, Side::Neutral),
         }
         Decision {
@@ -244,6 +242,14 @@ impl Allowed {
     pub fn new_lazy(f: fn(&GameState) -> Vec<usize>) -> Allowed {
         Allowed {
             allowed: AllowedType::Lazy(f),
+        }
+    }
+    pub fn simple_slice(&self) -> Option<&[usize]> {
+        match &self.allowed {
+            AllowedType::Slice(s) => Some(s),
+            AllowedType::Owned(s) => Some(&s),
+            AllowedType::Empty => Some(&[]),
+            _ => None,
         }
     }
     pub fn slice(&mut self, state: &GameState) -> &[usize] {

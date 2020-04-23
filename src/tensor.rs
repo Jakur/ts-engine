@@ -322,7 +322,7 @@ mod tests {
         hand.push(Card::Asia_Scoring);
         state.deck.us_hand_mut().extend(hand);
         let side = Side::US;
-        let d = Decision::new(side, Action::BeginAr, &[]);
+        let mut d = Decision::new(side, Action::BeginAr, &[]);
         let output_vec = d.encode(&state);
         let mut events = 0;
         let mut spaces = 0;
@@ -345,7 +345,7 @@ mod tests {
         use crate::country::CName::*;
         use std::collections::HashSet;
         let state = GameState::four_four_two();
-        let d = Decision::new(Side::USSR, Action::ConductOps, &[]);
+        let mut d = Decision::new(Side::USSR, Action::ConductOps, &[]);
         let output_vec = d.encode(&state);
         let mut coup = 0;
         let mut realign = 0;

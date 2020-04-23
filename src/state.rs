@@ -927,6 +927,9 @@ impl GameState {
             _ => {}
         }
     }
+    pub fn pending(&self) -> &[Decision] {
+        &self.pending
+    }
     pub fn remove_pending(&mut self) -> Option<Decision> {
         self.pending.pop()
     }

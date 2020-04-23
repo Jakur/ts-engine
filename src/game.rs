@@ -1,4 +1,4 @@
-use crate::action::{Action, Decision};
+use crate::action::{Action, Allowed, Decision};
 use crate::agent::{Actors, Agent, ScriptedAgent};
 use crate::card::Card;
 use crate::country::Side;
@@ -15,7 +15,9 @@ enum Blocked {
 
 #[derive(Clone, Copy)]
 enum Status {
-    HL,
+    Start,
+    ChooseHL,
+    ResolveHL,
     AR,
 }
 
@@ -26,6 +28,7 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     ply_history: Vec<DecodedChoice>,
     us_buf: Vec<DecodedChoice>,
     ussr_buf: Vec<DecodedChoice>,
+    status: Status,
 }
 
 impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
@@ -38,6 +41,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             ply_history: Vec::new(),
             us_buf: Vec::new(),
             ussr_buf: Vec::new(),
+            status: Status::Start,
         }
     }
     pub fn setup(&mut self) {
@@ -45,26 +49,90 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.state.deck.draw_cards(8, &mut self.rng);
         self.initial_placement();
     }
-    pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<(), Win> {
-        let goal = if self.state.turn <= 3 { 6 } else { 8 };
-
-        self.consume(decoded)?;
-        if self.state.ar > goal {
-            self.state.advance_turn()?;
-            if self.state.turn > 10 {
-                // Final scoring
-                todo!()
+    /// Consumes an incoming decoded choice from an agent, and resolves until
+    /// either the game ends returning an Err(Win) or else until more input
+    /// is needed from an agent returning Ok(vp_differential).
+    pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<i8, Win> {
+        let init_vp = self.state.vp;
+        self.consume(decoded);
+        self.resolve_neutral()?;
+        self.update_status()?;
+        Ok(self.state.vp - init_vp)
+    }
+    fn update_status(&mut self) -> Result<(), Win> {
+        match self.status {
+            Status::ChooseHL => {
+                if self.state.pending().iter().all(|d| d.is_single_event()) {
+                    let priority = |x: &Decision| {
+                        let c = Card::from_index(x.allowed.simple_slice().unwrap()[0]);
+                        2 * c.base_ops() + (Side::US == x.agent) as i8
+                    };
+                    self.status = Status::ResolveHL;
+                    let d = self.state.remove_pending().unwrap();
+                    let d2 = self.state.remove_pending().unwrap();
+                    let order = if priority(&d) > priority(&d2) {
+                        vec![d2, d]
+                    } else {
+                        vec![d, d2]
+                    };
+                    self.state.set_pending(order);
+                    self.state.side = self.state.peek_pending().unwrap().agent;
+                }
             }
-            self.state.set_pending(self.hl_order());
-        } else {
-            if self.state.ar > self.goal_ar(self.state.side) {
-                // Done for the turn
-                self.state.advance_ply()?;
+            Status::ResolveHL => {
+                if let Some(pending) = self.state.peek_pending() {
+                    if pending.is_single_event() {
+                        // Set phasing side
+                        self.state.side = pending.agent;
+                    }
+                } else {
+                    // Enter AR1
+                    self.status = Status::AR;
+                    self.state.check_win()?;
+                    self.state.ar = 1;
+                    self.state.add_pending(Decision::begin_ar(Side::USSR));
+                }
+            }
+            Status::AR => {
+                if self.state.empty_pending() {
+                    self.state.advance_ply()?;
+                    self.skip_null_ars()?;
+                    let goal = if self.state.turn <= 3 { 6 } else { 8 };
+                    if self.state.ar > goal {
+                        self.state.advance_turn()?;
+                        if self.state.turn > 10 {
+                            return Err(self.final_scoring());
+                        }
+                        self.status = Status::ChooseHL;
+                        self.state.set_pending(self.hl_order());
+                    } else {
+                        self.state.add_pending(Decision::begin_ar(self.state.side));
+                    }
+                }
+            }
+            Status::Start => {
+                if self.state.empty_pending() {
+                    // Todo this should need more to be accurate
+                    self.status = Status::ChooseHL;
+                    self.state.set_pending(self.hl_order());
+                }
             }
         }
         Ok(())
     }
-    fn consume(&mut self, decoded: DecodedChoice) -> Result<(), Win> {
+    fn skip_null_ars(&mut self) -> Result<(), Win> {
+        let global_goal = if self.state.turn <= 3 { 6 } else { 8 };
+        while self.state.ar <= global_goal {
+            let side_goal = self.goal_ar(self.state.side);
+            if self.state.ar > side_goal {
+                self.state.advance_ply()?; // Skip this AR
+            } else {
+                return Ok(()); // Return control
+            }
+        }
+        Ok(())
+    }
+    fn consume(&mut self, decoded: DecodedChoice) {
         let mut decision = match self.state.remove_pending() {
             Some(d) => d,
             _ => todo!(),
@@ -87,72 +155,30 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 .collect();
             decision =
                 Decision::with_quantity(decision.agent, decoded.action, legal, decision.quantity);
-            // decision = Decision
         }
-        // Headline
-        if self.state.ar == 0 {
-            if let Action::Event = decoded.action {
-                // Undecided
-                if decision.allowed.slice(&self.state).len() > 1 {
-                    let card = Card::from_index(choice.unwrap());
-                    if !decision.is_single_event() {
-                        // Both undecided
-                        let second = Decision::new_event(decision.agent, card);
-                        let first = self.state.remove_pending().unwrap();
-                        self.state.set_pending(vec![second, first]);
-                        todo!()
-                    } else {
-                        // One has already decided, thus find resolution order
-                        let d = Decision::new_event(decision.agent, card);
-                        let mut d2 = self.state.remove_pending().unwrap();
-                        let card2 = Card::from_index(d2.allowed.slice(&self.state)[0]);
-                        let order = {
-                            if card.base_ops() > card2.base_ops() {
-                                vec![d2, d]
-                            } else if card2.base_ops() > card.base_ops() {
-                                vec![d, d2]
-                            } else if d.agent == Side::US {
-                                vec![d2, d]
-                            } else {
-                                vec![d, d2]
-                            }
-                        };
-                        self.state.set_pending(order);
-                    }
-                } else {
-                    self.state.side = decision.agent; // Set phasing side
+        match self.status {
+            Status::ChooseHL => {
+                assert!(self.state.ar == 0);
+                decision.allowed = Allowed::new_owned(vec![decoded.choice.unwrap()]);
+                // Pretend we're FIFO
+                let other = self.state.remove_pending().unwrap();
+                self.state.add_pending(decision);
+                self.state.add_pending(other);
+            }
+            Status::ResolveHL | Status::AR | Status::Start => {
+                let next_d = self.state.resolve_action(
+                    decision,
+                    choice,
+                    &mut self.ply_history,
+                    &mut self.rng,
+                );
+                if let Some(x) = next_d {
+                    // Still resolving parts of this action
+                    dbg!(&x);
+                    self.state.add_pending(x);
                 }
             }
         }
-        let next_d =
-            self.state
-                .resolve_action(decision, choice, &mut self.ply_history, &mut self.rng);
-        if let Some(x) = next_d {
-            // Still resolving parts of this action
-            dbg!(&x);
-            self.state.add_pending(x);
-        } else {
-            todo!();
-            // self.resolve_neutral()?;
-            // // dbg!(&self.pending_actions);
-            // if self.state.ar == 0 && !self.state.empty_pending() {
-            //     let win = self.state.check_win();
-            //     return win;
-            // }
-            // if self.pending_actions.is_empty() {
-            //     let win = self.state.advance_ply();
-            //     dbg!(win);
-            //     if self.state.ar > self.goal_ar() {
-            //         let win = self.state.advance_turn();
-            //         self.state.set_pending(self.hl_order());
-            //         return win;
-            //     } else {
-            //         self.state.add_pending(Decision::begin_ar(self.state.side))
-            //     }
-            //     return win;
-            // }
-        }
-        Ok(())
     }
     fn resolve_neutral(&mut self) -> Result<(), Win> {
         while self.neutral_next() {
@@ -252,7 +278,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         Ok(())
     }
     fn initial_placement(&mut self) {
-        use crate::action::Allowed;
         use crate::country::{EASTERN_EUROPE, WESTERN_EUROPE};
         let mut pending_actions = Vec::new();
         // USSR
@@ -274,8 +299,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         unimplemented!();
     }
     fn resolve_single(&mut self, mut decision: Decision) -> Option<Decision> {
-        use crate::tensor::OutputIndex;
-
         let legal = decision.encode(&self.state);
         // Do not call eval if there are only 0 or 1 decisions
         let (action, choice) = if legal.len() <= 1 {
@@ -362,6 +385,7 @@ mod tests {
             .deck
             .ussr_hand_mut()
             .extend(vec![Card::Summit; 7]);
+        game.status = Status::AR;
         game.state.defcon = 2;
         game.state.ar = 1;
         game.state.turn = 4;
@@ -376,7 +400,8 @@ mod tests {
         game.rng.us_rolls = vec![5];
         game.rng.ussr_rolls = vec![3];
         // game.state.deck.ussr_hand_mut().push(Card::Summot)
-        game.pending_actions = vec![Decision::new(Side::USSR, Action::BeginAr, &[])];
+        game.state
+            .add_pending(Decision::new(Side::USSR, Action::BeginAr, &[]));
         // game.pla
         assert_eq!(game.play(10, None), Err(Win::Defcon(Side::US)));
     }
@@ -402,10 +427,10 @@ mod tests {
             actors,
             state,
             rng,
-            pending_actions: Vec::new(),
             ply_history: Vec::new(),
             us_buf: Vec::new(),
             ussr_buf: Vec::new(),
+            status: Status::Start,
         };
         game.setup();
         game
