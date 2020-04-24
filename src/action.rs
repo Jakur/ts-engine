@@ -36,8 +36,6 @@ impl std::fmt::Debug for Decision {
         use crate::country::CName;
         use Action::*;
         let allowed_debug = match self.allowed.allowed {
-            AllowedType::Empty => "[]".to_string(),
-            AllowedType::Lazy(_) => "LAZY".to_string(),
             AllowedType::Owned(ref v) => {
                 let out_vec: Vec<_> = match self.action {
                     Ops | OpsEvent | Event | EventOps | Space | Discard => v
@@ -66,6 +64,7 @@ impl std::fmt::Debug for Decision {
                 };
                 format!("{:?}", out_vec)
             }
+            _ => format!("{:?}", self.allowed.allowed),
         };
         f.debug_struct("Decision")
             .field("agent", &self.agent)
@@ -95,14 +94,19 @@ impl Decision {
     where
         T: Into<Allowed>,
     {
+        let allowed = allowed.into();
         match action {
             Action::EndAr | Action::ClearEvent => assert_eq!(agent, Side::Neutral),
+            Action::ConductOps | Action::BeginAr => match allowed.allowed {
+                AllowedType::Unknown => {}
+                _ => panic!("Cannot determine slice until OutputIndex resolution"),
+            },
             _ => assert_ne!(agent, Side::Neutral),
         }
         Decision {
             agent,
             action,
-            allowed: allowed.into(),
+            allowed,
             quantity: q,
         }
     }
@@ -126,7 +130,7 @@ impl Decision {
                 if let AllowedType::Lazy(_) = self.allowed.allowed {
                     false // Todo decide if we should expand this
                 } else {
-                    self.allowed.simple_slice().unwrap().len() < 2
+                    self.allowed.try_slice().unwrap().len() < 2
                 }
             }
         }
@@ -146,13 +150,13 @@ impl Decision {
         Decision::new(agent, Action::ChooseCard, vec)
     }
     pub fn begin_ar(agent: Side) -> Decision {
-        Decision::new(agent, Action::BeginAr, &[])
+        Decision::new(agent, Action::BeginAr, Allowed::new_unknown())
     }
     pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
     }
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
-        Decision::with_quantity(agent, Action::ConductOps, &[], ops)
+        Decision::with_quantity(agent, Action::ConductOps, Allowed::new_unknown(), ops)
     }
     pub fn next_decision(
         mut self,
@@ -179,7 +183,7 @@ impl Decision {
             let opp = self.agent.opposite();
             let allowed: Vec<_> = self
                 .allowed
-                .slice(state)
+                .force_slice(state)
                 .iter()
                 .copied()
                 .filter(|x| !state.is_controlled(opp, *x))
@@ -301,7 +305,13 @@ impl Allowed {
             allowed: AllowedType::Lazy(f),
         }
     }
-    pub fn simple_slice(&self) -> Option<&[usize]> {
+    pub fn new_unknown() -> Allowed {
+        Allowed {
+            allowed: AllowedType::Unknown,
+        }
+    }
+    /// Attempts to slice allowed data that is currently readable.
+    pub fn try_slice(&self) -> Option<&[usize]> {
         match &self.allowed {
             AllowedType::Slice(s) => Some(s),
             AllowedType::Owned(s) => Some(&s),
@@ -309,19 +319,15 @@ impl Allowed {
             _ => None,
         }
     }
-    pub fn slice(&mut self, state: &GameState) -> &[usize] {
+    /// Forces a resolution of problem cases. For lazy allowed, it resolves the
+    /// laziness and converts the type appropriately. Panics on unknown allowed
+    /// for meta types.
+    pub fn force_slice(&mut self, state: &GameState) -> &[usize] {
         let mut resolved = self.resolve(state);
         if let Some(ref mut resolved) = resolved {
             std::mem::swap(self, resolved);
-            self.slice(state)
-        } else {
-            match &self.allowed {
-                AllowedType::Slice(s) => s,
-                AllowedType::Owned(s) => &s,
-                AllowedType::Empty => &[],
-                _ => unreachable!(),
-            }
         }
+        self.try_slice().unwrap()
     }
     fn resolve(&self, state: &GameState) -> Option<Allowed> {
         if let AllowedType::Lazy(f) = self.allowed {
@@ -338,6 +344,7 @@ enum AllowedType {
     Lazy(fn(&GameState) -> Vec<usize>),
     Owned(Vec<usize>),
     Empty,
+    Unknown, // Unable to be read, used for meta types
 }
 
 impl std::fmt::Debug for AllowedType {
@@ -347,6 +354,7 @@ impl std::fmt::Debug for AllowedType {
             AllowedType::Owned(v) => write!(f, "{:?}", v),
             AllowedType::Empty => write!(f, "[]"),
             AllowedType::Lazy(_) => write!(f, "LAZY"),
+            AllowedType::Unknown => write!(f, "UNK"),
         }
     }
 }

@@ -183,7 +183,7 @@ impl TensorOutput for Decision {
                 let cuban_offset = self.action.offset();
                 let remove = self
                     .allowed
-                    .slice(state)
+                    .force_slice(state)
                     .iter()
                     .copied()
                     .map(|x| x + cuban_offset)
@@ -198,7 +198,7 @@ impl TensorOutput for Decision {
             _ => {
                 let v = self
                     .allowed
-                    .slice(state)
+                    .force_slice(state)
                     .iter()
                     .copied()
                     .map(|x| x + begin)
@@ -322,7 +322,7 @@ mod tests {
         hand.push(Card::Asia_Scoring);
         state.deck.us_hand_mut().extend(hand);
         let side = Side::US;
-        let mut d = Decision::new(side, Action::BeginAr, &[]);
+        let mut d = Decision::begin_ar(side);
         let output_vec = d.encode(&state);
         let mut events = 0;
         let mut spaces = 0;
@@ -345,7 +345,7 @@ mod tests {
         use crate::country::CName::*;
         use std::collections::HashSet;
         let state = GameState::four_four_two();
-        let mut d = Decision::new(Side::USSR, Action::ConductOps, &[]);
+        let mut d = Decision::conduct_ops(Side::USSR, 1);
         let output_vec = d.encode(&state);
         let mut coup = 0;
         let mut realign = 0;

@@ -58,13 +58,10 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<i8, Win> {
         let init_vp = self.state.vp;
         // dbg!(&self.status);
-        dbg!(self.state.peek_pending());
-        dbg!(self.state.side);
-        //dbg!(self.state.vp);
-        dbg!(&decoded);
-        if self.state.ar == 0 {
-            // dbg!(self.state.pending());
-        }
+        // dbg!(self.state.peek_pending());
+        // dbg!(self.state.side);
+        // dbg!(self.state.vp);
+        // dbg!(&decoded);
         self.consume(decoded);
         self.resolve_neutral()?;
         self.update_status()?;
@@ -367,10 +364,8 @@ mod tests {
         us.lock().unwrap().push(defcon_one);
         game.rng.us_rolls = vec![5];
         game.rng.ussr_rolls = vec![3];
-        // game.state.deck.ussr_hand_mut().push(Card::Summot)
-        game.state
-            .add_pending(Decision::new(Side::USSR, Action::BeginAr, &[]));
-        // game.pla
+        game.state.add_pending(Decision::begin_ar(Side::USSR));
+
         assert_eq!(game.play(10, None), Err(Win::Defcon(Side::US)));
     }
     fn test_traps() {

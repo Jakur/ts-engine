@@ -157,7 +157,7 @@ impl GameState {
                     if !bad.is_empty() {
                         let vec: Vec<_> = decision
                             .allowed
-                            .slice(&self)
+                            .force_slice(&self)
                             .iter()
                             .copied()
                             .filter(|x| !bad.contains(x))
@@ -956,7 +956,7 @@ impl GameState {
     }
     pub fn order_headlines(&mut self) {
         let priority = |x: &Decision| {
-            let c = Card::from_index(x.allowed.simple_slice().unwrap()[0]);
+            let c = Card::from_index(x.allowed.try_slice().unwrap()[0]);
             2 * c.base_ops() + (Side::US == x.agent) as i8
         };
         let mut iter = self
