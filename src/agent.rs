@@ -98,9 +98,11 @@ impl Agent for ScriptedAgent {
             }
         }
         let next = self.next().unwrap();
-        // dbg!(next);
-        // dbg!(&legal);
-        assert!(legal.contains(&next));
+        if !legal.contains(&next) {
+            dbg!(legal);
+            dbg!(next);
+            panic!("Legal does not contain next!");
+        }
         next.decode()
     }
     fn side(&self) -> Side {

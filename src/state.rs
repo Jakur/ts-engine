@@ -36,7 +36,7 @@ impl GameState {
             countries: standard_start(),
             vp: 0,
             defcon: 5,
-            turn: 1, // Todo make compatible with initial placements
+            turn: 0,
             ar: 0,
             side: Side::USSR,
             space: [0, 0],
@@ -65,6 +65,7 @@ impl GameState {
         state
     }
     pub fn advance_ply(&mut self) -> Result<(), Win> {
+        self.china = false; // Todo ensure China flag doesn't get left on
         self.check_win()?;
         if let Side::US = self.side {
             self.ar += 1;
@@ -93,6 +94,7 @@ impl GameState {
         self.vp -= us_pen;
         self.vp += ussr_pen;
         self.turn += 1;
+        self.ar = 0;
         // Reset Defcon and Mil ops for next turn
         self.defcon = std::cmp::min(defcon + 1, 5);
         self.mil_ops[0] = 0;
@@ -104,7 +106,6 @@ impl GameState {
         Ok(())
     }
     pub fn check_win(&self) -> Result<(), Win> {
-        dbg!(self.defcon);
         if self.defcon < 2 {
             let side = self.side.opposite();
             return Err(Win::Defcon(side));
@@ -188,7 +189,11 @@ impl GameState {
             Some(c) => c,
             None => {
                 match decision.action {
-                    Action::Event => 0,
+                    Action::EndAr => {
+                        history.clear();
+                        return None;
+                    }
+                    Action::Event => panic!("This should not be hit?!"),
                     Action::ClearEvent => {
                         self.current_event = None;
                         return None;
@@ -948,6 +953,23 @@ impl GameState {
     }
     pub fn peek_pending_mut(&mut self) -> Option<&mut Decision> {
         self.pending.last_mut()
+    }
+    pub fn order_headlines(&mut self) {
+        let priority = |x: &Decision| {
+            let c = Card::from_index(x.allowed.simple_slice().unwrap()[0]);
+            2 * c.base_ops() + (Side::US == x.agent) as i8
+        };
+        let mut iter = self
+            .pending
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_i, x)| x.action == Action::Event);
+        let (i1, e1) = iter.next().unwrap();
+        let (i2, e2) = iter.next().unwrap();
+        if priority(e2) > priority(e1) {
+            self.pending.swap(i1, i2);
+        }
     }
     pub fn set_pending(&mut self, pending: Vec<Decision>) {
         assert!(self.pending.is_empty());

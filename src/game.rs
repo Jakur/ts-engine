@@ -13,7 +13,7 @@ enum Blocked {
     Ready,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Status {
     Start,
     ChooseHL,
@@ -57,6 +57,14 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     /// is needed from an agent returning Ok(vp_differential).
     pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<i8, Win> {
         let init_vp = self.state.vp;
+        // dbg!(&self.status);
+        dbg!(self.state.peek_pending());
+        dbg!(self.state.side);
+        //dbg!(self.state.vp);
+        dbg!(&decoded);
+        if self.state.ar == 0 {
+            // dbg!(self.state.pending());
+        }
         self.consume(decoded);
         self.resolve_neutral()?;
         self.update_status()?;
@@ -65,26 +73,21 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     fn update_status(&mut self) -> Result<(), Win> {
         match self.status {
             Status::ChooseHL => {
-                if self.state.pending().iter().all(|d| d.is_single_event()) {
-                    let priority = |x: &Decision| {
-                        let c = Card::from_index(x.allowed.simple_slice().unwrap()[0]);
-                        2 * c.base_ops() + (Side::US == x.agent) as i8
-                    };
+                if self
+                    .state
+                    .pending()
+                    .iter()
+                    .all(|d| d.action != Action::ChooseCard)
+                {
+                    self.state.order_headlines();
                     self.status = Status::ResolveHL;
-                    let d = self.state.remove_pending().unwrap();
-                    let d2 = self.state.remove_pending().unwrap();
-                    let order = if priority(&d) > priority(&d2) {
-                        vec![d2, d]
-                    } else {
-                        vec![d, d2]
-                    };
-                    self.state.set_pending(order);
                     self.state.side = self.state.peek_pending().unwrap().agent;
                 }
             }
             Status::ResolveHL => {
                 if let Some(pending) = self.state.peek_pending() {
                     if pending.is_single_event() {
+                        dbg!(&pending);
                         // Set phasing side
                         self.state.side = pending.agent;
                     }
@@ -93,6 +96,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                     self.status = Status::AR;
                     self.state.check_win()?;
                     self.state.ar = 1;
+                    self.state.side = Side::USSR;
                     self.state.add_pending(Decision::begin_ar(Side::USSR));
                 }
             }
@@ -116,6 +120,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             Status::Start => {
                 if self.state.empty_pending() {
                     // Todo this should need more to be accurate
+                    self.state.turn = 1;
                     self.status = Status::ChooseHL;
                     self.state.set_pending(self.hl_order());
                 }
@@ -141,6 +146,9 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             _ => todo!(),
         };
         let choice = decoded.choice;
+        if decoded.action == Action::Pass {
+            return;
+        }
         if decoded.action != decision.action {
             // Todo clean this up, perhaps reapproaching it in a new way
             let lower = decoded.action.offset();
@@ -162,11 +170,17 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         match self.status {
             Status::ChooseHL => {
                 assert!(self.state.ar == 0);
-                decision.allowed = Allowed::new_owned(vec![decoded.choice.unwrap()]);
-                // Pretend we're FIFO
-                let other = self.state.remove_pending().unwrap();
-                self.state.add_pending(decision);
-                self.state.add_pending(other);
+                let chosen_hl =
+                    Decision::new(decision.agent, Action::Event, vec![decoded.choice.unwrap()]);
+
+                if let Action::ChooseCard = self.state.peek_pending().unwrap().action {
+                    // FIFO workaround
+                    let pending_hl_choice = self.state.remove_pending().unwrap();
+                    self.state.add_pending(chosen_hl);
+                    self.state.add_pending(pending_hl_choice);
+                } else {
+                    self.state.add_pending(chosen_hl);
+                }
             }
             Status::ResolveHL | Status::AR | Status::Start => {
                 let next_d = self.state.resolve_action(
@@ -177,7 +191,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 );
                 if let Some(x) = next_d {
                     // Still resolving parts of this action
-                    dbg!(&x);
+                    // dbg!(&x);
                     self.state.add_pending(x);
                 }
             }
@@ -242,9 +256,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         }
     }
     pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> Result<(), Win> {
-        // self.initial_placement();
-        // Todo initial conditions
-        if self.state.ar == 0 {
+        if self.state.ar == 0 && self.state.turn != 0 {
             self.state.set_pending(self.hl_order());
         }
         while self.state.turn <= goal_turn {
@@ -262,16 +274,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                 let agent = self.actors.get(side);
                 agent.decide(&self.state, legal)
             };
-            dbg!(&decoded);
             self.consume_action(decoded)?;
-
-            while let Some(d) = self.state.peek_pending() {
-                if d.agent != Side::Neutral {
-                    break;
-                }
-                let pass = DecodedChoice::new(Action::Pass, None);
-                self.consume_action(pass)?;
-            }
         }
         if self.state.turn >= 10 {
             let res = self.final_scoring();

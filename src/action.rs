@@ -23,12 +23,57 @@ pub const NUM_ACTIONS: usize = Action::Pass as usize + 1;
 pub const CUBAN_OFFSET: usize = Action::CubanMissile as usize;
 pub const PASS: usize = Action::Pass as usize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Decision {
     pub agent: Side,
     pub action: Action,
     pub allowed: Allowed,
     pub quantity: i8,
+}
+
+impl std::fmt::Debug for Decision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        use crate::country::CName;
+        use Action::*;
+        let allowed_debug = match self.allowed.allowed {
+            AllowedType::Empty => "[]".to_string(),
+            AllowedType::Lazy(_) => "LAZY".to_string(),
+            AllowedType::Owned(ref v) => {
+                let out_vec: Vec<_> = match self.action {
+                    Ops | OpsEvent | Event | EventOps | Space | Discard => v
+                        .iter()
+                        .map(|c| format!("{:?}", Card::from_index(*c)))
+                        .collect(),
+                    Influence | Coup | Realignment | Place | Remove | War => v
+                        .iter()
+                        .map(|c| format!("{:?}", CName::from_index(*c)))
+                        .collect(),
+                    _ => v.iter().map(|c| format!("{}", c)).collect(),
+                };
+                format!("{:?}", out_vec)
+            }
+            AllowedType::Slice(ref v) => {
+                let out_vec: Vec<_> = match self.action {
+                    Ops | OpsEvent | Event | EventOps | Space | Discard => v
+                        .iter()
+                        .map(|c| format!("{:?}", Card::from_index(*c)))
+                        .collect(),
+                    Influence | Coup | Realignment | Place | Remove | War => v
+                        .iter()
+                        .map(|c| format!("{:?}", CName::from_index(*c)))
+                        .collect(),
+                    _ => v.iter().map(|c| format!("{:?}", c)).collect(),
+                };
+                format!("{:?}", out_vec)
+            }
+        };
+        f.debug_struct("Decision")
+            .field("agent", &self.agent)
+            .field("action", &self.action)
+            .field("allowed", &allowed_debug)
+            .field("quantity", &self.quantity)
+            .finish()
+    }
 }
 
 impl Decision {
@@ -98,7 +143,7 @@ impl Decision {
                 }
             })
             .collect();
-        Decision::new(agent, Action::Event, vec)
+        Decision::new(agent, Action::ChooseCard, vec)
     }
     pub fn begin_ar(agent: Side) -> Decision {
         Decision::new(agent, Action::BeginAr, &[])

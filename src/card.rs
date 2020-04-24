@@ -493,7 +493,7 @@ impl Card {
                 state.ussr_effects.push(Effect::DeGaulle);
             }
             Captured_Nazi_Scientist => {
-                state.space_card(*state.side(), 1); // Todo ensure state.side is accurate
+                state.space_card(side, 1); // Todo ensure state.side is accurate
             }
             Truman_Doctrine => pa!(
                 state,

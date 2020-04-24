@@ -43,7 +43,7 @@ impl std::fmt::Debug for DecodedChoice {
         use Action::*;
         if let Some(c) = self.choice {
             let c_str = match self.action {
-                Ops | OpsEvent | Event | EventOps | Space | Discard => {
+                Ops | OpsEvent | Event | EventOps | Space | Discard | ChooseCard => {
                     format!("{:?}", Card::from_index(c))
                 }
                 Influence | Coup | Realignment | Place | Remove | War => {
