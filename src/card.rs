@@ -336,7 +336,7 @@ impl Card {
                         state.vp -= 2;
                     }
                 } else {
-                    state.defcon -= 1;
+                    state.set_defcon(state.defcon() - 1);
                     let modifier = state.base_ops_offset(side);
                     let x = if modifier < 0 {
                         Decision::conduct_ops(side, 4 + modifier)
@@ -407,8 +407,8 @@ impl Card {
                 Region::MiddleEast.score(state);
             }
             Duck_and_Cover => {
-                state.defcon -= 1;
-                state.vp += 5 - state.defcon;
+                state.set_defcon(state.defcon() - 1);
+                state.vp += 5 - state.defcon();
             }
             Five_Year_Plan => {
                 let card = state.deck.random_card(Side::USSR, rng);
@@ -614,13 +614,13 @@ impl Card {
                 pa!(state, y);
             }
             Nuclear_Test_Ban => {
-                let vps = state.defcon - 2;
+                let vps = state.defcon() - 2;
                 match state.side() {
                     Side::US => state.vp += vps,
                     Side::USSR => state.vp -= vps,
                     _ => unimplemented!(),
                 }
-                state.defcon = std::cmp::min(5, state.defcon + 2);
+                state.set_defcon(state.defcon() + 2);
             }
             Formosan_Resolution => state.us_effects.push(Effect::FormosanResolution),
             Brush_War => pa!(
@@ -635,7 +635,7 @@ impl Card {
             }
             Arms_Race => {
                 if state.mil_ops(side) > state.mil_ops(side.opposite()) {
-                    if state.mil_ops(side) >= state.defcon {
+                    if state.mil_ops(side) >= state.defcon() {
                         state.vp += 3;
                     } else {
                         state.vp += 1
@@ -643,7 +643,7 @@ impl Card {
                 }
             }
             Cuban_Missile_Crisis => {
-                state.defcon = 2;
+                state.set_defcon(2);
                 state.add_effect(side.opposite(), Effect::CubanMissileCrisis);
             }
             Nuclear_Subs => state.add_effect(side, Effect::NuclearSubs),
@@ -675,7 +675,7 @@ impl Card {
                         _ => {}
                     }
                 }
-                let defcon: Vec<_> = [state.defcon - 1, state.defcon, state.defcon + 1]
+                let defcon: Vec<_> = [state.defcon() - 1, state.defcon(), state.defcon() + 1]
                     .iter()
                     .copied()
                     .filter_map(|x| {
@@ -714,7 +714,7 @@ impl Card {
                 // Set missile envy effect when the above decision resolves
             }
             We_Will_Bury_You => {
-                state.defcon -= 1;
+                state.set_defcon(state.defcon() - 1);
                 state.us_effects.push(Effect::WWBY);
             }
             Kitchen_Debates => state.vp += 2,

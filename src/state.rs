@@ -13,7 +13,7 @@ pub use random::{DebugRand, InternalRand, TwilightRand};
 pub struct GameState {
     pub countries: Vec<Country>,
     pub vp: i8,
-    pub defcon: i8,
+    defcon: i8,
     pub turn: i8,
     pub ar: i8,
     pub side: Side,
@@ -87,7 +87,7 @@ impl GameState {
             return Err(Win::HeldScoring(Side::US));
         }
         // Mil ops
-        let defcon = self.defcon;
+        let defcon = self.defcon();
         let us_pen = max(defcon - self.mil_ops[Side::US as usize], 0);
         let ussr_pen = max(defcon - self.mil_ops[Side::USSR as usize], 0);
         // These are penalties, so the signs are reversed from usual
@@ -96,7 +96,7 @@ impl GameState {
         self.turn += 1;
         self.ar = 0;
         // Reset Defcon and Mil ops for next turn
-        self.defcon = std::cmp::min(defcon + 1, 5);
+        self.set_defcon(defcon + 1);
         self.mil_ops[0] = 0;
         self.mil_ops[1] = 0;
         // Check win before cleanup due to scoring cards held
@@ -106,7 +106,7 @@ impl GameState {
         Ok(())
     }
     pub fn check_win(&self) -> Result<(), Win> {
-        if self.defcon < 2 {
+        if self.defcon() < 2 {
             let side = self.side.opposite();
             return Err(Win::Defcon(side));
         }
@@ -116,6 +116,18 @@ impl GameState {
             return Err(Win::Vp(Side::USSR));
         }
         Ok(())
+    }
+    pub fn defcon(&self) -> i8 {
+        self.defcon
+    }
+    pub fn set_defcon(&mut self, value: i8) {
+        if value > 5 {
+            self.defcon = 5;
+        } else if value < 1 {
+            self.defcon = 1;
+        } else {
+            self.defcon = value;
+        }
     }
     pub fn side(&self) -> &Side {
         &self.side
@@ -390,7 +402,7 @@ impl GameState {
                     _ => unimplemented!(),
                 }
             }
-            Action::ChangeDefcon => self.defcon = choice as i8,
+            Action::ChangeDefcon => self.set_defcon(choice as i8),
             Action::BeginAr
             | Action::EndAr
             | Action::ConductOps
@@ -617,7 +629,7 @@ impl GameState {
             Side::Neutral => unimplemented!(),
         }
         if c.bg {
-            self.defcon -= 1;
+            self.set_defcon(self.defcon() - 1);
         }
         if !free {
             let x = side as usize;
@@ -770,13 +782,14 @@ impl GameState {
         let mut vec: Vec<usize> = valid(&AFRICA).collect();
         vec.extend(valid(&CENTRAL_AMERICA));
         vec.extend(valid(&SOUTH_AMERICA));
-        if self.defcon >= 3 {
+        let defcon = self.defcon();
+        if defcon >= 3 {
             vec.extend(valid(&MIDDLE_EAST));
         }
-        if self.defcon >= 4 {
+        if defcon >= 4 {
             vec.extend(valid(&ASIA));
         }
-        if self.defcon >= 5 {
+        if defcon >= 5 {
             if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
                 let mut set: HashSet<usize> = EUROPE
                     .iter()

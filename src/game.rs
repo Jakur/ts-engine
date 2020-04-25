@@ -351,7 +351,7 @@ mod tests {
             .ussr_hand_mut()
             .extend(vec![Card::Summit; 7]);
         game.status = Status::AR;
-        game.state.defcon = 2;
+        game.state.set_defcon(2);
         game.state.ar = 1;
         game.state.turn = 4;
         let summit_play = OutputIndex::new(Action::Event.offset() + Card::Summit as usize);

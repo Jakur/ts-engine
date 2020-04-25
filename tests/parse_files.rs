@@ -122,7 +122,7 @@ fn parse_one_turn() {
     dbg!(&game.state.countries[CName::Iraq as usize]);
     check_countries(&game.state, &us, &ussr);
     assert_eq!(game.state.turn, 2);
-    assert_eq!(game.state.defcon, 3);
+    assert_eq!(game.state.defcon(), 3);
     assert_eq!(game.state.vp, 0);
     assert!(game.state.us_effects.is_empty());
     assert!(game.state.ussr_effects.is_empty());
