@@ -43,7 +43,7 @@ impl std::fmt::Debug for DecodedChoice {
         use Action::*;
         if let Some(c) = self.choice {
             let c_str = match self.action {
-                Ops | OpsEvent | Event | EventOps | Space | Discard => {
+                Ops | OpsEvent | Event | EventOps | Space | Discard | ChooseCard => {
                     format!("{:?}", Card::from_index(c))
                 }
                 Influence | Coup | Realignment | Place | Remove | War => {
@@ -79,7 +79,7 @@ impl Decision {
                     return encode_offsets(vec![Action::Pass.offset()]);
                 } else {
                     let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
-                    let d = Decision::new(side, Action::Event, scoring);
+                    let mut d = Decision::new(side, Action::Event, scoring);
                     return d.encode(state);
                 }
             } else {
@@ -90,26 +90,26 @@ impl Decision {
                 {
                     let scoring = state.deck.scoring_cards(side);
                     let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
-                    let x = Decision::new(side, Action::Event, scoring);
+                    let mut x = Decision::new(side, Action::Event, scoring);
                     return x.encode(state);
                 }
                 // Else discard normally
                 let legal: Vec<_> = can_discard.into_iter().map(|x| x as usize).collect();
-                let x = Decision::new(state.side, Action::Discard, legal);
+                let mut x = Decision::new(state.side, Action::Discard, legal);
                 return x.encode(state);
             }
         }
         let space = state.legal_space(self.agent);
-        let space_d = Decision::new(self.agent, Action::Space, space);
+        let mut space_d = Decision::new(self.agent, Action::Space, space);
         let mut out = space_d.encode(state);
         let cc = |vec: Vec<Card>| vec.into_iter().map(|c| c as usize).collect::<Vec<_>>();
         let before_after = cc(state.deck.opp_events_fire(side, state));
         let event = cc(state.deck.can_event(side, state));
         let ops = cc(state.deck.can_play_ops(side, state));
-        let e_ops = Decision::new(self.agent, Action::EventOps, before_after.clone());
-        let ops_e = Decision::new(self.agent, Action::OpsEvent, before_after);
-        let e = Decision::new(self.agent, Action::Event, event);
-        let ops = Decision::new(self.agent, Action::Ops, ops);
+        let mut e_ops = Decision::new(self.agent, Action::EventOps, before_after.clone());
+        let mut ops_e = Decision::new(self.agent, Action::OpsEvent, before_after);
+        let mut e = Decision::new(self.agent, Action::Event, event);
+        let mut ops = Decision::new(self.agent, Action::Ops, ops);
         out.extend(e_ops.encode(state));
         out.extend(ops_e.encode(state));
         out.extend(e.encode(state));
@@ -120,16 +120,16 @@ impl Decision {
 }
 
 pub(crate) trait TensorOutput {
-    fn encode(&self, state: &GameState) -> OutputVec;
+    fn encode(&mut self, state: &GameState) -> OutputVec;
 }
 
 impl TensorOutput for Decision {
-    fn encode(&self, state: &GameState) -> OutputVec {
+    fn encode(&mut self, state: &GameState) -> OutputVec {
         let begin = self.action.offset();
         let out = match self.action {
             Action::BeginAr => {
                 let mut standard = if state.has_effect(self.agent, Effect::MissileEnvy) {
-                    let d =
+                    let mut d =
                         Decision::new(self.agent, Action::Ops, vec![Card::Missile_Envy as usize]);
                     d.encode(state)
                 } else {
@@ -163,15 +163,15 @@ impl TensorOutput for Decision {
             }
             Action::ConductOps => {
                 let inf = state.legal_influence(self.agent, self.quantity);
-                let inf_d = Decision::new(self.agent, Action::Influence, inf);
+                let mut inf_d = Decision::new(self.agent, Action::Influence, inf);
                 let mut out = inf_d.encode(state);
                 // Todo coup restrictions
                 let coup_realign = state.legal_coup_realign(self.agent);
                 if !state.has_effect(self.agent, Effect::CubanMissileCrisis) {
-                    let coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
+                    let mut coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
                     out.extend(coup_d.encode(state));
                 }
-                let realign_d = Decision::new(self.agent, Action::Realignment, coup_realign);
+                let mut realign_d = Decision::new(self.agent, Action::Realignment, coup_realign);
                 out.extend(realign_d.encode(state));
                 out
             }
@@ -183,7 +183,7 @@ impl TensorOutput for Decision {
                 let cuban_offset = self.action.offset();
                 let remove = self
                     .allowed
-                    .slice()
+                    .force_slice(state)
                     .iter()
                     .copied()
                     .map(|x| x + cuban_offset)
@@ -198,7 +198,7 @@ impl TensorOutput for Decision {
             _ => {
                 let v = self
                     .allowed
-                    .slice()
+                    .force_slice(state)
                     .iter()
                     .copied()
                     .map(|x| x + begin)
@@ -218,6 +218,9 @@ pub struct OutputIndex {
 impl OutputIndex {
     pub fn new(data: usize) -> OutputIndex {
         OutputIndex { data }
+    }
+    pub fn pass() -> OutputIndex {
+        OutputIndex::new(Action::Pass.offset())
     }
     // Encode a single action-choice pair.
     pub fn encode_single(action: Action, choice: usize) -> Self {
@@ -319,7 +322,7 @@ mod tests {
         hand.push(Card::Asia_Scoring);
         state.deck.us_hand_mut().extend(hand);
         let side = Side::US;
-        let d = Decision::new(side, Action::BeginAr, &[]);
+        let mut d = Decision::begin_ar(side);
         let output_vec = d.encode(&state);
         let mut events = 0;
         let mut spaces = 0;
@@ -342,7 +345,7 @@ mod tests {
         use crate::country::CName::*;
         use std::collections::HashSet;
         let state = GameState::four_four_two();
-        let d = Decision::new(Side::USSR, Action::ConductOps, &[]);
+        let mut d = Decision::conduct_ops(Side::USSR, 1);
         let output_vec = d.encode(&state);
         let mut coup = 0;
         let mut realign = 0;

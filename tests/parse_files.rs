@@ -23,7 +23,7 @@ fn check_countries(state: &GameState, us: &[(CName, i8)], ussr: &[(CName, i8)]) 
     for index in 0..country::NUM_COUNTRIES - 2 {
         let expected = &all_countries[index];
         let game = &state.countries[index];
-        // dbg!(CName::from_index(index));
+        dbg!(CName::from_index(index));
         assert_eq!(expected.us, game.us);
         assert_eq!(expected.ussr, game.ussr);
     }
@@ -36,8 +36,8 @@ fn events1() {
     let mut game = ts_engine::record::parse_lines(&s);
     game.setup();
     dbg!(game.state.turn);
-    let (s, _) = game.play(1, None);
-    assert_eq!(Side::Neutral, s);
+    let res = game.play(1, None);
+    assert!(res.is_ok());
     let us = [
         (Canada, 3),
         (UK, 4),
@@ -84,7 +84,7 @@ fn parse_one_turn() {
     let mut game = ts_engine::record::parse_lines(&s);
     assert_eq!(game.rng.us_rolls, vec![6, 1]);
     game.setup();
-    game.play(1, None);
+    assert!(game.play(1, None).is_ok());
     let us = [
         (Canada, 2),
         (UK, 3),
@@ -119,9 +119,10 @@ fn parse_one_turn() {
         (Afghanistan, 2),
         (Cuba, 3),
     ];
+    dbg!(&game.state.countries[CName::Iraq as usize]);
     check_countries(&game.state, &us, &ussr);
     assert_eq!(game.state.turn, 2);
-    assert_eq!(game.state.defcon, 3);
+    assert_eq!(game.state.defcon(), 3);
     assert_eq!(game.state.vp, 0);
     assert!(game.state.us_effects.is_empty());
     assert!(game.state.ussr_effects.is_empty());

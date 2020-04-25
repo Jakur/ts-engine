@@ -68,7 +68,7 @@ impl ScriptedAgent {
         }
     }
     pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
-        let (_win, _pts) = game.play(goal_t, Some(goal_ar));
+        let _x = game.play(goal_t, Some(goal_ar));
     }
     fn next(&self) -> Option<OutputIndex> {
         self.choices.lock().unwrap().pop()
@@ -98,9 +98,11 @@ impl Agent for ScriptedAgent {
             }
         }
         let next = self.next().unwrap();
-        // dbg!(next);
-        // dbg!(&legal);
-        assert!(legal.contains(&next));
+        if !legal.contains(&next) {
+            dbg!(legal);
+            dbg!(next);
+            panic!("Legal does not contain next!");
+        }
         next.decode()
     }
     fn side(&self) -> Side {
@@ -144,6 +146,6 @@ impl Agent for RandAgent {
 }
 
 pub fn legal_headline(agent: Side, state: &GameState) -> OutputVec {
-    let d = Decision::headline(agent, state);
+    let mut d = Decision::headline(agent, state);
     d.encode(state)
 }

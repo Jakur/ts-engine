@@ -23,12 +23,56 @@ pub const NUM_ACTIONS: usize = Action::Pass as usize + 1;
 pub const CUBAN_OFFSET: usize = Action::CubanMissile as usize;
 pub const PASS: usize = Action::Pass as usize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Decision {
     pub agent: Side,
     pub action: Action,
     pub allowed: Allowed,
     pub quantity: i8,
+}
+
+impl std::fmt::Debug for Decision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        use crate::country::CName;
+        use Action::*;
+        let allowed_debug = match self.allowed.allowed {
+            AllowedType::Owned(ref v) => {
+                let out_vec: Vec<_> = match self.action {
+                    Ops | OpsEvent | Event | EventOps | Space | Discard => v
+                        .iter()
+                        .map(|c| format!("{:?}", Card::from_index(*c)))
+                        .collect(),
+                    Influence | Coup | Realignment | Place | Remove | War => v
+                        .iter()
+                        .map(|c| format!("{:?}", CName::from_index(*c)))
+                        .collect(),
+                    _ => v.iter().map(|c| format!("{}", c)).collect(),
+                };
+                format!("{:?}", out_vec)
+            }
+            AllowedType::Slice(ref v) => {
+                let out_vec: Vec<_> = match self.action {
+                    Ops | OpsEvent | Event | EventOps | Space | Discard => v
+                        .iter()
+                        .map(|c| format!("{:?}", Card::from_index(*c)))
+                        .collect(),
+                    Influence | Coup | Realignment | Place | Remove | War => v
+                        .iter()
+                        .map(|c| format!("{:?}", CName::from_index(*c)))
+                        .collect(),
+                    _ => v.iter().map(|c| format!("{:?}", c)).collect(),
+                };
+                format!("{:?}", out_vec)
+            }
+            _ => format!("{:?}", self.allowed.allowed),
+        };
+        f.debug_struct("Decision")
+            .field("agent", &self.agent)
+            .field("action", &self.action)
+            .field("allowed", &allowed_debug)
+            .field("quantity", &self.quantity)
+            .finish()
+    }
 }
 
 impl Decision {
@@ -50,16 +94,46 @@ impl Decision {
     where
         T: Into<Allowed>,
     {
+        let allowed = allowed.into();
+        match action {
+            Action::EndAr | Action::ClearEvent => assert_eq!(agent, Side::Neutral),
+            Action::ConductOps | Action::BeginAr => match allowed.allowed {
+                AllowedType::Unknown => {}
+                _ => panic!("Cannot determine slice until OutputIndex resolution"),
+            },
+            _ => assert_ne!(agent, Side::Neutral),
+        }
         Decision {
             agent,
             action,
-            allowed: allowed.into(),
+            allowed,
             quantity: q,
         }
     }
     /// Creates a (trivial) decision for eventing a single given card
     pub fn new_event(caller: Side, card: Card) -> Self {
         Decision::new(caller, Action::Event, vec![card as usize])
+    }
+    pub fn is_single_event(&self) -> bool {
+        if self.action != Action::Event {
+            return false;
+        }
+        match self.allowed.allowed {
+            AllowedType::Owned(ref vec) => vec.len() == 1,
+            _ => false,
+        }
+    }
+    pub fn is_trivial(&self) -> bool {
+        match self.action {
+            Action::BeginAr | Action::ConductOps => false,
+            _ => {
+                if let AllowedType::Lazy(_) = self.allowed.allowed {
+                    false // Todo decide if we should expand this
+                } else {
+                    self.allowed.try_slice().unwrap().len() < 2
+                }
+            }
+        }
     }
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);
@@ -73,16 +147,16 @@ impl Decision {
                 }
             })
             .collect();
-        Decision::new(agent, Action::Event, vec)
+        Decision::new(agent, Action::ChooseCard, vec)
     }
     pub fn begin_ar(agent: Side) -> Decision {
-        Decision::new(agent, Action::BeginAr, &[])
+        Decision::new(agent, Action::BeginAr, Allowed::new_unknown())
     }
     pub fn new_no_allowed(agent: Side, action: Action) -> Decision {
         Decision::new(agent, action, &[])
     }
     pub fn conduct_ops(agent: Side, ops: i8) -> Decision {
-        Decision::with_quantity(agent, Action::ConductOps, &[], ops)
+        Decision::with_quantity(agent, Action::ConductOps, Allowed::new_unknown(), ops)
     }
     pub fn next_decision(
         mut self,
@@ -109,7 +183,7 @@ impl Decision {
             let opp = self.agent.opposite();
             let allowed: Vec<_> = self
                 .allowed
-                .slice()
+                .force_slice(state)
                 .iter()
                 .copied()
                 .filter(|x| !state.is_controlled(opp, *x))
@@ -126,8 +200,9 @@ impl Decision {
 #[derive(Clone, Copy, FromPrimitive, Debug, PartialEq)]
 pub enum Action {
     BeginAr = 0,
-    ConductOps,
+    EndAr,
     ClearEvent,
+    ConductOps,
     Influence,
     Coup,
     Space,
@@ -158,7 +233,7 @@ impl Action {
         let countries = crate::country::NUM_COUNTRIES - 2;
         let cards = Card::total();
         match self {
-            ConductOps | BeginAr | ClearEvent => 1, // meta action or dummy
+            ConductOps | BeginAr | ClearEvent | EndAr => 1, // meta action or dummy
             Influence | Coup | Realignment | Place | Remove => countries,
             Space | Discard => cards,
             War => countries, // You can cut this down quite a bit as well
@@ -173,6 +248,9 @@ impl Action {
     }
     pub fn offset(&self) -> usize {
         OFFSETS[*self as usize]
+    }
+    pub fn from_index(index: usize) -> Action {
+        Action::from_usize(index).unwrap()
     }
     pub fn action_index(data: usize) -> usize {
         let res = OFFSETS.binary_search(&data);
@@ -222,20 +300,63 @@ impl Allowed {
             allowed: AllowedType::Empty,
         }
     }
-    pub fn slice(&self) -> &[usize] {
+    pub fn new_lazy(f: fn(&GameState) -> Vec<usize>) -> Allowed {
+        Allowed {
+            allowed: AllowedType::Lazy(f),
+        }
+    }
+    pub fn new_unknown() -> Allowed {
+        Allowed {
+            allowed: AllowedType::Unknown,
+        }
+    }
+    /// Attempts to slice allowed data that is currently readable.
+    pub fn try_slice(&self) -> Option<&[usize]> {
         match &self.allowed {
-            AllowedType::Slice(s) => s,
-            AllowedType::Owned(s) => &s,
-            AllowedType::Empty => &[],
+            AllowedType::Slice(s) => Some(s),
+            AllowedType::Owned(s) => Some(&s),
+            AllowedType::Empty => Some(&[]),
+            _ => None,
+        }
+    }
+    /// Forces a resolution of problem cases. For lazy allowed, it resolves the
+    /// laziness and converts the type appropriately. Panics on unknown allowed
+    /// for meta types.
+    pub fn force_slice(&mut self, state: &GameState) -> &[usize] {
+        let mut resolved = self.resolve(state);
+        if let Some(ref mut resolved) = resolved {
+            std::mem::swap(self, resolved);
+        }
+        self.try_slice().unwrap()
+    }
+    fn resolve(&self, state: &GameState) -> Option<Allowed> {
+        if let AllowedType::Lazy(f) = self.allowed {
+            Some(Allowed::new_owned(f(state)))
+        } else {
+            None
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum AllowedType {
     Slice(&'static [usize]),
+    Lazy(fn(&GameState) -> Vec<usize>),
     Owned(Vec<usize>),
     Empty,
+    Unknown, // Unable to be read, used for meta types
+}
+
+impl std::fmt::Debug for AllowedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            AllowedType::Slice(s) => write!(f, "{:?}", s),
+            AllowedType::Owned(v) => write!(f, "{:?}", v),
+            AllowedType::Empty => write!(f, "[]"),
+            AllowedType::Lazy(_) => write!(f, "LAZY"),
+            AllowedType::Unknown => write!(f, "UNK"),
+        }
+    }
 }
 
 impl From<Vec<usize>> for Allowed {
@@ -261,6 +382,11 @@ impl From<&[usize; 0]> for Allowed {
 mod tests {
     use super::*;
     use crate::country::CName;
+    #[test]
+    fn test_size() {
+        dbg!(std::mem::size_of::<Allowed>());
+        dbg!(std::mem::size_of::<Decision>());
+    }
     #[test]
     fn test_action_offsets() {
         let mut last = 0;

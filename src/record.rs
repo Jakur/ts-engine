@@ -84,7 +84,7 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "Special" => MetaAction::Real(Action::SpecialEvent),
         "Remove" => MetaAction::Real(Action::Remove),
         "Roll" => MetaAction::Roll,
-        "HL" => MetaAction::Real(Action::Event), // Headline
+        "HL" => MetaAction::Real(Action::ChooseCard), // Headline
         "OE" => MetaAction::Real(Action::OpsEvent),
         "EO" => MetaAction::Real(Action::EventOps),
         "E" => MetaAction::Real(Action::Event),
@@ -200,8 +200,13 @@ pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand
                     }
                 }
                 MetaAction::Real(act) => match act {
-                    Action::Event | Action::EventOps | Action::Ops | Action::OpsEvent => {
+                    Action::Event
+                    | Action::EventOps
+                    | Action::Ops
+                    | Action::OpsEvent
+                    | Action::ChooseCard => {
                         let card = parsed.card.unwrap();
+                        // Todo find exceptions to this
                         match parsed.side {
                             Side::US => us_cards.push(card),
                             Side::USSR => ussr_cards.push(card),

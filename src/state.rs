@@ -1,7 +1,7 @@
-use crate::action::{Action, Allowed, Decision, EventTime, Restriction};
+use crate::action::{Action, Allowed, Decision, Restriction};
 use crate::card::*;
 use crate::country::*;
-use crate::tensor::DecodedChoice;
+use crate::tensor::{DecodedChoice, OutputIndex, TensorOutput};
 
 use counter::Counter;
 
@@ -13,7 +13,7 @@ pub use random::{DebugRand, InternalRand, TwilightRand};
 pub struct GameState {
     pub countries: Vec<Country>,
     pub vp: i8,
-    pub defcon: i8,
+    defcon: i8,
     pub turn: i8,
     pub ar: i8,
     pub side: Side,
@@ -27,6 +27,7 @@ pub struct GameState {
     pub current_event: Option<Card>,
     pub vietnam: bool,
     pub china: bool,
+    pending: Vec<Decision>,
 }
 
 impl GameState {
@@ -35,7 +36,7 @@ impl GameState {
             countries: standard_start(),
             vp: 0,
             defcon: 5,
-            turn: 1, // Todo make compatible with initial placements
+            turn: 0,
             ar: 0,
             side: Side::USSR,
             space: [0, 0],
@@ -48,6 +49,7 @@ impl GameState {
             current_event: None,
             vietnam: false,
             china: false,
+            pending: Vec::new(),
         }
     }
     pub fn four_four_two() -> GameState {
@@ -62,25 +64,70 @@ impl GameState {
         c[Austria as usize].ussr = 1;
         state
     }
-    pub fn advance_ply(&mut self) -> Option<Side> {
-        let win = self.check_win();
+    pub fn advance_ply(&mut self) -> Result<(), Win> {
+        self.china = false; // Todo ensure China flag doesn't get left on
+        self.check_win()?;
         if let Side::US = self.side {
             self.ar += 1;
         }
         self.side = self.side.opposite();
         self.deck.flush_pending();
-        win
+        Ok(())
     }
-    pub fn check_win(&self) -> Option<Side> {
-        if self.defcon < 2 {
-            return Some(self.side.opposite());
+    pub fn advance_turn(&mut self) -> Result<(), Win> {
+        use std::cmp::max;
+        let us_held = self.deck.held_scoring(Side::US);
+        let ussr_held = self.deck.held_scoring(Side::USSR);
+        // Holding cards is illegal, but it's possible in the physical game
+        if us_held && ussr_held {
+            return Err(Win::HeldScoring(Side::US)); // US wins if both players cheat
+        } else if us_held {
+            return Err(Win::HeldScoring(Side::USSR));
+        } else if ussr_held {
+            return Err(Win::HeldScoring(Side::US));
+        }
+        // Mil ops
+        let defcon = self.defcon();
+        let us_pen = max(defcon - self.mil_ops[Side::US as usize], 0);
+        let ussr_pen = max(defcon - self.mil_ops[Side::USSR as usize], 0);
+        // These are penalties, so the signs are reversed from usual
+        self.vp -= us_pen;
+        self.vp += ussr_pen;
+        self.turn += 1;
+        self.ar = 0;
+        // Reset Defcon and Mil ops for next turn
+        self.set_defcon(defcon + 1);
+        self.mil_ops[0] = 0;
+        self.mil_ops[1] = 0;
+        // Check win before cleanup due to scoring cards held
+        self.check_win()?;
+        self.deck.end_turn_cleanup();
+        self.turn_effect_clear();
+        Ok(())
+    }
+    pub fn check_win(&self) -> Result<(), Win> {
+        if self.defcon() < 2 {
+            let side = self.side.opposite();
+            return Err(Win::Defcon(side));
         }
         if self.vp >= 20 {
-            return Some(Side::US);
+            return Err(Win::Vp(Side::US));
         } else if self.vp <= -20 {
-            return Some(Side::USSR);
+            return Err(Win::Vp(Side::USSR));
         }
-        None
+        Ok(())
+    }
+    pub fn defcon(&self) -> i8 {
+        self.defcon
+    }
+    pub fn set_defcon(&mut self, value: i8) {
+        if value > 5 {
+            self.defcon = 5;
+        } else if value < 1 {
+            self.defcon = 1;
+        } else {
+            self.defcon = value;
+        }
     }
     pub fn side(&self) -> &Side {
         &self.side
@@ -122,7 +169,7 @@ impl GameState {
                     if !bad.is_empty() {
                         let vec: Vec<_> = decision
                             .allowed
-                            .slice()
+                            .force_slice(&self)
                             .iter()
                             .copied()
                             .filter(|x| !bad.contains(x))
@@ -133,11 +180,20 @@ impl GameState {
             }
         }
     }
+    pub fn resolve_neutral(&mut self, action: Action) -> Result<(), Win> {
+        match action {
+            Action::EndAr => self.advance_ply(),
+            Action::ClearEvent => {
+                self.current_event = None;
+                self.check_win()
+            }
+            _ => unimplemented!(),
+        }
+    }
     pub fn resolve_action<R: TwilightRand>(
         &mut self,
         mut decision: Decision,
         choice: Option<usize>,
-        pending: &mut Vec<Decision>,
         history: &mut Vec<DecodedChoice>,
         rng: &mut R,
     ) -> Option<Decision> {
@@ -145,7 +201,11 @@ impl GameState {
             Some(c) => c,
             None => {
                 match decision.action {
-                    Action::Event => 0,
+                    Action::EndAr => {
+                        history.clear();
+                        return None;
+                    }
+                    Action::Event => panic!("This should not be hit?!"),
                     Action::ClearEvent => {
                         self.current_event = None;
                         return None;
@@ -165,8 +225,8 @@ impl GameState {
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 let event = Decision::new_event(side, card);
-                pending.push(conduct);
-                pending.push(event);
+                self.add_pending(conduct);
+                self.add_pending(event);
                 self.deck.play_card(side, card).expect("Found");
             }
             Action::OpsEvent => {
@@ -174,8 +234,8 @@ impl GameState {
                 let ops = card.modified_ops(decision.agent, self);
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 let event = Decision::new_event(side, card);
-                pending.push(event);
-                pending.push(conduct);
+                self.add_pending(event);
+                self.add_pending(conduct);
                 if card == Card::The_China_Card {
                     self.china = true;
                 }
@@ -189,20 +249,20 @@ impl GameState {
                     self.china = true;
                 }
                 let conduct = Decision::conduct_ops(decision.agent, ops);
-                pending.push(conduct);
+                self.add_pending(conduct);
                 self.deck.play_card(side, card).expect("Found");
             }
             Action::Event => {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
                 self.deck.play_card(side, card).expect("Found");
-                if card.event(self, pending, rng) && card.is_starred() {
+                if card.event(self, rng) && card.is_starred() {
                     self.deck.remove_card(card).expect("Remove Failure");
                 }
             }
             Action::SpecialEvent => {
                 let card = self.current_event;
-                card.unwrap().special_event(self, choice, pending, rng);
+                card.unwrap().special_event(self, choice, rng);
                 // Todo reset current event ?
             }
             Action::Space => {
@@ -331,21 +391,23 @@ impl GameState {
                                 &[],
                                 ops,
                             );
-                            pending.push(dec);
+                            self.add_pending(dec);
                         } else {
                             // ME eventer side card, or neutral
                             let dec = Decision::new_event(side.opposite(), chosen_card);
-                            pending.push(dec);
+                            self.add_pending(dec);
                         }
                         self.add_effect(side, Effect::MissileEnvy);
                     }
                     _ => unimplemented!(),
                 }
             }
-            Action::ChangeDefcon => self.defcon = choice as i8,
-            Action::BeginAr | Action::ConductOps | Action::Pass | Action::ClearEvent => {
-                unreachable!()
-            }
+            Action::ChangeDefcon => self.set_defcon(choice as i8),
+            Action::BeginAr
+            | Action::EndAr
+            | Action::ConductOps
+            | Action::Pass
+            | Action::ClearEvent => unreachable!(),
         }
         let decoded = DecodedChoice::new(decision.action, Some(choice));
         history.push(decoded);
@@ -567,7 +629,7 @@ impl GameState {
             Side::Neutral => unimplemented!(),
         }
         if c.bg {
-            self.defcon -= 1;
+            self.set_defcon(self.defcon() - 1);
         }
         if !free {
             let x = side as usize;
@@ -720,13 +782,14 @@ impl GameState {
         let mut vec: Vec<usize> = valid(&AFRICA).collect();
         vec.extend(valid(&CENTRAL_AMERICA));
         vec.extend(valid(&SOUTH_AMERICA));
-        if self.defcon >= 3 {
+        let defcon = self.defcon();
+        if defcon >= 3 {
             vec.extend(valid(&MIDDLE_EAST));
         }
-        if self.defcon >= 4 {
+        if defcon >= 4 {
             vec.extend(valid(&ASIA));
         }
-        if self.defcon >= 5 {
+        if defcon >= 5 {
             if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
                 let mut set: HashSet<usize> = EUROPE
                     .iter()
@@ -853,12 +916,87 @@ impl GameState {
             _ => unimplemented!(),
         }
     }
-    pub fn mil_ops(&self, side: Side) -> i8 {
-        self.mil_ops[side as usize]
+    pub fn add_pending(&mut self, decision: Decision) {
+        // After
+        let act = decision.action;
+        let side = decision.agent;
+        match act {
+            Action::Event => {
+                self.pending
+                    .push(Decision::new(Side::Neutral, Action::ClearEvent, &[]))
+            }
+            Action::BeginAr => self
+                .pending
+                .push(Decision::new(Side::Neutral, Action::EndAr, &[])),
+            _ => {}
+        }
+
+        self.pending.push(decision);
+
+        // Before
+        match act {
+            Action::Coup | Action::ConductOps => {
+                if self.has_effect(side, Effect::CubanMissileCrisis) {
+                    let legal = self.legal_cuban(side);
+                    self.pending
+                        .push(Decision::new(side, Action::CubanMissile, legal));
+                }
+            }
+            _ => {}
+        }
     }
-    pub fn set_limit(&mut self, limit: usize, pending_actions: &mut Vec<Decision>) {
+    pub fn next_legal(&mut self) -> Vec<OutputIndex> {
+        let d = self.pending.pop();
+        if let Some(mut d) = d {
+            let encoded = d.encode(&self);
+            self.pending.push(d);
+            encoded
+        } else {
+            vec![OutputIndex::pass()]
+        }
+    }
+    pub fn pending(&self) -> &[Decision] {
+        &self.pending
+    }
+    pub fn remove_pending(&mut self) -> Option<Decision> {
+        self.pending.pop()
+    }
+    pub fn peek_pending(&self) -> Option<&Decision> {
+        self.pending.last()
+    }
+    pub fn peek_pending_mut(&mut self) -> Option<&mut Decision> {
+        self.pending.last_mut()
+    }
+    pub fn order_headlines(&mut self) {
+        let priority = |x: &Decision| {
+            let c = Card::from_index(x.allowed.try_slice().unwrap()[0]);
+            2 * c.base_ops() + (Side::US == x.agent) as i8
+        };
+        let mut iter = self
+            .pending
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_i, x)| x.action == Action::Event);
+        let (i1, e1) = iter.next().unwrap();
+        let (i2, e2) = iter.next().unwrap();
+        if priority(e2) > priority(e1) {
+            self.pending.swap(i1, i2);
+        }
+    }
+    pub fn set_pending(&mut self, pending: Vec<Decision>) {
+        assert!(self.pending.is_empty());
+        self.pending = pending;
+    }
+    pub fn empty_pending(&self) -> bool {
+        self.pending.is_empty()
+    }
+    pub fn set_limit(&mut self, limit: usize) {
         self.restrict = Some(Restriction::Limit(limit));
         // Todo restriction clear more nicely
+    }
+    pub fn mil_ops(&self, side: Side) -> i8 {
+        self.mil_ops[side as usize]
     }
     pub fn ar_left(&self, side: Side) -> i8 {
         let goal = match self.period() {
@@ -887,6 +1025,23 @@ pub enum Period {
     Early,
     Middle,
     Late,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Win {
+    Defcon(Side),
+    Vp(Side),
+    HeldScoring(Side),
+}
+
+impl Win {
+    pub fn winner(&self) -> Side {
+        match self {
+            Win::Defcon(s) => *s,
+            Win::Vp(s) => *s,
+            Win::HeldScoring(s) => *s,
+        }
+    }
 }
 
 #[cfg(test)]
