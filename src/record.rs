@@ -42,6 +42,19 @@ macro_rules! become_err {
     };
 }
 
+pub struct Record {
+    pub ussr_agent: ScriptedAgent,
+    pub us_agent: ScriptedAgent,
+    pub rng: DebugRand,
+}
+
+impl Into<Game<ScriptedAgent, ScriptedAgent, DebugRand>> for Record {
+    fn into(self) -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
+        let state = GameState::new();
+        Game::new(self.ussr_agent, self.us_agent, state, self.rng)
+    }
+}
+
 fn side(x: &str) -> IResult<&str, Side> {
     let p = map(
         nom::branch::alt((tag("USSR"), tag("US"))),
@@ -177,7 +190,7 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
     })
 }
 
-pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
+pub fn parse_lines(string: &str) -> Record {
     let mut last_side = Side::USSR;
     let mut us_rolls = Vec::new();
     let mut ussr_rolls = Vec::new();
@@ -235,7 +248,11 @@ pub fn parse_lines(string: &str) -> Game<ScriptedAgent, ScriptedAgent, DebugRand
     let us_agent = ScriptedAgent::new(&choices[Side::US as usize]);
     let ussr_agent = ScriptedAgent::new(&choices[Side::USSR as usize]);
     let rng = DebugRand::new(us_rolls, ussr_rolls, vec![], us_cards, ussr_cards);
-    Game::new(ussr_agent, us_agent, GameState::new(), rng)
+    Record {
+        ussr_agent,
+        us_agent,
+        rng,
+    }
 }
 
 #[cfg(test)]

@@ -44,6 +44,15 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             status: Status::Start,
         }
     }
+    pub fn turn_one(ussr_agent: A, us_agent: B, rng: R) -> Game<A, B, R> {
+        let state = GameState::four_four_two();
+        let mut game = Game::new(ussr_agent, us_agent, state, rng);
+        game.state.deck.draw_cards(8, &mut game.rng);
+        game.state.set_pending(game.hl_order());
+        game.state.turn = 1;
+        game.status = Status::ChooseHL;
+        game
+    }
     pub fn setup(&mut self) {
         // Todo figure this out
         self.state.deck.draw_cards(8, &mut self.rng);
@@ -256,7 +265,8 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         if self.state.ar == 0 && self.state.turn != 0 {
             self.state.set_pending(self.hl_order());
         }
-        while self.state.turn <= goal_turn {
+        let goal_ar = goal_ar.unwrap_or(10);
+        while self.state.turn <= goal_turn && self.state.ar <= goal_ar {
             let next = self.state.peek_pending().unwrap();
             let side = next.agent;
             let decoded = if next.is_trivial() {
@@ -369,11 +379,14 @@ mod tests {
         assert_eq!(game.play(10, None), Err(Win::Defcon(Side::US)));
     }
     fn test_traps() {
-        // let mut game = standard_start();
-        // game.state.deck.us_hand_mut().extend([Card::De_Gaulle_Leads_France, Card::Comecon].iter());
-        // game.state.deck.us_hand_mut().extend(vec![Card::Summit; 5].iter());
-        // game.state.deck.ussr_hand_mut().extend([Card::Olympic_Games, Card::NATO].iter());
-        // game.state.deck.ussr_hand_mut().extend(vec![Card::Summit; 5].iter());
+        let text = "USSR Quagmire HL
+        US Duck_and_Cover HL
+        USSR CIA_Created
+        Coup Iran
+        Roll 6
+        US Place France
+        US Discard Socialist_Governments";
+        //let game = Game::turn_one();
     }
     fn standard_start() -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
         use CName::*;

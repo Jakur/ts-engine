@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use ts_engine;
 use ts_engine::country::{self, CName};
+use ts_engine::game::Game;
 use ts_engine::state::GameState;
 
 fn load_file(name: &str) -> String {
@@ -33,7 +34,7 @@ fn check_countries(state: &GameState, us: &[(CName, i8)], ussr: &[(CName, i8)]) 
 fn events1() {
     use ts_engine::country::{CName::*, Side};
     let s = load_file("tests/Events1.record");
-    let mut game = ts_engine::record::parse_lines(&s);
+    let mut game: Game<_, _, _> = ts_engine::record::parse_lines(&s).into();
     game.setup();
     dbg!(game.state.turn);
     let res = game.play(1, None);
@@ -81,7 +82,7 @@ fn parse_one_turn() {
     use ts_engine::card::Card;
     use ts_engine::country::{CName::*, Side};
     let s = load_file("tests/Brashers_Ziemovit2020.record");
-    let mut game = ts_engine::record::parse_lines(&s);
+    let mut game: Game<_, _, _> = ts_engine::record::parse_lines(&s).into();
     assert_eq!(game.rng.us_rolls, vec![6, 1]);
     game.setup();
     assert!(game.play(1, None).is_ok());
