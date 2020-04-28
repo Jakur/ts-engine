@@ -107,7 +107,7 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "Discard" => MetaAction::Real(Action::Discard),
         "Space" => MetaAction::Real(Action::Space),
         "Touch" => MetaAction::Touch,
-        _ => MetaAction::Unknown, // Always a play card ?
+        _ => panic!("Unexpected keyword {}", word),
     };
     Ok((left, meta))
 }
@@ -241,12 +241,19 @@ pub fn parse_lines(string: &str) -> Record {
                         let x = OutputIndex::encode_single(act, card as usize);
                         choices[parsed.side as usize].push(x);
                     }
-                    _ => {
+                    Action::Influence
+                    | Action::Coup
+                    | Action::Realignment
+                    | Action::Place
+                    | Action::Remove
+                    | Action::War
+                    | Action::SpecialEvent => {
                         for choice in parsed.choices.unwrap() {
                             let x = OutputIndex::encode_single(act, choice);
                             choices[parsed.side as usize].push(x);
                         }
                     }
+                    _ => unimplemented!(),
                 },
                 _ => unimplemented!(),
             }
