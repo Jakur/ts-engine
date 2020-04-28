@@ -25,14 +25,7 @@ impl Deck {
             china: Side::USSR,
             china_up: true,
         };
-        // Todo early war cards with higher indices
-        for c_index in 1..Card::Formosan_Resolution as usize + 1 {
-            let card = Card::from_index(c_index);
-            if card == Card::The_China_Card {
-                continue;
-            }
-            deck.draw_pile.push(card);
-        }
+        deck.add_early_war();
         deck
     }
     pub fn hand(&self, side: Side) -> &Vec<Card> {
@@ -248,6 +241,23 @@ impl Deck {
     }
     pub fn reshuffle<T: TwilightRand>(&mut self, rng: &mut T) {
         rng.reshuffle(self);
+    }
+    pub fn add_early_war(&mut self) {
+        // Todo early war cards with higher indices
+        for c_index in 1..Card::Formosan_Resolution as usize + 1 {
+            let card = Card::from_index(c_index);
+            if card == Card::The_China_Card {
+                continue;
+            }
+            self.draw_pile.push(card);
+        }
+    }
+    pub fn add_mid_war(&mut self) {
+        // Todo the rest
+        for c_index in Card::Formosan_Resolution as usize + 1..Card::total() {
+            let card = Card::from_index(c_index);
+            self.draw_pile.push(card);
+        }
     }
 }
 

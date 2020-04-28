@@ -47,15 +47,18 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     pub fn turn_one(ussr_agent: A, us_agent: B, rng: R) -> Game<A, B, R> {
         let state = GameState::four_four_two();
         let mut game = Game::new(ussr_agent, us_agent, state, rng);
-        game.state.deck.draw_cards(8, &mut game.rng);
-        game.state.set_pending(game.hl_order());
         game.state.turn = 1;
+        game.state.ar = 0;
         game.status = Status::ChooseHL;
         game
     }
+    pub fn draw_hands(&mut self) {
+        let goal = if self.state.turn <= 3 { 8 } else { 9 };
+        self.state.deck.draw_cards(goal, &mut self.rng);
+    }
     pub fn setup(&mut self) {
         // Todo figure this out
-        self.state.deck.draw_cards(8, &mut self.rng);
+        self.draw_hands();
         self.initial_placement();
     }
     pub fn legal(&mut self) -> Vec<OutputIndex> {
@@ -67,9 +70,10 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
     pub fn consume_action(&mut self, decoded: DecodedChoice) -> Result<i8, Win> {
         let init_vp = self.state.vp;
         // dbg!(&self.status);
-        // dbg!(self.state.peek_pending());
         // dbg!(self.state.side);
+        // dbg!(self.state.peek_pending());
         // dbg!(self.state.vp);
+        // dbg!(self.legal());
         // dbg!(&decoded);
         self.consume(decoded);
         self.resolve_neutral()?;
@@ -93,7 +97,6 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             Status::ResolveHL => {
                 if let Some(pending) = self.state.peek_pending() {
                     if pending.is_single_event() {
-                        dbg!(&pending);
                         // Set phasing side
                         self.state.side = pending.agent;
                     }
@@ -262,7 +265,7 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         }
     }
     pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> Result<(), Win> {
-        if self.state.ar == 0 && self.state.turn != 0 {
+        if self.state.empty_pending() && self.state.ar == 0 && self.state.turn != 0 {
             self.state.set_pending(self.hl_order());
         }
         let goal_ar = goal_ar.unwrap_or(10);
@@ -350,6 +353,7 @@ mod tests {
     use super::*;
     use crate::agent::*;
     use crate::country::CName;
+    use crate::record::{parse_lines, Record};
     use crate::state::DebugRand;
     use crate::tensor::OutputIndex;
     #[test]
@@ -378,16 +382,7 @@ mod tests {
 
         assert_eq!(game.play(10, None), Err(Win::Defcon(Side::US)));
     }
-    fn test_traps() {
-        let text = "USSR Quagmire HL
-        US Duck_and_Cover HL
-        USSR CIA_Created
-        Coup Iran
-        Roll 6
-        US Place France
-        US Discard Socialist_Governments";
-        //let game = Game::turn_one();
-    }
+
     fn standard_start() -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
         use CName::*;
         let ussr = [Poland, Poland, Poland, Poland, EGermany, Austria];

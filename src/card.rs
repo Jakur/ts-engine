@@ -25,6 +25,7 @@ lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
 }
 
+#[derive(Debug)]
 pub struct Attributes {
     pub side: Side,
     pub ops: i8,
@@ -126,6 +127,7 @@ macro_rules! pa {
 
 #[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum Card {
+    Dummy = 0,
     Asia_Scoring = 1,
     Europe_Scoring,
     Middle_East_Scoring,
@@ -397,6 +399,7 @@ impl Card {
         let clear = Decision::new(Side::Neutral, Action::ClearEvent, &[]);
         pa!(state, clear);
         match self {
+            Dummy => panic!("Debug card evented!"),
             Asia_Scoring => {
                 Region::Asia.score(state);
             }

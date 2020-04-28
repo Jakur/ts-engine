@@ -9,8 +9,8 @@ pub mod agent;
 pub mod card;
 pub mod country;
 pub mod game;
-pub mod state;
 pub mod record;
+pub mod state;
 mod tensor;
 
 #[cfg(test)]

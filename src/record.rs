@@ -80,9 +80,10 @@ fn card(x: &str) -> IResult<&str, Card> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum MetaAction {
     Real(Action),
+    Touch,
     Roll,
     Unknown,
 }
@@ -103,6 +104,9 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "E" => MetaAction::Real(Action::Event),
         "O" => MetaAction::Real(Action::Ops),
         "War" => MetaAction::Real(Action::War),
+        "Discard" => MetaAction::Real(Action::Discard),
+        "Space" => MetaAction::Real(Action::Space),
+        "Touch" => MetaAction::Touch,
         _ => MetaAction::Unknown, // Always a play card ?
     };
     Ok((left, meta))
@@ -155,7 +159,6 @@ struct Parsed {
 }
 
 fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
-    // dbg!(line);
     let (_, (side, _, card, _, act, _, choices)) = tuple((
         opt(side),
         opt(space),
@@ -212,12 +215,22 @@ pub fn parse_lines(string: &str) -> Record {
                         _ => unimplemented!(),
                     }
                 }
+                MetaAction::Touch => {
+                    let card = parsed.card.expect("Found a card to add");
+                    match parsed.side {
+                        Side::US => us_cards.push(card),
+                        Side::USSR => ussr_cards.push(card),
+                        _ => unimplemented!(),
+                    }
+                }
                 MetaAction::Real(act) => match act {
                     Action::Event
                     | Action::EventOps
                     | Action::Ops
                     | Action::OpsEvent
-                    | Action::ChooseCard => {
+                    | Action::ChooseCard
+                    | Action::Discard
+                    | Action::Space => {
                         let card = parsed.card.unwrap();
                         // Todo find exceptions to this
                         match parsed.side {
@@ -247,6 +260,7 @@ pub fn parse_lines(string: &str) -> Record {
     ussr_rolls = ussr_rolls.into_iter().rev().collect();
     let us_agent = ScriptedAgent::new(&choices[Side::US as usize]);
     let ussr_agent = ScriptedAgent::new(&choices[Side::USSR as usize]);
+    // dbg!(&us_agent.choices.lock().unwrap());
     let rng = DebugRand::new(us_rolls, ussr_rolls, vec![], us_cards, ussr_cards);
     Record {
         ussr_agent,

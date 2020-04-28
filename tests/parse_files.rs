@@ -1,11 +1,13 @@
 use std::fs::File;
 use std::io::prelude::*;
 use ts_engine;
+use ts_engine::card::Card;
 use ts_engine::country::{self, CName};
 use ts_engine::game::Game;
+use ts_engine::record::*;
 use ts_engine::state::GameState;
 
-fn load_file(name: &str) -> String {
+pub fn load_file(name: &str) -> String {
     let mut string = String::new();
     let mut f = File::open(name).unwrap();
     f.read_to_string(&mut string).unwrap();
@@ -28,6 +30,23 @@ fn check_countries(state: &GameState, us: &[(CName, i8)], ussr: &[(CName, i8)]) 
         assert_eq!(expected.us, game.us);
         assert_eq!(expected.ussr, game.ussr);
     }
+}
+
+#[test]
+fn test_traps() {
+    let text = load_file("tests/Traps1.record");
+    let record = parse_lines(&text);
+    let Record {
+        ussr_agent,
+        us_agent,
+        rng,
+    } = record;
+    let mut game = Game::turn_one(ussr_agent, us_agent, rng);
+    game.state.deck.add_mid_war();
+    game.draw_hands();
+    dbg!(game.state.deck.us_hand());
+    dbg!(game.state.deck.ussr_hand());
+    assert!(game.play(1, Some(5)).is_ok());
 }
 
 #[test]

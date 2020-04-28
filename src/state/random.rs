@@ -1,7 +1,7 @@
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
 use crate::card::{Card, Deck};
 use crate::country::Side;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 
 /// A trait representing the nondeterminism involved in Twilight Struggle. It is
 /// generic so we can abstract across games where we the program have control
@@ -14,7 +14,7 @@ pub trait TwilightRand {
     /// that side's hand is empty.
     fn card_from_hand(&mut self, deck: &Deck, side: Side) -> Option<Card>;
     /// Reshuffles the discard pile of the deck into the draw pile. Cards will
-    /// be drawn from the end of the draw pile vector, as in a stack. 
+    /// be drawn from the end of the draw pile vector, as in a stack.
     fn reshuffle(&mut self, deck: &mut Deck);
     /// Draws a new card for the given side from the draw pile, adding it to that
     /// player's hand.
@@ -23,15 +23,19 @@ pub trait TwilightRand {
 
 #[derive(Clone)]
 pub struct InternalRand {
-    rng: SmallRng
+    rng: SmallRng,
 }
 
 impl InternalRand {
     pub fn new_entropy() -> Self {
-        InternalRand { rng: SmallRng::from_entropy() }
+        InternalRand {
+            rng: SmallRng::from_entropy(),
+        }
     }
     pub fn new_seeded(seed: u64) -> Self {
-        InternalRand {rng: SmallRng::seed_from_u64(seed) }
+        InternalRand {
+            rng: SmallRng::seed_from_u64(seed),
+        }
     }
 }
 
@@ -77,10 +81,21 @@ impl DebugRand {
     pub fn new_empty() -> Self {
         Self::new(Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
     }
-    pub fn new(us_rolls: Vec<i8>, ussr_rolls: Vec<i8>, discards: Vec<Option<Card>>, 
-        us_draw: Vec<Card>, ussr_draw: Vec<Card>) -> Self {
-            DebugRand {us_rolls, ussr_rolls, discards, us_draw, ussr_draw}
+    pub fn new(
+        us_rolls: Vec<i8>,
+        ussr_rolls: Vec<i8>,
+        discards: Vec<Option<Card>>,
+        us_draw: Vec<Card>,
+        ussr_draw: Vec<Card>,
+    ) -> Self {
+        DebugRand {
+            us_rolls,
+            ussr_rolls,
+            discards,
+            us_draw,
+            ussr_draw,
         }
+    }
 }
 
 impl TwilightRand for DebugRand {
@@ -88,7 +103,7 @@ impl TwilightRand for DebugRand {
         match side {
             Side::US => self.us_rolls.pop().unwrap(),
             Side::USSR => self.ussr_rolls.pop().unwrap(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
     fn card_from_hand(&mut self, deck: &Deck, side: Side) -> Option<Card> {
@@ -111,17 +126,18 @@ impl TwilightRand for DebugRand {
             _ => None,
         };
         if let Some(card) = card {
+            // dbg!(card);
             if card == Card::The_China_Card {
-                return
+                return;
             }
+            // dbg!(deck.draw_pile());
             let index = deck.draw_pile().iter().position(|&c| c == card).unwrap();
             deck.draw_pile_mut().swap_remove(index);
             deck.hand_mut(side).push(card);
         } else {
-            // We've drawn all the known cards we care about, so just draw 
-            // non-scoring cards for now
-            let index = deck.draw_pile().iter().position(|c| !c.is_scoring()).unwrap();
-            let card = deck.draw_pile_mut().swap_remove(index);
+            // We've drawn all the known cards we care about, so just draw
+            // a dummy card for now
+            let card = Card::Dummy;
             deck.hand_mut(side).push(card);
         }
     }
