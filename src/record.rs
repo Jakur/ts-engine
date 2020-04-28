@@ -106,6 +106,7 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "War" => MetaAction::Real(Action::War),
         "Discard" => MetaAction::Real(Action::Discard),
         "Space" => MetaAction::Real(Action::Space),
+        "Pass" => MetaAction::Real(Action::Pass),
         "Touch" => MetaAction::Touch,
         _ => panic!("Unexpected keyword {}", word),
     };
@@ -171,6 +172,7 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
     .ok()?;
     let side = side.unwrap_or(last_side);
     let act = act.unwrap_or(MetaAction::Unknown);
+    dbg!(line);
     let act = if let MetaAction::Unknown = act {
         if let Some(c) = card {
             // Opponent card
@@ -253,6 +255,7 @@ pub fn parse_lines(string: &str) -> Record {
                             choices[parsed.side as usize].push(x);
                         }
                     }
+                    Action::Pass => choices[parsed.side as usize].push(OutputIndex::pass()),
                     _ => unimplemented!(),
                 },
                 _ => unimplemented!(),

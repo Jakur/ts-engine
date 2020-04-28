@@ -99,6 +99,7 @@ impl Agent for ScriptedAgent {
         }
         let next = self.next().unwrap();
         if !legal.contains(&next) {
+            dbg!(_state.ar);
             dbg!(legal);
             dbg!(next);
             panic!("Legal does not contain next!");

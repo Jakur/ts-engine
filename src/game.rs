@@ -119,6 +119,13 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
                         if self.state.turn > 10 {
                             return Err(self.final_scoring());
                         }
+                        // Deck / Hand management
+                        if self.state.turn == 4 {
+                            self.state.deck.add_mid_war();
+                        } else if self.state.turn == 7 {
+                            self.state.deck.add_late_war();
+                        }
+                        self.draw_hands();
                         self.status = Status::ChooseHL;
                         self.state.set_pending(self.hl_order());
                     } else {

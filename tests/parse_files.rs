@@ -46,7 +46,11 @@ fn test_traps() {
     game.draw_hands();
     dbg!(game.state.deck.us_hand());
     dbg!(game.state.deck.ussr_hand());
-    assert!(game.play(1, Some(5)).is_ok());
+    assert!(game.play(1, Some(6)).is_ok());
+    dbg!(game.state.deck.removed());
+    dbg!(game.state.deck.discard_pile());
+    dbg!(game.state.deck.us_hand());
+    // Todo test ops in the headline for USSR
 }
 
 #[test]

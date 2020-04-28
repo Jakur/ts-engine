@@ -259,6 +259,9 @@ impl Deck {
             self.draw_pile.push(card);
         }
     }
+    pub fn add_late_war(&mut self) {
+        todo!()
+    }
 }
 
 #[derive(Debug)]
