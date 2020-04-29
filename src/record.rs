@@ -47,6 +47,7 @@ pub struct Record {
     pub ussr_agent: ScriptedAgent,
     pub us_agent: ScriptedAgent,
     pub rng: DebugRand,
+    pub triggers: Vec<usize>,
 }
 
 impl Record {
@@ -64,7 +65,7 @@ impl Into<Replay> for Record {
     fn into(self) -> Replay {
         let state = GameState::new();
         let game = Game::new(state, self.rng);
-        Replay::new(self.us_agent, self.ussr_agent, game)
+        Replay::new(self.us_agent, self.ussr_agent, game, self.triggers)
     }
 }
 
@@ -96,6 +97,7 @@ fn card(x: &str) -> IResult<&str, Card> {
 #[derive(Debug, PartialEq)]
 enum MetaAction {
     Real(Action),
+    Check,
     Touch,
     Roll,
     Unknown,
@@ -121,6 +123,7 @@ fn action(x: &str) -> IResult<&str, MetaAction> {
         "Space" => MetaAction::Real(Action::Space),
         "Pass" => MetaAction::Real(Action::Pass),
         "Touch" => MetaAction::Touch,
+        "Check" => MetaAction::Check,
         _ => panic!("Unexpected keyword {}", word),
     };
     Ok((left, meta))
@@ -215,6 +218,7 @@ pub fn parse_lines(string: &str) -> Record {
     let mut us_cards = Vec::new();
     let mut ussr_cards = Vec::new();
     let mut choices = [Vec::new(), Vec::new()];
+    let mut triggers = Vec::new();
     for line in string.lines() {
         if line.starts_with("#") {
             continue;
@@ -237,6 +241,10 @@ pub fn parse_lines(string: &str) -> Record {
                         Side::USSR => ussr_cards.push(card),
                         _ => unimplemented!(),
                     }
+                }
+                MetaAction::Check => {
+                    let count = choices[0].len() + choices[1].len();
+                    triggers.push(count);
                 }
                 MetaAction::Real(act) => match act {
                     Action::Event
@@ -279,8 +287,9 @@ pub fn parse_lines(string: &str) -> Record {
         }
     }
     // Reverse rolls since we remove them LIFO instead of FIFO
-    us_rolls = us_rolls.into_iter().rev().collect();
-    ussr_rolls = ussr_rolls.into_iter().rev().collect();
+    us_rolls.reverse();
+    ussr_rolls.reverse();
+    triggers.reverse();
     let us_agent = ScriptedAgent::new(&choices[Side::US as usize]);
     let ussr_agent = ScriptedAgent::new(&choices[Side::USSR as usize]);
     // dbg!(&us_agent.choices.lock().unwrap());
@@ -289,6 +298,7 @@ pub fn parse_lines(string: &str) -> Record {
         ussr_agent,
         us_agent,
         rng,
+        triggers,
     }
 }
 

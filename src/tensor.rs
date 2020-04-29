@@ -27,6 +27,8 @@ lazy_static! {
         IndexMap::new(x)
     };
 }
+
+#[derive(Clone)]
 pub struct DecodedChoice {
     pub action: Action,
     pub choice: Option<usize>,

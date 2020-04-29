@@ -41,6 +41,7 @@ fn test_traps() {
     replay.game.four_four_two();
     // replay.game.setup();
     replay.game.state.deck.add_mid_war();
+    replay.add_check(Box::new(|x: &Replay| assert!(x.history.len() == 9)));
     // replay.game.draw_hands();
     // dbg!(game.state.deck.us_hand());
     // dbg!(game.state.deck.ussr_hand());

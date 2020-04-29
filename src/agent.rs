@@ -52,8 +52,6 @@ pub trait Agent {
     fn side(&self) -> Side;
     /// Returns just the evaluation of the given position
     fn get_eval(&self, state: &GameState) -> f32;
-    /// Handles a trivial action
-    fn trivial_action(&self, _action: Option<OutputIndex>) {}
 }
 
 pub struct ScriptedAgent {
@@ -67,9 +65,17 @@ impl ScriptedAgent {
             choices: Mutex::new(v),
         }
     }
-    pub fn legal_line(&self, game: &mut Game<DebugRand>, goal_t: i8, goal_ar: i8) {
-        todo!()
-        // let _x = game.play(goal_t, Some(goal_ar));
+    /// Handles a trivial action, returning whether something was removed from the list
+    pub fn trivial_action(&self, action: Option<OutputIndex>) -> bool {
+        let mut choices = self.choices.lock().unwrap();
+        let should_pop = match (choices.last(), action) {
+            (Some(next), Some(taken)) => taken == *next,
+            _ => false,
+        };
+        if should_pop {
+            choices.pop();
+        }
+        should_pop
     }
     fn next(&self) -> Option<OutputIndex> {
         self.choices.lock().unwrap().pop()
@@ -109,16 +115,6 @@ impl Agent for ScriptedAgent {
     }
     fn side(&self) -> Side {
         unimplemented!()
-    }
-    fn trivial_action(&self, action: Option<OutputIndex>) {
-        let mut choices = self.choices.lock().unwrap();
-        let should_pop = match (choices.last(), action) {
-            (Some(next), Some(taken)) => taken == *next,
-            _ => false,
-        };
-        if should_pop {
-            choices.pop();
-        }
     }
 }
 
