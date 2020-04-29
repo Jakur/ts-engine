@@ -5,6 +5,8 @@ use crate::country::Side;
 use crate::state::{DebugRand, GameState, TwilightRand, Win};
 use crate::tensor::{DecodedChoice, OutputIndex, TensorOutput};
 
+pub mod replay;
+
 #[derive(Clone, Copy)]
 enum Blocked {
     US,
@@ -20,9 +22,13 @@ enum Status {
     ResolveHL,
     AR,
 }
+pub enum Start {
+    Beginning,
+    HL(i8),
+    FirstAR(i8),
+}
 
-pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
-    pub actors: Actors<A, B>,
+pub struct Game<R: TwilightRand> {
     pub state: GameState,
     pub rng: R,
     ply_history: Vec<DecodedChoice>,
@@ -31,11 +37,9 @@ pub struct Game<A: Agent, B: Agent, R: TwilightRand> {
     status: Status,
 }
 
-impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
-    pub fn new(ussr_agent: A, us_agent: B, state: GameState, rng: R) -> Game<A, B, R> {
-        let actors = Actors::new(ussr_agent, us_agent);
+impl<R: TwilightRand> Game<R> {
+    pub fn new(state: GameState, rng: R) -> Game<R> {
         Game {
-            actors,
             state,
             rng,
             ply_history: Vec::new(),
@@ -44,22 +48,46 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             status: Status::Start,
         }
     }
-    pub fn turn_one(ussr_agent: A, us_agent: B, rng: R) -> Game<A, B, R> {
-        let state = GameState::four_four_two();
-        let mut game = Game::new(ussr_agent, us_agent, state, rng);
-        game.state.turn = 1;
-        game.state.ar = 0;
-        game.status = Status::ChooseHL;
-        game
+    pub fn four_four_two(&mut self) {
+        use crate::country::CName;
+        let c = &mut self.state.countries;
+        c[CName::Italy as usize].us = 4;
+        c[CName::WGermany as usize].us = 4;
+        c[CName::Iran as usize].us = 2;
+        c[CName::Poland as usize].ussr = 4;
+        c[CName::EGermany as usize].ussr = 4;
+        c[CName::Austria as usize].ussr = 1;
     }
     pub fn draw_hands(&mut self) {
         let goal = if self.state.turn <= 3 { 8 } else { 9 };
         self.state.deck.draw_cards(goal, &mut self.rng);
     }
-    pub fn setup(&mut self) {
-        // Todo figure this out
-        self.draw_hands();
-        self.initial_placement();
+    pub fn setup(&mut self, start: Start) {
+        match start {
+            Start::Beginning => {
+                self.status = Status::Start;
+                self.state.turn = 0;
+                self.state.ar = 0;
+                self.draw_hands();
+                self.initial_placement();
+            }
+            Start::HL(turn) => {
+                self.status = Status::ChooseHL;
+                self.state.turn = turn;
+                self.state.ar = 0;
+                self.draw_hands();
+                self.state.set_pending(self.hl_order());
+            }
+            Start::FirstAR(turn) => {
+                self.status = Status::AR;
+                self.state.turn = turn;
+                self.state.ar = 1;
+                self.state.side = Side::USSR;
+                let d = Decision::begin_ar(Side::USSR);
+                self.draw_hands();
+                self.state.set_pending(vec![d])
+            }
+        }
     }
     pub fn legal(&mut self) -> Vec<OutputIndex> {
         self.state.next_legal()
@@ -78,7 +106,11 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
         self.consume(decoded);
         self.resolve_neutral()?;
         self.update_status()?;
-        Ok(self.state.vp - init_vp)
+        if self.state.turn > 10 {
+            Err(self.final_scoring())
+        } else {
+            Ok(self.state.vp - init_vp)
+        }
     }
     fn update_status(&mut self) -> Result<(), Win> {
         match self.status {
@@ -271,33 +303,12 @@ impl<A: Agent, B: Agent, R: TwilightRand> Game<A, B, R> {
             vec![us_hl, ussr_hl]
         }
     }
-    pub fn play(&mut self, goal_turn: i8, goal_ar: Option<i8>) -> Result<(), Win> {
-        if self.state.empty_pending() && self.state.ar == 0 && self.state.turn != 0 {
-            self.state.set_pending(self.hl_order());
-        }
-        let goal_ar = goal_ar.unwrap_or(10);
-        while self.state.turn <= goal_turn && self.state.ar <= goal_ar {
-            let next = self.state.peek_pending().unwrap();
-            let side = next.agent;
-            let decoded = if next.is_trivial() {
-                let mut x = next.clone(); // This is cheap because next is trivial
-                let legal = x.encode(&self.state);
-                let action = legal.get(0).copied();
-                let agent = self.actors.get(next.agent);
-                agent.trivial_action(action);
-                action.unwrap_or(OutputIndex::pass()).decode()
-            } else {
-                let legal = self.legal();
-                let agent = self.actors.get(side);
-                agent.decide(&self.state, legal)
-            };
-            self.consume_action(decoded)?;
-        }
-        if self.state.turn >= 10 {
-            let res = self.final_scoring();
-            return Err(res);
-        }
-        Ok(())
+    pub fn standard_start(rng: R) -> Game<R> {
+        let state = GameState::four_four_two();
+        let mut game = Game::new(state, rng);
+        game.status = Status::ChooseHL;
+        game.state.set_pending(game.hl_order());
+        game
     }
     fn initial_placement(&mut self) {
         use crate::country::{EASTERN_EUROPE, WESTERN_EUROPE};
@@ -358,14 +369,15 @@ fn legal_bonus_influence(state: &GameState) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::*;
-    use crate::country::CName;
-    use crate::record::{parse_lines, Record};
+    use crate::game::replay::Replay;
+    use crate::record::Record;
     use crate::state::DebugRand;
-    use crate::tensor::OutputIndex;
     #[test]
     fn test_summit() {
-        let mut game = standard_start();
+        let rng = DebugRand::new(vec![5], vec![3], Vec::new(), Vec::new(), Vec::new());
+        let mut replay: Replay = Record::standard_start().into();
+        let game = &mut replay.game;
+        game.rng = rng;
         game.state.deck.us_hand_mut().extend(vec![Card::Summit; 7]);
         game.state
             .deck
@@ -375,46 +387,11 @@ mod tests {
         game.state.set_defcon(2);
         game.state.ar = 1;
         game.state.turn = 4;
-        let summit_play = OutputIndex::new(Action::Event.offset() + Card::Summit as usize);
-        let x = summit_play.decode().action;
-        assert_eq!(x, Action::Event);
-        let defcon_one = OutputIndex::new(Action::ChangeDefcon.offset() + 1);
-        let ussr = &mut game.actors.ussr_mut().choices;
-        ussr.lock().unwrap().push(summit_play);
-        let us = &mut game.actors.us_mut().choices;
-        us.lock().unwrap().push(defcon_one);
-        game.rng.us_rolls = vec![5];
-        game.rng.ussr_rolls = vec![3];
+        game.state.clear_pending();
         game.state.add_pending(Decision::begin_ar(Side::USSR));
-
-        assert_eq!(game.play(10, None), Err(Win::Defcon(Side::US)));
-    }
-
-    fn standard_start() -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
-        use CName::*;
-        let ussr = [Poland, Poland, Poland, Poland, EGermany, Austria];
-        let us = [
-            WGermany, WGermany, WGermany, WGermany, Italy, Italy, Italy, Italy, Iran,
-        ];
-        let ussr_agent = ScriptedAgent::new(&ussr.iter().map(|c| encode_inf(*c)).collect());
-        let us_agent = ScriptedAgent::new(&us.iter().map(|c| encode_inf(*c)).collect());
-        let actors = Actors::new(ussr_agent, us_agent);
-        let state = GameState::new();
-        let rng = DebugRand::new_empty();
-        let mut game = Game {
-            actors,
-            state,
-            rng,
-            ply_history: Vec::new(),
-            us_buf: Vec::new(),
-            ussr_buf: Vec::new(),
-            status: Status::Start,
-        };
-        game.setup();
-        game
-    }
-    fn encode_inf(c_name: CName) -> OutputIndex {
-        let offset = Action::Place.offset();
-        OutputIndex::new(offset + (c_name as usize))
+        let summit_play = DecodedChoice::new(Action::Event, Some(Card::Summit as usize));
+        let defcon_one = DecodedChoice::new(Action::ChangeDefcon, Some(1));
+        assert!(game.consume_action(summit_play).is_ok());
+        assert_eq!(game.consume_action(defcon_one), Err(Win::Defcon(Side::US)));
     }
 }

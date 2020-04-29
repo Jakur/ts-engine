@@ -67,8 +67,9 @@ impl ScriptedAgent {
             choices: Mutex::new(v),
         }
     }
-    pub fn legal_line(&self, game: &mut Game<Self, Self, DebugRand>, goal_t: i8, goal_ar: i8) {
-        let _x = game.play(goal_t, Some(goal_ar));
+    pub fn legal_line(&self, game: &mut Game<DebugRand>, goal_t: i8, goal_ar: i8) {
+        todo!()
+        // let _x = game.play(goal_t, Some(goal_ar));
     }
     fn next(&self) -> Option<OutputIndex> {
         self.choices.lock().unwrap().pop()

@@ -2,6 +2,7 @@ use crate::action::Action;
 use crate::agent::ScriptedAgent;
 use crate::card::Card;
 use crate::country::{CName, Side};
+use crate::game::replay::Replay;
 use crate::game::Game;
 use crate::state::{DebugRand, GameState};
 use crate::tensor::OutputIndex;
@@ -48,10 +49,22 @@ pub struct Record {
     pub rng: DebugRand,
 }
 
-impl Into<Game<ScriptedAgent, ScriptedAgent, DebugRand>> for Record {
-    fn into(self) -> Game<ScriptedAgent, ScriptedAgent, DebugRand> {
+impl Record {
+    pub fn standard_start() -> Record {
+        let game_str = concat!(
+            "USSR Place 4-Poland 1-EGermany 1-Austria\n",
+            "US Place 4-WGermany 3-Italy\n",
+            "Place 1-Italy 1-Iran"
+        );
+        parse_lines(game_str)
+    }
+}
+
+impl Into<Replay> for Record {
+    fn into(self) -> Replay {
         let state = GameState::new();
-        Game::new(self.ussr_agent, self.us_agent, state, self.rng)
+        let game = Game::new(state, self.rng);
+        Replay::new(self.us_agent, self.ussr_agent, game)
     }
 }
 
@@ -172,7 +185,7 @@ fn parse_line(line: &str, last_side: Side) -> Option<Parsed> {
     .ok()?;
     let side = side.unwrap_or(last_side);
     let act = act.unwrap_or(MetaAction::Unknown);
-    dbg!(line);
+    // dbg!(line);
     let act = if let MetaAction::Unknown = act {
         if let Some(c) = card {
             // Opponent card

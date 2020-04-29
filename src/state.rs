@@ -988,6 +988,9 @@ impl GameState {
         assert!(self.pending.is_empty());
         self.pending = pending;
     }
+    pub fn clear_pending(&mut self) {
+        self.pending.clear();
+    }
     pub fn empty_pending(&self) -> bool {
         self.pending.is_empty()
     }

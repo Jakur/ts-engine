@@ -3,7 +3,8 @@ use std::io::prelude::*;
 use ts_engine;
 use ts_engine::card::Card;
 use ts_engine::country::{self, CName};
-use ts_engine::game::Game;
+use ts_engine::game::replay::Replay;
+use ts_engine::game::{Game, Start};
 use ts_engine::record::*;
 use ts_engine::state::GameState;
 
@@ -36,20 +37,17 @@ fn check_countries(state: &GameState, us: &[(CName, i8)], ussr: &[(CName, i8)]) 
 fn test_traps() {
     let text = load_file("tests/Traps1.record");
     let record = parse_lines(&text);
-    let Record {
-        ussr_agent,
-        us_agent,
-        rng,
-    } = record;
-    let mut game = Game::turn_one(ussr_agent, us_agent, rng);
-    game.state.deck.add_mid_war();
-    game.draw_hands();
-    dbg!(game.state.deck.us_hand());
-    dbg!(game.state.deck.ussr_hand());
-    assert!(game.play(1, Some(6)).is_ok());
-    dbg!(game.state.deck.removed());
-    dbg!(game.state.deck.discard_pile());
-    dbg!(game.state.deck.us_hand());
+    let mut replay: Replay = record.into();
+    replay.game.four_four_two();
+    // replay.game.setup();
+    replay.game.state.deck.add_mid_war();
+    // replay.game.draw_hands();
+    // dbg!(game.state.deck.us_hand());
+    // dbg!(game.state.deck.ussr_hand());
+    assert!(replay.play(Start::HL(4)).is_none());
+    // dbg!(game.state.deck.removed());
+    // dbg!(game.state.deck.discard_pile());
+    // dbg!(game.state.deck.us_hand());
     // Todo test ops in the headline for USSR
 }
 
@@ -57,11 +55,9 @@ fn test_traps() {
 fn events1() {
     use ts_engine::country::{CName::*, Side};
     let s = load_file("tests/Events1.record");
-    let mut game: Game<_, _, _> = ts_engine::record::parse_lines(&s).into();
-    game.setup();
-    dbg!(game.state.turn);
-    let res = game.play(1, None);
-    assert!(res.is_ok());
+    let mut replay: Replay = ts_engine::record::parse_lines(&s).into();
+    let res = replay.play(Start::Beginning);
+    assert!(res.is_none());
     let us = [
         (Canada, 3),
         (UK, 4),
@@ -93,9 +89,9 @@ fn events1() {
         (Angola, 1),
         (SouthAfrica, 1),
     ];
-    check_countries(&game.state, &us, &ussr);
+    check_countries(&replay.game.state, &us, &ussr);
     // dbg!(game.state.ar);
-    assert_eq!(game.state.turn, 2);
+    assert_eq!(replay.game.state.turn, 2);
     // assert_eq!(game.state.defcon, 4);
     // assert_eq!(game.state.vp, 0);
 }
@@ -105,10 +101,9 @@ fn parse_one_turn() {
     use ts_engine::card::Card;
     use ts_engine::country::{CName::*, Side};
     let s = load_file("tests/Brashers_Ziemovit2020.record");
-    let mut game: Game<_, _, _> = ts_engine::record::parse_lines(&s).into();
-    assert_eq!(game.rng.us_rolls, vec![6, 1]);
-    game.setup();
-    assert!(game.play(1, None).is_ok());
+    let mut replay: Replay = ts_engine::record::parse_lines(&s).into();
+    assert_eq!(replay.game.rng.us_rolls, vec![6, 1]);
+    assert!(replay.play(Start::Beginning).is_none());
     let us = [
         (Canada, 2),
         (UK, 3),
@@ -143,6 +138,7 @@ fn parse_one_turn() {
         (Afghanistan, 2),
         (Cuba, 3),
     ];
+    let game = &replay.game;
     dbg!(&game.state.countries[CName::Iraq as usize]);
     check_countries(&game.state, &us, &ussr);
     assert_eq!(game.state.turn, 2);
