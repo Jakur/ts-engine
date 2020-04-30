@@ -25,6 +25,9 @@ pub enum Effect {
     WWBY,
     WillyBrandt, // NATO
     TearDown,
+    AWACS,
+    FlowerPower,
+    U2,
 }
 
 impl Effect {
@@ -42,6 +45,7 @@ impl Effect {
             NoOpec => true,              // The lasting part of North Sea Oil
             MissileEnvy => true,         // Can span multiple turns, technically
             WillyBrandt => true,
+            FlowerPower => true,
             _ => false,
         }
     }

@@ -185,6 +185,9 @@ impl Deck {
         self.china = self.china.opposite();
         self.china_up = false;
     }
+    pub fn turn_china_up(&mut self) {
+        self.china_up = true;
+    }
     pub fn play_card(&mut self, side: Side, card: Card) -> Result<(), DeckError> {
         if let Card::The_China_Card = card {
             self.play_china();

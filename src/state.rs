@@ -247,6 +247,12 @@ impl GameState {
                 if card == Card::The_China_Card {
                     ops += 1;
                     self.china = true;
+                } else if card.is_war()
+                    && decision.agent == Side::US
+                    && card.can_event(self)
+                    && self.has_effect(Side::USSR, Effect::FlowerPower)
+                {
+                    self.vp -= 2;
                 }
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 self.add_pending(conduct);
@@ -256,6 +262,14 @@ impl GameState {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
                 self.deck.play_card(side, card).expect("Found");
+                // Todo make sure flower power works
+                if card.is_war()
+                    && decision.agent == Side::US
+                    && card.can_event(self)
+                    && self.has_effect(Side::USSR, Effect::FlowerPower)
+                {
+                    self.vp -= 2;
+                }
                 if card.event(self, rng) && card.is_starred() {
                     self.deck.remove_card(card).expect("Remove Failure");
                 }
@@ -803,10 +817,13 @@ impl GameState {
                     })
                     .collect();
                 // Todo other NATO exceptions
-                let france = &self.countries[CName::France as usize];
-                if france.controller() == Side::US {
-                    if self.has_effect(Side::USSR, Effect::DeGaulle) {
-                        set.insert(CName::France as usize);
+                let france = CName::France;
+                let wgermany = CName::WGermany;
+                let cancel_nato = [(france, Effect::DeGaulle), (wgermany, Effect::WillyBrandt)];
+                for (name, e) in cancel_nato.iter() {
+                    let c = &self.countries[*name as usize];
+                    if c.controller() == Side::US && self.has_effect(Side::USSR, *e) {
+                        set.insert(*name as usize);
                     }
                 }
                 vec.extend(set.iter());
@@ -878,6 +895,7 @@ impl GameState {
     }
     pub fn legal_war(&self, side: Side) -> Allowed {
         if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
+            // Note NATO exceptions do not matter, since they are all higher than 2 stability
             let vec: Vec<_> = BRUSH_TARGETS
                 .iter()
                 .copied()

@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use crate::action::{self, Action, Decision, EventTime};
+use crate::action::{Action, Allowed, Decision, EventTime};
 use crate::country::{self, CName, Country, Region, Side, Status};
 use crate::state::{GameState, Period, TwilightRand};
 
@@ -8,6 +8,7 @@ use num_traits::FromPrimitive;
 
 pub mod deck;
 pub mod effect;
+mod legal;
 pub use deck::*;
 pub use effect::*;
 
@@ -132,57 +133,67 @@ pub enum Card {
     Europe_Scoring,
     Middle_East_Scoring,
     Duck_and_Cover,
-    Five_Year_Plan,
+    Five_Year_Plan, // 5, Ironically
     The_China_Card,
     Socialist_Governments,
     Fidel,
     Vietnam_Revolts,
-    Blockade,
+    Blockade, // 10
     Korean_War,
     Romanian_Abdication,
     Arab_Israeli_War,
     Comecon,
-    Nasser,
+    Nasser, // 15
     Warsaw_Pact_Formed,
     De_Gaulle_Leads_France,
     Captured_Nazi_Scientist,
     Truman_Doctrine,
-    Olympic_Games,
+    Olympic_Games, // 20
     NATO,
     Independent_Reds,
     Marshall_Plan,
     Indo_Pakistani_War,
-    Containment,
+    Containment, // 25
     CIA_Created,
     US_Japan_Mutual_Defense_Pact,
     Suez_Crisis,
     East_European_Unrest,
-    Decolonization,
+    Decolonization, // 30
     Red_Scare_Purge,
     UN_Intervention,
     De_Stalinization,
     Nuclear_Test_Ban,
-    Formosan_Resolution = 35,
+    Formosan_Resolution, // 35
     Brush_War,
     Central_America_Scoring,
     Southeast_Asia_Scoring,
     Arms_Race,
-    Cuban_Missile_Crisis = 40,
+    Cuban_Missile_Crisis, // 40
     Nuclear_Subs,
     Quagmire,
     SALT_Negotiations,
     Bear_Trap,
-    Summit,
+    Summit,                         // 45
     How_I_Learned_To_Stop_Worrying, // I'm sorry this is so long
     Junta,
     Kitchen_Debates,
     Missile_Envy,
-    We_Will_Bury_You = 50,
+    We_Will_Bury_You, // 50
     Brezhnev_Doctrine,
     Portuguese_Empire_Crumbles,
     South_African_Unrest,
     Allende,
-    Willy_Brandt,
+    Willy_Brandt, // 55
+    Muslim_Revolution,
+    ABM_Treaty,
+    Cultural_Revolution,
+    Flower_Power,
+    U2_Incident, // 60
+    OPEC,
+    Lone_Gunman,
+    Colonial_Rear_Guards,
+    Panama_Canal_Returned,
+    Camp_David_Accords, // 65
 }
 
 impl Card {
@@ -582,6 +593,9 @@ impl Card {
                         }
                     })
                     .collect();
+                if state.has_effect(Side::USSR, Effect::U2) {
+                    state.vp -= 1;
+                }
                 let d = Decision::new(side, Action::Ops, vec);
                 pa!(state, d);
             }
@@ -732,6 +746,31 @@ impl Card {
                 state.countries[CName::WGermany as usize].ussr += 1;
                 state.ussr_effects.push(Effect::WillyBrandt);
             }
+            Muslim_Revolution => {
+                let allowed = Allowed::new_lazy(legal::muslim_rev);
+                let d = Decision::new(Side::USSR, Action::Remove, allowed);
+                pa!(state, d.clone());
+                pa!(state, d);
+            }
+            ABM_Treaty => {
+                state.set_defcon(state.defcon() + 1);
+                let ops = self.modified_ops(side, state);
+                pa!(state, Decision::conduct_ops(side, ops));
+            }
+            Cultural_Revolution => {
+                if let Side::US = state.deck.china() {
+                    state.deck.play_china();
+                    state.deck.turn_china_up();
+                } else {
+                    state.vp -= 1;
+                }
+            }
+            Flower_Power => state.ussr_effects.push(Effect::FlowerPower),
+            U2_Incident => {
+                state.vp -= 1;
+                state.add_effect(Side::USSR, Effect::U2);
+            }
+            _ => unimplemented!(),
             The_China_Card => {}
             Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
                 unimplemented!()
@@ -772,6 +811,7 @@ impl Card {
                 us_lead > 0
             }
             Willy_Brandt => !state.has_effect(Side::US, Effect::TearDown),
+            Muslim_Revolution => !state.has_effect(Side::US, Effect::AWACS),
             _ => true, // todo make this accurate
         }
     }
@@ -784,6 +824,15 @@ impl Card {
     }
     pub fn is_scoring(&self) -> bool {
         self.att().scoring
+    }
+    pub fn is_war(&self) -> bool {
+        match self {
+            Card::Arab_Israeli_War
+            | Card::Korean_War
+            | Card::Indo_Pakistani_War
+            | Card::Brush_War => true,
+            _ => false,
+        }
     }
     pub fn modified_ops(&self, side: Side, state: &GameState) -> i8 {
         let offset = state.base_ops_offset(side);
