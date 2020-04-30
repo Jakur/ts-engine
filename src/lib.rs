@@ -13,6 +13,25 @@ pub mod record;
 pub mod state;
 mod tensor;
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! name_index {
+    ($name:ident; $($element:expr),*) => {
+        pub const $name: [usize; $crate::count![@COUNT; $($element),*]] = [
+            $($element as usize),*
+        ];
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! count {
+    (@COUNT; $($element:expr),*) => {
+        <[()]>::len(&[$($crate::count![@SUBST; $element]),*])
+    };
+    (@SUBST; $_element:expr) => { () };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,4 @@
+use super::name_index;
 use crate::card::Effect;
 use crate::state::GameState;
 
@@ -7,6 +8,10 @@ use std::collections::HashSet;
 pub const NUM_COUNTRIES: usize = CName::USSR as usize + 1;
 pub const US_INDEX: usize = CName::US as usize;
 pub const USSR_INDEX: usize = CName::USSR as usize;
+name_index![INDIA_PAKISTAN; CName::India, CName::Pakistan];
+name_index![SUEZ; CName::France, CName::UK, CName::Israel];
+name_index![OPEC; CName::Egypt, CName::Iran, CName::Libya, CName::SaudiaArabia, 
+    CName::Iraq, CName::GulfStates, CName::Venezuela];
 
 lazy_static! {
     pub static ref EUROPE: Vec<usize> = Region::Europe.all_countries();
@@ -23,13 +28,6 @@ lazy_static! {
         v.extend(CENTRAL_AMERICA.iter().copied());
         v
     };
-    pub static ref INDIA_PAKISTAN: Vec<usize> =
-        vec![CName::India as usize, CName::Pakistan as usize];
-    pub static ref SUEZ: Vec<usize> = vec![
-        CName::France as usize,
-        CName::UK as usize,
-        CName::Israel as usize
-    ];
     pub static ref DECOL: Vec<usize> = AFRICA
         .iter()
         .cloned()
@@ -49,6 +47,9 @@ lazy_static! {
     pub static ref EDGES: Vec<Vec<usize>> = adjacency_list();
 }
 
+// name_index![OPEC; CName::Egypt, CName::Iran, CName::Libya, CName::SaudiaArabia, CName::Iraq, CName::GulfStates, CName::Venezuela];
+// name_index![2, 3, 4];
+// name_index![3, 5];
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
     US = 0,
