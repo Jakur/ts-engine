@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use crate::action::{Action, Allowed, Decision, EventTime};
+use crate::action::{Action, Allowed, Decision};
 use crate::country::{self, CName, Country, Region, Side, Status};
 use crate::state::{GameState, Period, TwilightRand};
 
@@ -12,15 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Willy_Brandt as usize + 1;
-
-const IND_REDS: [usize; 5] = [
-    CName::Yugoslavia as usize,
-    CName::Romania as usize,
-    CName::Bulgaria as usize,
-    CName::Hungary as usize,
-    CName::Czechoslovakia as usize,
-];
+const NUM_CARDS: usize = Card::Camp_David_Accords as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -113,6 +105,16 @@ fn init_cards() -> Vec<Attributes> {
         c(USSR, 2),
         c(USSR, 1).star(),
         c(USSR, 2).star(), // Willy
+        c(USSR, 4),
+        c(Neutral, 4),
+        c(USSR, 3).star(),
+        c(USSR, 4).star(),
+        c(USSR, 3).star(),
+        c(USSR, 3),
+        c(USSR, 1).star(),
+        c(US, 2),
+        c(US, 1).star(),
+        c(US, 2).star(), // Camp David
     ];
     x
 }
@@ -521,7 +523,7 @@ impl Card {
                 state.us_effects.push(Effect::Nato);
             }
             Independent_Reds => {
-                let allowed = opp_has_inf(&IND_REDS, Side::US, state);
+                let allowed = opp_has_inf(&country::IND_REDS, Side::US, state);
                 let x = Decision::new(Side::US, Action::Place, allowed);
                 pa!(state, x);
             }
@@ -770,7 +772,39 @@ impl Card {
                 state.vp -= 1;
                 state.add_effect(Side::USSR, Effect::U2);
             }
-            _ => unimplemented!(),
+            OPEC => {
+                let count = country::OPEC.iter().fold(0, |acc, c| {
+                    if let Side::USSR = state.countries[*c].controller() {
+                        acc + 1
+                    } else {
+                        acc
+                    }
+                });
+                state.vp -= count;
+            }
+            Lone_Gunman => {
+                let ops = self.modified_ops(Side::USSR, state);
+                state.add_effect(Side::USSR, Effect::US_Hand_Revealed);
+                pa!(state, Decision::conduct_ops(Side::USSR, ops));
+            }
+            Colonial_Rear_Guards => {
+                // USA Decol
+                state.set_limit(1);
+                let x = Decision::with_quantity(Side::US, Action::Place, &country::DECOL[..], 4);
+                pa!(state, x);
+            }
+            Panama_Canal_Returned => {
+                state.countries[CName::Panama as usize].us += 1;
+                state.countries[CName::CostaRica as usize].us += 1;
+                state.countries[CName::Venezuela as usize].us += 1;
+            }
+            Camp_David_Accords => {
+                state.vp += 1;
+                state.countries[CName::Israel as usize].us += 1;
+                state.countries[CName::Jordan as usize].us += 1;
+                state.countries[CName::Egypt as usize].us += 1;
+                state.add_effect(Side::US, Effect::CampDavid);
+            }
             The_China_Card => {}
             Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
                 unimplemented!()
@@ -812,6 +846,7 @@ impl Card {
             }
             Willy_Brandt => !state.has_effect(Side::US, Effect::TearDown),
             Muslim_Revolution => !state.has_effect(Side::US, Effect::AWACS),
+            OPEC => !state.has_effect(Side::US, Effect::NoOpec),
             _ => true, // todo make this accurate
         }
     }
@@ -889,12 +924,14 @@ mod tests {
     use num_traits::FromPrimitive;
     #[test]
     fn check_cards() {
+        // Cards are sequential and do not overflow u8
+        let cards: Vec<_> = (0..)
+            .map(|x| Card::from_u8(x))
+            .take_while(|x| x.is_some())
+            .collect();
+        assert_eq!(cards.len(), NUM_CARDS); // Make sure num cards is actually right
         let atts = init_cards();
         assert_eq!(atts.len(), NUM_CARDS);
-        let cards: Vec<_> = (1..NUM_CARDS).map(|x| Card::from_u8(x as u8)).collect();
-        for c in cards {
-            assert!(c.is_some());
-        }
     }
     #[test]
     fn check_special_cards() {
