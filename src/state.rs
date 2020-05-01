@@ -20,8 +20,8 @@ pub struct GameState {
     pub space: [i8; 2],
     pub mil_ops: [i8; 2],
     space_attempts: [i8; 2],
-    pub us_effects: Vec<Effect>,
-    pub ussr_effects: Vec<Effect>,
+    us_effects: Vec<Effect>,
+    ussr_effects: Vec<Effect>,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
     pub current_event: Option<Card>,
@@ -435,8 +435,16 @@ impl GameState {
             self.us_effects.swap_remove(pos);
         }
     }
+    pub fn us_effects(&self) -> &[Effect] {
+        &self.us_effects
+    }
+    pub fn ussr_effects(&self) -> &[Effect] {
+        &self.ussr_effects
+    }
     /// Return true if the side has the effect, else false.
     pub fn has_effect(&self, side: Side, effect: Effect) -> bool {
+        // Assert that we're not checking for something that's impossible
+        assert_ne!(side.opposite(), effect.allowed_side());
         let vec = match side {
             Side::US => &self.us_effects,
             Side::USSR => &self.ussr_effects,
@@ -446,6 +454,8 @@ impl GameState {
     }
     /// Returns the index of the effect if it is in play, or else None.
     pub fn effect_pos(&self, side: Side, effect: Effect) -> Option<usize> {
+        // Assert that we're not checking for something that's impossible
+        assert_ne!(side.opposite(), effect.allowed_side());
         let vec = match side {
             Side::US => &self.us_effects,
             Side::USSR => &self.ussr_effects,
@@ -454,6 +464,8 @@ impl GameState {
         vec.iter().position(|e| *e == effect)
     }
     pub fn add_effect(&mut self, side: Side, effect: Effect) {
+        // Assert that this event shouldn't only go to the opponent
+        assert_ne!(side.opposite(), effect.allowed_side());
         let vec = match side {
             Side::US => &mut self.us_effects,
             Side::USSR => &mut self.ussr_effects,

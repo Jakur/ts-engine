@@ -310,8 +310,8 @@ impl Card {
                 }
             }
             Warsaw_Pact_Formed => {
-                if !state.us_effects.contains(&Effect::AllowNato) {
-                    state.us_effects.push(Effect::AllowNato);
+                if !state.has_effect(Side::US, Effect::AllowNato) {
+                    state.add_effect(Side::US, Effect::AllowNato);
                 }
                 if choice == 0 {
                     let x = Decision::with_quantity(
@@ -461,7 +461,7 @@ impl Card {
                 state.remove_all(Side::US, CName::Cuba);
                 state.control(Side::USSR, CName::Cuba);
             }
-            Vietnam_Revolts => state.ussr_effects.push(Effect::VietnamRevolts),
+            Vietnam_Revolts => state.add_effect(Side::USSR, Effect::VietnamRevolts),
             Korean_War => {
                 let index = CName::SKorea as usize;
                 state.add_mil_ops(Side::USSR, 2);
@@ -506,7 +506,7 @@ impl Card {
                 let remove = std::cmp::min(2, c.us);
                 c.us -= remove;
                 c.ussr += 1;
-                state.ussr_effects.push(Effect::DeGaulle);
+                state.add_effect(Side::USSR, Effect::DeGaulle);
             }
             Captured_Nazi_Scientist => {
                 state.space_card(side, 1); // Todo ensure state.side is accurate
@@ -519,17 +519,15 @@ impl Card {
                     not_opp_cont(&country::EUROPE[..], side, state),
                 )
             ),
-            NATO => {
-                state.us_effects.push(Effect::Nato);
-            }
+            NATO => state.add_effect(Side::US, Effect::Nato),
             Independent_Reds => {
                 let allowed = opp_has_inf(&country::IND_REDS, Side::US, state);
                 let x = Decision::new(Side::US, Action::Place, allowed);
                 pa!(state, x);
             }
             Marshall_Plan => {
-                if !state.us_effects.contains(&Effect::AllowNato) {
-                    state.us_effects.push(Effect::AllowNato);
+                if !state.has_effect(Side::US, Effect::AllowNato) {
+                    state.add_effect(Side::US, Effect::AllowNato);
                 }
                 state.set_limit(1);
                 let x = Decision::with_quantity(
@@ -544,16 +542,16 @@ impl Card {
                 state,
                 Decision::new(*state.side(), Action::War, &country::INDIA_PAKISTAN[..],)
             ),
-            Containment => state.us_effects.push(Effect::Containment),
+            Containment => state.add_effect(Side::US, Effect::Containment),
             CIA_Created => {
                 let offset = std::cmp::max(0, state.base_ops_offset(Side::US));
-                state.us_effects.push(Effect::USSR_Hand_Revealed);
+                state.add_effect(Side::US, Effect::USSR_Hand_Revealed);
                 pa!(state, Decision::conduct_ops(Side::US, 1 + offset));
             }
             US_Japan_Mutual_Defense_Pact => {
                 state.control(Side::US, CName::Japan);
                 // This effect is so useless I wonder if I should bother
-                state.us_effects.push(Effect::US_Japan);
+                state.add_effect(Side::US, Effect::US_Japan);
             }
             Suez_Crisis => {
                 let x = Decision::with_quantity(
@@ -641,7 +639,7 @@ impl Card {
                 }
                 state.set_defcon(state.defcon() + 2);
             }
-            Formosan_Resolution => state.us_effects.push(Effect::FormosanResolution),
+            Formosan_Resolution => state.add_effect(Side::US, Effect::FormosanResolution),
             Brush_War => pa!(
                 state,
                 Decision::new(side, Action::War, state.legal_war(side))
@@ -734,10 +732,10 @@ impl Card {
             }
             We_Will_Bury_You => {
                 state.set_defcon(state.defcon() - 1);
-                state.us_effects.push(Effect::WWBY);
+                state.add_effect(Side::US, Effect::WWBY);
             }
             Kitchen_Debates => state.vp += 2,
-            Brezhnev_Doctrine => state.ussr_effects.push(Effect::Brezhnev),
+            Brezhnev_Doctrine => state.add_effect(Side::US, Effect::Brezhnev),
             Portuguese_Empire_Crumbles => {
                 state.countries[CName::Angola as usize].ussr += 2;
                 state.countries[CName::SEAfricanStates as usize].ussr += 2;
@@ -746,7 +744,7 @@ impl Card {
             Willy_Brandt => {
                 state.vp -= 1;
                 state.countries[CName::WGermany as usize].ussr += 1;
-                state.ussr_effects.push(Effect::WillyBrandt);
+                state.add_effect(Side::USSR, Effect::WillyBrandt);
             }
             Muslim_Revolution => {
                 let allowed = Allowed::new_lazy(legal::muslim_rev);
@@ -767,7 +765,7 @@ impl Card {
                     state.vp -= 1;
                 }
             }
-            Flower_Power => state.ussr_effects.push(Effect::FlowerPower),
+            Flower_Power => state.add_effect(Side::USSR, Effect::FlowerPower),
             U2_Incident => {
                 state.vp -= 1;
                 state.add_effect(Side::USSR, Effect::U2);

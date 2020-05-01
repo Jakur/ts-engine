@@ -105,10 +105,10 @@ mod tests {
             state.control(Side::USSR, *c);
         }
         // Use two copies of Shuttle, so order of scoring doesn't matter
-        state.us_effects.push(card::Effect::ShuttleDiplomacy);
-        state.us_effects.push(card::Effect::ShuttleDiplomacy);
+        state.add_effect(Side::US, card::Effect::ShuttleDiplomacy);
+        state.add_effect(Side::US, card::Effect::ShuttleDiplomacy);
 
-        state.us_effects.push(card::Effect::FormosanResolution);
+        state.add_effect(Side::US, card::Effect::FormosanResolution);
         let scores = [
             (Region::Europe, 0),
             (Region::MiddleEast, 0),

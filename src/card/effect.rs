@@ -1,3 +1,5 @@
+use crate::country::Side;
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Effect {
     ShuttleDiplomacy,
@@ -31,6 +33,19 @@ pub enum Effect {
 }
 
 impl Effect {
+    pub fn allowed_side(&self) -> Side {
+        use Effect::*;
+        match self {
+            ShuttleDiplomacy | FormosanResolution | IronLady | Containment | CampDavid
+            | AllowNato | Nato | USSR_Hand_Revealed | US_Japan | NuclearSubs | Quagmire
+            | NorthSeaOil | TearDown | AWACS | WWBY => Side::US,
+
+            VietnamRevolts | Brezhnev | DeGaulle | US_Hand_Revealed | BearTrap | NoOpec
+            | WillyBrandt | FlowerPower | U2 => Side::USSR,
+
+            RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy => Side::Neutral,
+        }
+    }
     pub fn permanent(&self) -> bool {
         use Effect::*;
         match self {

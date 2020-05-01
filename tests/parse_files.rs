@@ -145,8 +145,8 @@ fn parse_one_turn() {
     assert_eq!(game.state.turn, 2);
     assert_eq!(game.state.defcon(), 3);
     assert_eq!(game.state.vp, 0);
-    assert!(game.state.us_effects.is_empty());
-    assert!(game.state.ussr_effects.is_empty());
+    assert!(game.state.us_effects().is_empty());
+    assert!(game.state.ussr_effects().is_empty());
     assert_eq!(game.state.space[Side::US as usize], 1);
     assert_eq!(game.state.space[Side::USSR as usize], 0);
     assert_eq!(game.state.mil_ops[Side::US as usize], 0);
