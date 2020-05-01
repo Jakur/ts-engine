@@ -30,6 +30,9 @@ pub enum Effect {
     AWACS,
     FlowerPower,
     U2,
+    AllowSolidarity,
+    LatinAmericanPlus,
+    LatinAmericanMinus,
 }
 
 impl Effect {
@@ -38,12 +41,13 @@ impl Effect {
         match self {
             ShuttleDiplomacy | FormosanResolution | IronLady | Containment | CampDavid
             | AllowNato | Nato | USSR_Hand_Revealed | US_Japan | NuclearSubs | Quagmire
-            | NorthSeaOil | TearDown | AWACS | WWBY => Side::US,
+            | NorthSeaOil | TearDown | AWACS | WWBY | AllowSolidarity => Side::US,
 
             VietnamRevolts | Brezhnev | DeGaulle | US_Hand_Revealed | BearTrap | NoOpec
             | WillyBrandt | FlowerPower | U2 => Side::USSR,
 
-            RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy => Side::Neutral,
+            RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy | LatinAmericanPlus
+            | LatinAmericanMinus => Side::Neutral,
         }
     }
     pub fn permanent(&self) -> bool {
@@ -61,6 +65,7 @@ impl Effect {
             MissileEnvy => true,         // Can span multiple turns, technically
             WillyBrandt => true,
             FlowerPower => true,
+            AllowSolidarity => true,
             _ => false,
         }
     }

@@ -197,6 +197,39 @@ impl TensorOutput for Decision {
                 // Todo include pass or empty?
                 encode_offsets(vec![Action::Pass.offset()])
             }
+            Action::ChooseCard if state.current_event == Some(Card::Grain_Sales) => {
+                let mut vec = Vec::new();
+                let card = self
+                    .allowed
+                    .force_slice(state)
+                    .iter()
+                    .find(|&&c| c != 0)
+                    .map(|&c| Card::from_index(c))
+                    .unwrap();
+                let index = card as usize;
+                let ops = card.modified_ops(Side::US, state);
+                if state.can_space(Side::US, ops) {
+                    vec.push(Action::Space.offset() + index);
+                }
+                match card.side() {
+                    Side::US | Side::Neutral => {
+                        if card.can_event(state) && (state.ar != 0 || card.can_headline(state)) {
+                            vec.push(Action::Event.offset() + index);
+                        }
+                        vec.push(Action::Ops.offset() + index);
+                    }
+                    Side::USSR => {
+                        if card.can_event(state) && (state.ar != 0 || card.can_headline(state)) {
+                            vec.push(Action::OpsEvent.offset() + index);
+                            vec.push(Action::EventOps.offset() + index);
+                        } else {
+                            vec.push(Action::Ops.offset() + index);
+                        }
+                    }
+                }
+                vec.push(Action::ChooseCard.offset() + index); // Return card
+                encode_offsets(vec)
+            }
             _ => {
                 let v = self
                     .allowed

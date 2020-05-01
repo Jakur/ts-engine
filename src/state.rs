@@ -148,6 +148,7 @@ impl GameState {
         &self.countries[0..len - 2]
     }
     pub fn apply_restriction(&self, history: &[DecodedChoice], decision: &mut Decision) {
+        // Todo consider replacing this with lazy allowed functions
         if let Some(restrict) = &self.restrict {
             match restrict {
                 Restriction::Limit(num) => {
@@ -190,6 +191,20 @@ impl GameState {
             _ => unimplemented!(),
         }
     }
+    /// Handle discarding cards to deal with weird special cases like Grain Sales.
+    pub fn discard_card(&mut self, side: Side, card: Card) {
+        let side = if let Some(Card::Grain_Sales) = self.current_event {
+            // Check if this is the card Grain Sales hit, or Grain Sales itself
+            if let Card::Grain_Sales = card {
+                side
+            } else {
+                Side::USSR // Grain Sales can only hit USSR cards
+            }
+        } else {
+            side
+        };
+        self.deck.play_card(side, card).expect("Found");
+    }
     pub fn resolve_action<R: TwilightRand>(
         &mut self,
         mut decision: Decision,
@@ -227,7 +242,7 @@ impl GameState {
                 let event = Decision::new_event(side, card);
                 self.add_pending(conduct);
                 self.add_pending(event);
-                self.deck.play_card(side, card).expect("Found");
+                self.discard_card(side, card);
             }
             Action::OpsEvent => {
                 let card = Card::from_index(choice);
@@ -239,7 +254,7 @@ impl GameState {
                 if card == Card::The_China_Card {
                     self.china = true;
                 }
-                self.deck.play_card(side, card).expect("Found");
+                self.discard_card(side, card);
             }
             Action::Ops => {
                 let card = Card::from_index(choice);
@@ -256,12 +271,12 @@ impl GameState {
                 }
                 let conduct = Decision::conduct_ops(decision.agent, ops);
                 self.add_pending(conduct);
-                self.deck.play_card(side, card).expect("Found");
+                self.discard_card(side, card);
             }
             Action::Event => {
                 let card = Card::from_index(choice);
                 self.current_event = Some(card);
-                self.deck.play_card(side, card).expect("Found");
+                self.discard_card(side, card);
                 // Todo make sure flower power works
                 if card.is_war()
                     && decision.agent == Side::US
@@ -395,7 +410,7 @@ impl GameState {
                 match event {
                     Card::Missile_Envy => {
                         let chosen_card = Card::from_index(choice);
-                        self.deck.play_card(side, chosen_card).expect("Has card");
+                        self.discard_card(side, chosen_card);
                         if chosen_card.side() == side {
                             // Opponent Card -> Ops
                             let ops = chosen_card.modified_ops(side.opposite(), self);
@@ -412,6 +427,12 @@ impl GameState {
                             self.add_pending(dec);
                         }
                         self.add_effect(side, Effect::MissileEnvy);
+                    }
+                    Card::Grain_Sales => {
+                        // If we get here, we're giving the card back
+                        let ops = 2 + self.base_ops_offset(Side::US);
+                        let d = Decision::conduct_ops(Side::US, ops);
+                        self.add_pending(d);
                     }
                     _ => unimplemented!(),
                 }
@@ -661,9 +682,6 @@ impl GameState {
             let x = side as usize;
             self.mil_ops[x] = std::cmp::max(5, self.mil_ops[x] + ops);
         }
-    }
-    pub fn discard_card(&mut self, side: Side, card: Card) {
-        self.deck.play_card(side, card).expect("Found");
     }
     /// Returns cards in hand at least the given value. China is never
     /// included.

@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Camp_David_Accords as usize + 1;
+const NUM_CARDS: usize = Card::OAS_Founded as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -115,6 +115,11 @@ fn init_cards() -> Vec<Attributes> {
         c(US, 2),
         c(US, 1).star(),
         c(US, 2).star(), // Camp David
+        c(US, 2).star(),
+        c(US, 2),
+        c(US, 2).star(),
+        c(Neutral, 2),
+        c(US, 1).star(), // OAS
     ];
     x
 }
@@ -196,6 +201,11 @@ pub enum Card {
     Colonial_Rear_Guards,
     Panama_Canal_Returned,
     Camp_David_Accords, // 65
+    Puppet_Governments,
+    Grain_Sales,
+    John_Paul,
+    Latin_American_Death_Squads,
+    OAS_Founded, // 70
 }
 
 impl Card {
@@ -306,7 +316,7 @@ impl Card {
                         .map(|c| c as usize)
                         .collect();
                     let d = Decision::new(Side::US, Action::Discard, cards);
-                    // pa!(state, d);
+                    pa!(state, d);
                 }
             }
             Warsaw_Pact_Formed => {
@@ -802,6 +812,57 @@ impl Card {
                 state.countries[CName::Jordan as usize].us += 1;
                 state.countries[CName::Egypt as usize].us += 1;
                 state.add_effect(Side::US, Effect::CampDavid);
+            }
+            Puppet_Governments => {
+                state.set_limit(1);
+                let legal: Vec<_> = state
+                    .valid_countries()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, c)| {
+                        if c.us == 0 && c.ussr == 0 {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let d = Decision::with_quantity(Side::US, Action::Place, legal, 3);
+                pa!(state, d);
+            }
+            Grain_Sales => {
+                let hit = rng.card_from_hand(&state.deck, Side::USSR);
+                if let Some(card) = hit {
+                    let d = Decision::new(
+                        Side::US,
+                        Action::ChooseCard,
+                        vec![Card::Dummy as usize, card as usize],
+                    );
+                    pa!(state, d);
+                } else {
+                    let ops = 2 + state.base_ops_offset(Side::US);
+                    let d = Decision::conduct_ops(Side::US, ops);
+                    pa!(state, d);
+                }
+            }
+            John_Paul => {
+                let poland = &mut state.countries[CName::Poland as usize];
+                poland.ussr = std::cmp::max(poland.ussr - 2, 0);
+                poland.us += 1;
+                state.add_effect(Side::US, Effect::AllowSolidarity);
+            }
+            Latin_American_Death_Squads => {
+                state.add_effect(side, Effect::LatinAmericanPlus);
+                state.add_effect(side.opposite(), Effect::LatinAmericanMinus);
+            }
+            OAS_Founded => {
+                let d = Decision::with_quantity(
+                    Side::US,
+                    Action::Place,
+                    &country::LATIN_AMERICA[..],
+                    2,
+                );
+                pa!(state, d);
             }
             The_China_Card => {}
             Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
