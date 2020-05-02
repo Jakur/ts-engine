@@ -28,7 +28,7 @@ lazy_static! {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DecodedChoice {
     pub action: Action,
     pub choice: Option<usize>,

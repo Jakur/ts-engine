@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::OAS_Founded as usize + 1;
+const NUM_CARDS: usize = Card::Liberation_Theology as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -120,6 +120,11 @@ fn init_cards() -> Vec<Attributes> {
         c(US, 2).star(),
         c(Neutral, 2),
         c(US, 1).star(), // OAS
+        c(US, 2).star(),
+        c(US, 1).star(),
+        c(US, 3),
+        c(US, 2),
+        c(USSR, 2), // Lib Theo
     ];
     x
 }
@@ -206,6 +211,11 @@ pub enum Card {
     John_Paul,
     Latin_American_Death_Squads,
     OAS_Founded, // 70
+    Nixon_Plays_China,
+    Sadat_Expels_Soviets,
+    Shuttle_Diplomacy,
+    The_Voice_Of_America,
+    Liberation_Theology, // 75
 }
 
 impl Card {
@@ -864,6 +874,23 @@ impl Card {
                 );
                 pa!(state, d);
             }
+            Nixon_Plays_China => {
+                if let Side::USSR = state.deck.china() {
+                    state.deck.play_china();
+                } else {
+                    state.vp += 2;
+                }
+            }
+            Sadat_Expels_Soviets => {
+                let egypt = &mut state.countries[CName::Egypt as usize];
+                egypt.ussr = 0;
+                egypt.us += 1;
+            }
+            Shuttle_Diplomacy => state.add_effect(Side::US, Effect::ShuttleDiplomacy),
+            The_Voice_Of_America => {
+                todo!();
+            }
+            Liberation_Theology => todo!(),
             The_China_Card => {}
             Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
                 unimplemented!()

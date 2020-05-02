@@ -372,26 +372,102 @@ mod tests {
     use crate::game::replay::Replay;
     use crate::record::Record;
     use crate::state::DebugRand;
-    #[test]
-    fn test_summit() {
+    fn get_example_replay() -> Replay {
+        // Todo make this example position less weird
+        // Note this does not return a 4-4-2, but rather the start position
         let rng = DebugRand::new(vec![5], vec![3], Vec::new(), Vec::new(), Vec::new());
         let mut replay: Replay = Record::standard_start().into();
         let game = &mut replay.game;
-        game.rng = rng;
-        game.state.deck.us_hand_mut().extend(vec![Card::Summit; 7]);
-        game.state
-            .deck
-            .ussr_hand_mut()
-            .extend(vec![Card::Summit; 7]);
         game.status = Status::AR;
         game.state.set_defcon(2);
         game.state.ar = 1;
         game.state.turn = 4;
         game.state.clear_pending();
         game.state.add_pending(Decision::begin_ar(Side::USSR));
+        game.rng = rng;
+        replay
+    }
+    #[test]
+    fn test_summit() {
+        let mut replay = get_example_replay();
+        let game = &mut replay.game;
+        game.state.deck.us_hand_mut().extend(vec![Card::Summit; 7]);
+        game.state
+            .deck
+            .ussr_hand_mut()
+            .extend(vec![Card::Summit; 7]);
         let summit_play = DecodedChoice::new(Action::Event, Some(Card::Summit as usize));
         let defcon_one = DecodedChoice::new(Action::ChangeDefcon, Some(1));
         assert!(game.consume_action(summit_play).is_ok());
         assert_eq!(game.consume_action(defcon_one), Err(Win::Defcon(Side::US)));
+    }
+    #[test]
+    fn test_destal() {
+        use crate::country::CName;
+        use std::collections::HashSet;
+        let names = |output: Vec<OutputIndex>| {
+            let set: HashSet<_> = output
+                .into_iter()
+                .filter_map(|x| {
+                    let decoded = x.decode();
+                    if let Action::Remove = decoded.action {
+                        decoded
+                            .choice
+                            .map(|x| format!("{:?}", CName::from_index(x)))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            set
+        };
+        let mut replay = get_example_replay();
+        let mut legal: HashSet<_> = ["Finland", "EGermany", "Syria", "Iraq", "NKorea"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let game = &mut replay.game;
+        game.state.deck.ussr_hand_mut().push(Card::De_Stalinization);
+        let destal = DecodedChoice::new(Action::Event, Some(Card::De_Stalinization as usize));
+        game.consume_action(destal).unwrap();
+
+        assert_eq!(names(game.legal()), legal);
+        let remove_fin = DecodedChoice::new(Action::Remove, Some(CName::Finland as usize));
+        let remove_nk = DecodedChoice::new(Action::Remove, Some(CName::NKorea as usize));
+
+        dbg!(&game.ply_history);
+        assert_eq!(names(game.legal()), legal);
+        game.consume_action(remove_fin).unwrap();
+        legal.remove("Finland");
+
+        dbg!(&game.ply_history);
+        assert_eq!(names(game.legal()), legal);
+        game.consume_action(remove_nk.clone()).unwrap();
+
+        dbg!(&game.ply_history);
+        assert_eq!(names(game.legal()), legal);
+        game.consume_action(remove_nk.clone()).unwrap();
+
+        dbg!(&game.ply_history);
+        assert_eq!(names(game.legal()), legal);
+        game.consume_action(remove_nk).unwrap();
+
+        // Place destal
+        let place_uk = OutputIndex::new(Action::Place.offset() + CName::UK as usize);
+        let place_chile = OutputIndex::new(Action::Place.offset() + CName::Chile as usize);
+        let place_thai = OutputIndex::new(Action::Place.offset() + CName::Thailand as usize);
+        // UK starts controlled
+        assert!(game.legal().iter().find(|&&x| x == place_uk).is_none());
+        game.consume_action(place_thai.decode()).unwrap();
+        game.consume_action(place_chile.decode()).unwrap();
+        game.consume_action(place_thai.decode()).unwrap();
+
+        // Thailand already placed in twice
+        assert!(game.legal().iter().find(|&&x| x == place_thai).is_none());
+        game.consume_action(place_chile.decode()).unwrap();
+        // Destal is done, next AR
+        let next = &game.state.pending().last().unwrap();
+        assert_eq!(Side::US, next.agent);
+        assert_eq!(Action::BeginAr, next.action);
     }
 }

@@ -165,11 +165,34 @@ impl Decision {
     ) -> Option<Decision> {
         self.quantity -= 1;
         if self.quantity == 0 {
-            None
-        } else {
-            if let Action::Influence = self.action {
-                self.next_influence(state)
-            } else {
+            return None;
+        }
+        match self.action {
+            Action::Influence => self.next_influence(state),
+            Action::Remove => {
+                let changed_last = state.apply_restriction(history, &mut self);
+                if !changed_last {
+                    // Check if the country we just modified is now empty
+                    if let Some(last) = history.last().map(|c| c.choice).flatten() {
+                        let card = state.current_event.unwrap();
+                        let country = &state.countries[last];
+                        let period = state.period();
+                        let (remove_side, _) = card.remove_quantity(self.agent, country, period);
+                        if !state.countries[last].has_influence(remove_side) {
+                            self.allowed = self
+                                .allowed
+                                .force_slice(state)
+                                .iter()
+                                .copied()
+                                .filter(|x| *x != last)
+                                .collect::<Vec<_>>()
+                                .into();
+                        }
+                    }
+                }
+                Some(self)
+            }
+            _ => {
                 state.apply_restriction(history, &mut self);
                 Some(self)
             }
@@ -274,7 +297,7 @@ pub enum EventTime {
     Never = 2,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Restriction {
     Limit(usize),
 }
@@ -328,6 +351,15 @@ impl Allowed {
             std::mem::swap(self, resolved);
         }
         self.try_slice().unwrap()
+    }
+    fn force_iter<'a>(&'a self, state: &GameState) -> Box<dyn Iterator<Item = usize> + 'a> {
+        //! This boxing incurs a small amount of overhead to avoid making the
+        //! calling code explicitly handle both cases
+        if let AllowedType::Lazy(f) = self.allowed {
+            Box::new(f(state).into_iter())
+        } else {
+            Box::new(self.try_slice().unwrap().iter().copied())
+        }
     }
     fn resolve(&self, state: &GameState) -> Option<Allowed> {
         if let AllowedType::Lazy(f) = self.allowed {

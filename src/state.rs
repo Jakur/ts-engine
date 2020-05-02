@@ -147,39 +147,40 @@ impl GameState {
         let len = self.countries.len();
         &self.countries[0..len - 2]
     }
-    pub fn apply_restriction(&self, history: &[DecodedChoice], decision: &mut Decision) {
+    /// Uses history to see if formerly allowed actions would not be prevented
+    /// by an event's limit. Returns true if allowed was reallocated.
+    pub fn apply_restriction(&self, history: &[DecodedChoice], decision: &mut Decision) -> bool {
         // Todo consider replacing this with lazy allowed functions
-        if let Some(restrict) = &self.restrict {
+        if let (Some(restrict), Some(last)) = (&self.restrict, history.last()) {
             match restrict {
                 Restriction::Limit(num) => {
-                    let counter: Counter<usize> = history
-                        .iter()
-                        .filter_map(|x| {
-                            if x.action == decision.action {
-                                x.choice
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    let bad: HashSet<_> = counter
-                        .into_map()
-                        .into_iter()
-                        .filter_map(|(k, v)| if v >= *num { Some(k) } else { None })
-                        .collect();
-                    if !bad.is_empty() {
-                        let vec: Vec<_> = decision
+                    if let Some(Card::De_Stalinization) = self.current_event {
+                        // Limit applies only to placing, not removing
+                        if let Action::Remove = decision.action {
+                            return false;
+                        }
+                    }
+                    // Assume only the last bit of history could affect things
+                    let count = history.iter().filter(|x| *x == last).count();
+                    dbg!(count);
+                    dbg!(last);
+                    if count >= *num && decision.action == last.action {
+                        dbg!("Got here?");
+                        let remove = last.choice.expect("Not None");
+                        decision.allowed = decision
                             .allowed
                             .force_slice(&self)
                             .iter()
                             .copied()
-                            .filter(|x| !bad.contains(x))
-                            .collect();
-                        decision.allowed = vec.into();
+                            .filter(|x| *x != remove)
+                            .collect::<Vec<_>>()
+                            .into();
+                        return true;
                     }
                 }
             }
         }
+        false
     }
     pub fn resolve_neutral(&mut self, action: Action) -> Result<(), Win> {
         match action {
