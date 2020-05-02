@@ -888,9 +888,24 @@ impl Card {
             }
             Shuttle_Diplomacy => state.add_effect(Side::US, Effect::ShuttleDiplomacy),
             The_Voice_Of_America => {
-                todo!();
+                state.set_limit(2);
+                let start = country::EUROPE.last().unwrap() + 1;
+                let legal: Vec<_> = (start..country::NUM_COUNTRIES - 2)
+                    .filter(|x| state.countries[*x].has_influence(Side::USSR))
+                    .collect();
+                let d = Decision::with_quantity(Side::US, Action::Remove, legal, 4);
+                pa!(state, d);
             }
-            Liberation_Theology => todo!(),
+            Liberation_Theology => {
+                state.set_limit(2);
+                let d = Decision::with_quantity(
+                    Side::USSR,
+                    Action::Place,
+                    &country::CENTRAL_AMERICA[..],
+                    3,
+                );
+                pa!(state, d);
+            }
             The_China_Card => {}
             Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
                 unimplemented!()
