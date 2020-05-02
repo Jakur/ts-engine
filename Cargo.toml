@@ -11,5 +11,4 @@ rand = { version = "0.7", features = ["small_rng"] }
 lazy_static = "1.4.0"
 num-traits = "0.2"
 num-derive = "0.3"
-counter = "0.4"
 nom = "5"

@@ -3,8 +3,6 @@ use crate::card::*;
 use crate::country::*;
 use crate::tensor::{DecodedChoice, OutputIndex, TensorOutput};
 
-use counter::Counter;
-
 use std::collections::HashSet;
 mod random;
 pub use random::{DebugRand, InternalRand, TwilightRand};
@@ -1099,10 +1097,6 @@ impl Win {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{RandAgent, ScriptedAgent};
-    use crate::country;
-    use crate::game::Game;
-    use crate::tensor::OutputIndex;
     #[test]
     fn test_influence() {
         // let mut state = GameState::four_four_two();

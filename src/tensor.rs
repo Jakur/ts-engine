@@ -297,6 +297,7 @@ impl<K: Into<usize> + Copy, V: std::cmp::Ord + Copy> IndexMap<K, V> {
         }
         IndexMap { keys, values }
     }
+    #[cfg(test)]
     pub fn get(&self, key: K) -> Option<&V> {
         let key = key.into();
         if key >= self.values.len() {

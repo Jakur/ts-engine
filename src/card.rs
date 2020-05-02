@@ -898,12 +898,8 @@ impl Card {
             }
             Liberation_Theology => {
                 state.set_limit(2);
-                let d = Decision::with_quantity(
-                    Side::USSR,
-                    Action::Place,
-                    &country::CENTRAL_AMERICA[..],
-                    3,
-                );
+                let legal = &country::CENTRAL_AMERICA[..];
+                let d = Decision::with_quantity(Side::USSR, Action::Place, legal, 3);
                 pa!(state, d);
             }
             The_China_Card => {}

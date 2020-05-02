@@ -1,10 +1,9 @@
 use std::fs::File;
 use std::io::prelude::*;
 use ts_engine;
-use ts_engine::card::Card;
 use ts_engine::country::{self, CName};
 use ts_engine::game::replay::Replay;
-use ts_engine::game::{Game, Start};
+use ts_engine::game::Start;
 use ts_engine::record::*;
 use ts_engine::state::GameState;
 

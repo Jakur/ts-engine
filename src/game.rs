@@ -1,19 +1,10 @@
 use crate::action::{Action, Allowed, Decision};
-use crate::agent::{Actors, Agent, ScriptedAgent};
 use crate::card::Card;
 use crate::country::Side;
-use crate::state::{DebugRand, GameState, TwilightRand, Win};
+use crate::state::{GameState, TwilightRand, Win};
 use crate::tensor::{DecodedChoice, OutputIndex, TensorOutput};
 
 pub mod replay;
-
-#[derive(Clone, Copy)]
-enum Blocked {
-    US,
-    USSR,
-    Both, // Only possible in the headline
-    Ready,
-}
 
 #[derive(Clone, Copy, Debug)]
 enum Status {
@@ -32,8 +23,6 @@ pub struct Game<R: TwilightRand> {
     pub state: GameState,
     pub rng: R,
     ply_history: Vec<DecodedChoice>,
-    us_buf: Vec<DecodedChoice>,
-    ussr_buf: Vec<DecodedChoice>,
     status: Status,
 }
 
@@ -43,8 +32,6 @@ impl<R: TwilightRand> Game<R> {
             state,
             rng,
             ply_history: Vec::new(),
-            us_buf: Vec::new(),
-            ussr_buf: Vec::new(),
             status: Status::Start,
         }
     }
