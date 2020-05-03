@@ -432,6 +432,21 @@ impl GameState {
                         let d = Decision::conduct_ops(Side::US, ops);
                         self.add_pending(d);
                     }
+                    Card::Ask_Not => {
+                        if choice == 0 {
+                            // Done discarding
+                            let hand = self.deck.us_hand_mut();
+                            let size = hand.len();
+                            hand.retain(|c| *c != Card::Dummy);
+                            for _ in 0..size - hand.len() {
+                                self.deck.draw_card(rng, Side::US);
+                            }
+                            decision.quantity = 1; // Done
+                        } else {
+                            let card = Card::from_index(choice);
+                            self.deck.play_card(Side::US, card).unwrap();
+                        }
+                    }
                     _ => unimplemented!(),
                 }
             }

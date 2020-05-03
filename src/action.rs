@@ -192,6 +192,18 @@ impl Decision {
                 }
                 Some(self)
             }
+            Action::ChooseCard if state.current_event().unwrap() == Card::Ask_Not => {
+                let mut allowed = vec![0];
+                allowed.extend(state.deck.us_hand().iter().filter_map(|&c| {
+                    if let Card::Dummy = c {
+                        None
+                    } else {
+                        Some(c as usize)
+                    }
+                }));
+                self.allowed = Allowed::new_owned(allowed);
+                Some(self)
+            }
             _ => {
                 state.apply_restriction(history, &mut self);
                 Some(self)

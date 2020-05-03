@@ -114,7 +114,7 @@ impl Deck {
         rng.card_from_hand(self, side)
     }
     /// Draws the next card from the draw pile, reshuffling if necessary.
-    fn draw_card<T: TwilightRand>(&mut self, rng: &mut T, side: Side) {
+    pub fn draw_card<T: TwilightRand>(&mut self, rng: &mut T, side: Side) {
         rng.draw_card(self, side);
     }
     /// Returns a vector of cards which, if played by the given side, will cause
@@ -210,20 +210,6 @@ impl Deck {
                 }
                 Side::Neutral => Err(DeckError::CannotFind),
             }
-        }
-    }
-    pub fn try_discard(&mut self, card: Card) -> Result<(), DeckError> {
-        // Should only need to check end, to not duplicate discarding actions
-        // Todo check edge cases like reshuffle midturn
-        if card == Card::The_China_Card {
-            return Err(DeckError::ChinaException);
-        }
-        let contains = self.discard_pile.iter().rev().take(3).find(|c| **c == card);
-        if contains.is_some() {
-            Err(DeckError::AlreadyContains)
-        } else {
-            self.discard_pile.push(card);
-            Ok(())
         }
     }
     pub fn china_available(&self, side: Side) -> bool {

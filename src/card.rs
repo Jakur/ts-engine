@@ -923,7 +923,12 @@ impl Card {
                     state.deck.turn_china_up();
                 }
             }
-            Ask_Not => todo!(),
+            Ask_Not => {
+                let allowed: Vec<_> = state.deck.us_hand().iter().map(|x| *x as usize).collect();
+                let q = allowed.len() as i8;
+                let d = Decision::with_quantity(Side::US, Action::ChooseCard, allowed, q);
+                pa!(state, d);
+            }
             Alliance_For_Progress => {
                 let count = &country::LATIN_AMERICA
                     .iter()
