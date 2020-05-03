@@ -263,7 +263,7 @@ impl GameState {
                     self.china = true;
                 } else if card.is_war()
                     && decision.agent == Side::US
-                    && card.can_event(self)
+                    && card.can_event(self, side)
                     && self.has_effect(Side::USSR, Effect::FlowerPower)
                 {
                     self.vp -= 2;
@@ -278,7 +278,7 @@ impl GameState {
                 // Todo make sure flower power works
                 if card.is_war()
                     && decision.agent == Side::US
-                    && card.can_event(self)
+                    && card.can_event(self, side)
                     && self.has_effect(Side::USSR, Effect::FlowerPower)
                 {
                     self.vp -= 2;
@@ -286,7 +286,6 @@ impl GameState {
                 if card.event(self, rng) && card.is_starred() {
                     self.deck.remove_card(card).expect("Remove Failure");
                 }
-                self.set_event(card);
             }
             Action::SpecialEvent => {
                 let card = self.current_event();

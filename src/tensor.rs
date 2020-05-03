@@ -213,13 +213,15 @@ impl TensorOutput for Decision {
                 }
                 match card.side() {
                     Side::US | Side::Neutral => {
-                        if card.can_event(state) && (state.ar != 0 || card.can_headline()) {
+                        if card.can_event(state, Side::US) && (state.ar != 0 || card.can_headline())
+                        {
                             vec.push(Action::Event.offset() + index);
                         }
                         vec.push(Action::Ops.offset() + index);
                     }
                     Side::USSR => {
-                        if card.can_event(state) && (state.ar != 0 || card.can_headline()) {
+                        if card.can_event(state, Side::US) && (state.ar != 0 || card.can_headline())
+                        {
                             vec.push(Action::OpsEvent.offset() + index);
                             vec.push(Action::EventOps.offset() + index);
                         } else {

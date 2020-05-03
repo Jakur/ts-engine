@@ -322,9 +322,13 @@ impl Card {
         use Card::*;
         let side = match self.side() {
             s @ Side::US | s @ Side::USSR => s,
-            Side::Neutral => *state.side(),
+            Side::Neutral => match state.current_event() {
+                // Todo Star Wars
+                Some(Card::Grain_Sales) => Side::US,
+                _ => *state.side(),
+            },
         };
-        if !self.can_event(state) {
+        if !self.can_event(state, side) {
             return false;
         }
         match self {
@@ -429,6 +433,10 @@ impl Card {
                 _ => *state.side(),
             },
         };
+        if !self.can_event(state, side) {
+            return false;
+        }
+        state.set_event(*self);
         if self.is_special() {
             let legal = self.e_choices(state).unwrap();
             let d = if *self == Card::Olympic_Games {
@@ -441,9 +449,6 @@ impl Card {
             pa!(state, clear);
             pa!(state, d);
             return true;
-        }
-        if !self.can_event(state) {
-            return false;
         }
         let clear = Decision::new(Side::Neutral, Action::ClearEvent, &[]);
         pa!(state, clear);
@@ -934,7 +939,10 @@ impl Card {
             }
             One_Small_Step => {
                 let index = side as usize;
-                state.space[index] += 1;
+                if state.space[index] < 7 {
+                    // If you're at space 7, your final location is only +1
+                    state.space[index] += 1;
+                }
                 state.space_card(side, 1); // 1 is a perfect roll
             }
             South_America_Scoring => {
@@ -950,7 +958,7 @@ impl Card {
     /// Returns whether a card can be evented, which is primarily relevant to
     /// whether or not a starred event will be removed if play by its opposing
     /// side.
-    pub fn can_event(&self, state: &GameState) -> bool {
+    pub fn can_event(&self, state: &GameState, eventer: Side) -> bool {
         use Card::*;
         match self {
             The_China_Card => false,
@@ -982,7 +990,9 @@ impl Card {
             Willy_Brandt => !state.has_effect(Side::US, Effect::TearDown),
             Muslim_Revolution => !state.has_effect(Side::US, Effect::AWACS),
             OPEC => !state.has_effect(Side::US, Effect::NoOpec),
-            One_Small_Step => todo!(),
+            One_Small_Step => {
+                state.space[eventer as usize] < state.space[eventer.opposite() as usize]
+            }
             _ => true, // todo make this accurate
         }
     }

@@ -124,7 +124,7 @@ impl Deck {
         let opp = side.opposite();
         hand.iter()
             .copied()
-            .filter(|c| c.side() == opp && c.can_event(state))
+            .filter(|c| c.side() == opp && c.can_event(state, side))
             .collect()
     }
     /// Returns a vector of cards that the given side can themselves event.
@@ -133,7 +133,7 @@ impl Deck {
         let opp = side.opposite();
         hand.iter()
             .copied()
-            .filter(|c| c.side() != opp && c.can_event(state))
+            .filter(|c| c.side() != opp && c.can_event(state, side))
             .collect()
     }
     /// Returns cards that can be played for just ops, i.e. non-scoring cards of
@@ -144,7 +144,7 @@ impl Deck {
         let mut vec: Vec<_> = hand
             .iter()
             .copied()
-            .filter(|c| !c.is_scoring() && (c.side() != opp || !c.can_event(state)))
+            .filter(|c| !c.is_scoring() && (c.side() != opp || !c.can_event(state, side)))
             .collect();
         if self.china_available(side) {
             vec.push(Card::The_China_Card);
