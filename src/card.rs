@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Liberation_Theology as usize + 1;
+const NUM_CARDS: usize = Card::South_America_Scoring as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -125,6 +125,12 @@ fn init_cards() -> Vec<Attributes> {
         c(US, 3),
         c(US, 2),
         c(USSR, 2), // Lib Theo
+        c(US, 3).star(),
+        c(US, 3).star(),
+        c(US, 3).star(),
+        c(Neutral, 0).scoring(),
+        c(Neutral, 2),           // OSS
+        c(Neutral, 0).scoring(), // End Mid War
     ];
     x
 }
@@ -216,6 +222,12 @@ pub enum Card {
     Shuttle_Diplomacy,
     The_Voice_Of_America,
     Liberation_Theology, // 75
+    Ussuri_River_Skirmish,
+    Ask_Not,
+    Alliance_For_Progress,
+    Africa_Scoring,
+    One_Small_Step,        // 80
+    South_America_Scoring, // End Mid War
 }
 
 impl Card {
@@ -411,7 +423,11 @@ impl Card {
         use Card::*;
         let side = match self.side() {
             s @ Side::US | s @ Side::USSR => s,
-            Side::Neutral => *state.side(),
+            Side::Neutral => match state.current_event() {
+                // Todo Star Wars
+                Some(Card::Grain_Sales) => Side::US,
+                _ => *state.side(),
+            },
         };
         if self.is_special() {
             let legal = self.e_choices(state).unwrap();
@@ -450,18 +466,7 @@ impl Card {
                 let card = state.deck.random_card(Side::USSR, rng);
                 if let Some(card) = card {
                     if card.att().side == Side::US {
-                        // Todo find out of the US really has agency in these decisions?
-                        // Just Chernobyl?
-                        let d = if card.is_special() {
-                            Decision::new(
-                                Side::US,
-                                Action::SpecialEvent,
-                                card.e_choices(state).unwrap_or_else(|| vec![]),
-                            )
-                        } else {
-                            Decision::new(Side::US, Action::Event, &[])
-                        };
-                        state.current_event = Some(card);
+                        let d = Decision::new_event(Side::USSR, card);
                         pa!(state, d);
                     }
                     state.discard_card(Side::USSR, card);
@@ -902,6 +907,39 @@ impl Card {
                 let d = Decision::with_quantity(Side::USSR, Action::Place, legal, 3);
                 pa!(state, d);
             }
+            Ussuri_River_Skirmish => {
+                if let Side::US = state.deck.china() {
+                    state.set_limit(2);
+                    let legal = &country::ASIA[..];
+                    let d = Decision::with_quantity(Side::USSR, Action::Place, legal, 4);
+                    pa!(state, d);
+                } else {
+                    state.deck.play_china();
+                    state.deck.turn_china_up();
+                }
+            }
+            Ask_Not => todo!(),
+            Alliance_For_Progress => {
+                let count = &country::LATIN_AMERICA
+                    .iter()
+                    .filter(|x| {
+                        let c = &state.countries[**x];
+                        c.bg && c.controller() == Side::US
+                    })
+                    .count();
+                state.vp += *count as i8;
+            }
+            Africa_Scoring => {
+                Region::Africa.score(state);
+            }
+            One_Small_Step => {
+                let index = side as usize;
+                state.space[index] += 1;
+                state.space_card(side, 1); // 1 is a perfect roll
+            }
+            South_America_Scoring => {
+                Region::SouthAmerica.score(state);
+            }
             The_China_Card => {}
             Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
                 unimplemented!()
@@ -944,12 +982,15 @@ impl Card {
             Willy_Brandt => !state.has_effect(Side::US, Effect::TearDown),
             Muslim_Revolution => !state.has_effect(Side::US, Effect::AWACS),
             OPEC => !state.has_effect(Side::US, Effect::NoOpec),
+            One_Small_Step => todo!(),
             _ => true, // todo make this accurate
         }
     }
-    pub fn can_headline(&self, state: &GameState) -> bool {
-        // Todo make sure this is right
-        self.can_event(state) && *self != Card::UN_Intervention
+    pub fn can_headline(&self) -> bool {
+        match self {
+            Card::The_China_Card | Card::UN_Intervention => false,
+            _ => true,
+        }
     }
     pub fn is_starred(&self) -> bool {
         self.att().starred

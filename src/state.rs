@@ -22,7 +22,7 @@ pub struct GameState {
     ussr_effects: Vec<Effect>,
     pub deck: Deck,
     pub restrict: Option<Restriction>,
-    pub current_event: Option<Card>,
+    current_event: Option<Card>,
     pub vietnam: bool,
     pub china: bool,
     pending: Vec<Decision>,
@@ -152,7 +152,7 @@ impl GameState {
         if let (Some(restrict), Some(last)) = (&self.restrict, history.last()) {
             match restrict {
                 Restriction::Limit(num) => {
-                    if let Some(Card::De_Stalinization) = self.current_event {
+                    if let Some(Card::De_Stalinization) = self.current_event() {
                         // Limit applies only to placing, not removing
                         if let Action::Remove = decision.action {
                             return false;
@@ -184,7 +184,7 @@ impl GameState {
         match action {
             Action::EndAr => self.advance_ply(),
             Action::ClearEvent => {
-                self.current_event = None;
+                self.clear_event();
                 self.check_win()
             }
             _ => unimplemented!(),
@@ -192,7 +192,7 @@ impl GameState {
     }
     /// Handle discarding cards to deal with weird special cases like Grain Sales.
     pub fn discard_card(&mut self, side: Side, card: Card) {
-        let side = if let Some(Card::Grain_Sales) = self.current_event {
+        let side = if let Some(Card::Grain_Sales) = self.current_event() {
             // Check if this is the card Grain Sales hit, or Grain Sales itself
             if let Card::Grain_Sales = card {
                 side
@@ -221,7 +221,7 @@ impl GameState {
                     }
                     Action::Event => panic!("This should not be hit?!"),
                     Action::ClearEvent => {
-                        self.current_event = None;
+                        self.clear_event();
                         return None;
                     }
                     _ => return None, // Pass, implicit or explicit
@@ -274,7 +274,6 @@ impl GameState {
             }
             Action::Event => {
                 let card = Card::from_index(choice);
-                self.current_event = Some(card);
                 self.discard_card(side, card);
                 // Todo make sure flower power works
                 if card.is_war()
@@ -287,11 +286,12 @@ impl GameState {
                 if card.event(self, rng) && card.is_starred() {
                     self.deck.remove_card(card).expect("Remove Failure");
                 }
+                self.set_event(card);
             }
             Action::SpecialEvent => {
-                let card = self.current_event;
+                let card = self.current_event();
                 card.unwrap().special_event(self, choice, rng);
-                // Todo reset current event ?
+                // Todo set event?
             }
             Action::Space => {
                 let card = Card::from_index(choice);
@@ -322,7 +322,7 @@ impl GameState {
             }
             Action::Coup => {
                 // Todo other free coups
-                let free_coup = if let Some(e) = self.current_event {
+                let free_coup = if let Some(e) = self.current_event() {
                     match e {
                         Card::Junta => true,
                         _ => false,
@@ -340,7 +340,7 @@ impl GameState {
                 decision.quantity = 1; // Use up all of your ops on one action
             }
             Action::Place => {
-                let (q, side) = if let Some(card) = self.current_event {
+                let (q, side) = if let Some(card) = self.current_event() {
                     let q = card.influence_quantity(&self, &decision.action, choice);
                     let side = match card.side() {
                         s @ Side::US | s @ Side::USSR => s,
@@ -369,12 +369,12 @@ impl GameState {
                 }
             }
             Action::Remove => {
-                let event = self.current_event.unwrap();
+                let event = self.current_event().unwrap();
                 let (rs, rq) = event.remove_quantity(side, &self.countries[choice], self.period());
                 self.remove_influence(rs, choice, rq);
             }
             Action::War => {
-                let brush = match self.current_event.unwrap() {
+                let brush = match self.current_event().unwrap() {
                     // Todo Brush War
                     _ => false,
                 };
@@ -405,7 +405,7 @@ impl GameState {
                 self.deck.recover_card(side, Card::from_index(choice));
             }
             Action::ChooseCard => {
-                let event = self.current_event.expect("Some event");
+                let event = self.current_event().expect("Some event");
                 match event {
                     Card::Missile_Envy => {
                         let chosen_card = Card::from_index(choice);
@@ -962,6 +962,15 @@ impl GameState {
             }
             _ => unimplemented!(),
         }
+    }
+    pub fn current_event(&self) -> Option<Card> {
+        self.current_event
+    }
+    pub fn set_event(&mut self, event: Card) {
+        self.current_event = Some(event);
+    }
+    pub fn clear_event(&mut self) {
+        self.current_event = None;
     }
     pub fn add_pending(&mut self, decision: Decision) {
         // After

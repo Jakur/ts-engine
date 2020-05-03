@@ -36,11 +36,6 @@ macro_rules! count {
 mod tests {
     use super::*;
     #[test]
-    fn test_name() {
-        let c = card::Card::Asia_Scoring;
-        println!("{:?}", c);
-    }
-    #[test]
     fn test_scoring() {
         use country::CName::*;
         use country::{Region, Side};

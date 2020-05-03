@@ -197,7 +197,7 @@ impl TensorOutput for Decision {
                 // Todo include pass or empty?
                 encode_offsets(vec![Action::Pass.offset()])
             }
-            Action::ChooseCard if state.current_event == Some(Card::Grain_Sales) => {
+            Action::ChooseCard if state.current_event() == Some(Card::Grain_Sales) => {
                 let mut vec = Vec::new();
                 let card = self
                     .allowed
@@ -213,13 +213,13 @@ impl TensorOutput for Decision {
                 }
                 match card.side() {
                     Side::US | Side::Neutral => {
-                        if card.can_event(state) && (state.ar != 0 || card.can_headline(state)) {
+                        if card.can_event(state) && (state.ar != 0 || card.can_headline()) {
                             vec.push(Action::Event.offset() + index);
                         }
                         vec.push(Action::Ops.offset() + index);
                     }
                     Side::USSR => {
-                        if card.can_event(state) && (state.ar != 0 || card.can_headline(state)) {
+                        if card.can_event(state) && (state.ar != 0 || card.can_headline()) {
                             vec.push(Action::OpsEvent.offset() + index);
                             vec.push(Action::EventOps.offset() + index);
                         } else {

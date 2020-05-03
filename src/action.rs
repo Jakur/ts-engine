@@ -140,7 +140,7 @@ impl Decision {
         let vec: Vec<_> = hand
             .iter()
             .filter_map(|c| {
-                if c.can_headline(state) {
+                if c.can_headline() {
                     Some(*c as usize)
                 } else {
                     None
@@ -174,7 +174,7 @@ impl Decision {
                 if !changed_last {
                     // Check if the country we just modified is now empty
                     if let Some(last) = history.last().map(|c| c.choice).flatten() {
-                        let card = state.current_event.unwrap();
+                        let card = state.current_event().unwrap();
                         let country = &state.countries[last];
                         let period = state.period();
                         let (remove_side, _) = card.remove_quantity(self.agent, country, period);
