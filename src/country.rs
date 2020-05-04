@@ -83,15 +83,29 @@ impl From<usize> for Side {
 
 pub fn access(state: &GameState, side: Side) -> Vec<usize> {
     let mut set = HashSet::new();
-    for (i, list) in EDGES
-        .iter()
-        .enumerate()
-        .filter(|(i, _list)| state.countries[*i].has_influence(side))
-    {
-        for &v in list.iter() {
-            set.insert(v);
+    if state.iron_lady && side == Side::USSR {
+        let arg = CName::Argentina as usize;
+        for (i, list) in EDGES
+            .iter()
+            .enumerate()
+            .filter(|(i, _list)| *i != arg && state.countries[*i].has_influence(side))
+        {
+            for &v in list.iter() {
+                set.insert(v);
+            }
+            set.insert(i);
         }
-        set.insert(i);
+    } else {
+        for (i, list) in EDGES
+            .iter()
+            .enumerate()
+            .filter(|(i, _list)| state.countries[*i].has_influence(side))
+        {
+            for &v in list.iter() {
+                set.insert(v);
+            }
+            set.insert(i);
+        }
     }
     set.remove(&US_INDEX);
     set.remove(&USSR_INDEX);

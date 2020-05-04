@@ -25,6 +25,7 @@ pub struct GameState {
     current_event: Option<Card>,
     pub vietnam: bool,
     pub china: bool,
+    pub iron_lady: bool,
     pending: Vec<Decision>,
 }
 
@@ -47,6 +48,7 @@ impl GameState {
             current_event: None,
             vietnam: false,
             china: false,
+            iron_lady: false,
             pending: Vec::new(),
         }
     }
@@ -64,6 +66,7 @@ impl GameState {
     }
     pub fn advance_ply(&mut self) -> Result<(), Win> {
         self.china = false; // Todo ensure China flag doesn't get left on
+        self.iron_lady = false;
         self.check_win()?;
         if let Side::US = self.side {
             self.ar += 1;
@@ -274,7 +277,11 @@ impl GameState {
             }
             Action::Event => {
                 let card = Card::from_index(choice);
-                self.discard_card(side, card);
+                // Do not discard for star wars, since it's already there
+                match self.current_event() {
+                    Some(c) if c == Card::Star_Wars => {}
+                    _ => self.discard_card(side, card),
+                }
                 // Todo make sure flower power works
                 if card.is_war()
                     && decision.agent == Side::US
@@ -329,7 +336,19 @@ impl GameState {
                 } else {
                     false
                 };
-                let roll = rng.roll(decision.agent);
+                let mut roll = rng.roll(decision.agent);
+                if Region::SouthAmerica.has_country(choice)
+                    || Region::CentralAmerica.has_country(choice)
+                {
+                    if self.has_effect(side, Effect::LatinAmericanPlus) {
+                        roll += 1;
+                    } else if self.has_effect(side, Effect::LatinAmericanMinus) {
+                        roll -= 1;
+                    }
+                }
+                if self.has_effect(side, Effect::SALT) {
+                    roll -= 1;
+                }
                 let mut ops = decision.quantity;
                 if self.china && !Region::Asia.has_country(choice) {
                     ops -= 1;

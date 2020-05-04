@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::South_America_Scoring as usize + 1;
+const NUM_CARDS: usize = Card::Star_Wars as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -131,6 +131,10 @@ fn init_cards() -> Vec<Attributes> {
         c(Neutral, 0).scoring(),
         c(Neutral, 2),           // OSS
         c(Neutral, 0).scoring(), // End Mid War
+        c(USSR, 3).star(),
+        c(US, 3).star(),
+        c(US, 2).star(),
+        c(US, 2).star(),
     ];
     x
 }
@@ -228,6 +232,10 @@ pub enum Card {
     Africa_Scoring,
     One_Small_Step,        // 80
     South_America_Scoring, // End Mid War
+    Iranian_Hostage_Crisis,
+    The_Iron_Lady,
+    Reagan_Bombs_Libya,
+    Star_Wars, // 85
 }
 
 impl Card {
@@ -953,10 +961,47 @@ impl Card {
             South_America_Scoring => {
                 Region::SouthAmerica.score(state);
             }
-            The_China_Card => {}
-            Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest => {
-                unimplemented!()
+            Iranian_Hostage_Crisis => {
+                let iran = &mut state.countries[CName::Iran as usize];
+                iran.us = 0;
+                iran.ussr += 2;
+                state.add_effect(Side::USSR, Effect::TerrorismPlus);
             }
+            The_Iron_Lady => {
+                state.countries[CName::UK as usize].ussr = 0;
+                let arg = &mut state.countries[CName::Argentina as usize];
+                if arg.ussr == 0 {
+                    state.iron_lady = true; // Flag for the access weirdness
+                }
+                arg.ussr += 1;
+                state.vp += 1;
+                state.add_effect(Side::US, Effect::IronLady);
+            }
+            Reagan_Bombs_Libya => {
+                state.vp += state.countries[CName::Libya as usize].ussr / 2;
+            }
+            Star_Wars => {
+                let mut allowed: Vec<_> = state
+                    .deck
+                    .discard_pile()
+                    .iter()
+                    .filter_map(|c| {
+                        if state.ar != 0 || c.can_headline() {
+                            Some(*c as usize)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                // Todo figure out if pending discard is an unnecessary abstraction
+                if let Some(c) = state.deck.pending_discard().iter().find(|c| *c != self) {
+                    allowed.push(*c as usize);
+                }
+                let d = Decision::new(Side::US, Action::Event, allowed);
+                pa!(state, d);
+            }
+            Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest
+            | The_China_Card => unimplemented!(),
         }
         return true;
     }

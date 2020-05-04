@@ -107,6 +107,9 @@ impl Deck {
             Err(DeckError::CannotFind)
         }
     }
+    pub fn pending_discard(&self) -> &Vec<Card> {
+        &self.pending_discard
+    }
     pub fn flush_pending(&mut self) {
         self.discard_pile.append(&mut self.pending_discard);
     }
