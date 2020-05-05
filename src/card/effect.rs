@@ -34,6 +34,8 @@ pub enum Effect {
     LatinAmericanPlus,
     LatinAmericanMinus,
     TerrorismPlus,
+    Reformer,
+    IranContra,
 }
 
 impl Effect {
@@ -45,7 +47,7 @@ impl Effect {
             | NorthSeaOil | TearDown | AWACS | WWBY | AllowSolidarity => Side::US,
 
             VietnamRevolts | Brezhnev | DeGaulle | US_Hand_Revealed | BearTrap | NoOpec
-            | WillyBrandt | FlowerPower | U2 | TerrorismPlus => Side::USSR,
+            | WillyBrandt | FlowerPower | U2 | TerrorismPlus | Reformer | IranContra => Side::USSR,
 
             RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy | LatinAmericanPlus
             | LatinAmericanMinus => Side::Neutral,
@@ -68,7 +70,7 @@ impl Effect {
             FlowerPower => true,
             AllowSolidarity => true,
             TerrorismPlus => true,
-            IronLady => true,
+            Reformer => true,
             _ => false,
         }
     }

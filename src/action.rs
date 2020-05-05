@@ -85,7 +85,8 @@ impl Decision {
     pub fn determine(agent: Side, action: Action, q: i8, state: &GameState) -> Decision {
         let allowed = match action {
             Action::Influence => state.legal_influence(agent, q),
-            Action::Coup | Action::Realignment => state.legal_coup_realign(agent),
+            Action::Coup => state.legal_coup_realign(agent, true),
+            Action::Realignment => state.legal_coup_realign(agent, false),
             _ => todo!(),
         };
         Decision::with_quantity(agent, action, allowed, q)
@@ -254,7 +255,9 @@ pub enum Action {
     CubanMissile,
     RecoverCard, // SALT
     ChangeDefcon,
-    ChooseCard, // Generic choice over cards for unusual events
+    ChooseCard,  // Generic choice over cards for unusual events
+    BlockRegion, // Chernobyl
+    DoubleInf,   // LADS
     Pass,
 }
 
@@ -278,6 +281,8 @@ impl Action {
             RecoverCard => cards,
             ChangeDefcon => 6, // Todo avoid DEFCON 0?
             ChooseCard => cards,
+            BlockRegion => 6,
+            DoubleInf => crate::country::SOUTH_AMERICA.len(),
             Pass => 1,
         }
     }

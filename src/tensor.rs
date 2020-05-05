@@ -168,12 +168,25 @@ impl TensorOutput for Decision {
                 let mut inf_d = Decision::new(self.agent, Action::Influence, inf);
                 let mut out = inf_d.encode(state);
                 // Todo coup restrictions
-                let coup_realign = state.legal_coup_realign(self.agent);
+                let realign = state.legal_coup_realign(self.agent, false);
                 if !state.has_effect(self.agent, Effect::CubanMissileCrisis) {
-                    let mut coup_d = Decision::new(self.agent, Action::Coup, coup_realign.clone());
-                    out.extend(coup_d.encode(state));
+                    match state.current_event() {
+                        // Cannot coup with KAL or Glasnost ops
+                        Some(e) if e == Card::Soviets_Shoot_Down_KAL || e == Card::Glasnost => {}
+                        _ => {
+                            let mut coup_d = {
+                                if state.defcon() == 5 && self.agent == Side::USSR {
+                                    let legal = state.legal_coup_realign(self.agent, true);
+                                    Decision::new(self.agent, Action::Coup, legal)
+                                } else {
+                                    Decision::new(self.agent, Action::Coup, realign.clone())
+                                }
+                            };
+                            out.extend(coup_d.encode(state));
+                        }
+                    }
                 }
-                let mut realign_d = Decision::new(self.agent, Action::Realignment, coup_realign);
+                let mut realign_d = Decision::new(self.agent, Action::Realignment, realign);
                 out.extend(realign_d.encode(state));
                 out
             }

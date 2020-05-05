@@ -26,6 +26,7 @@ pub struct GameState {
     pub vietnam: bool,
     pub china: bool,
     pub iron_lady: bool,
+    pub chernobyl: Option<Region>,
     pending: Vec<Decision>,
 }
 
@@ -49,6 +50,7 @@ impl GameState {
             vietnam: false,
             china: false,
             iron_lady: false,
+            chernobyl: None,
             pending: Vec::new(),
         }
     }
@@ -67,6 +69,7 @@ impl GameState {
     pub fn advance_ply(&mut self) -> Result<(), Win> {
         self.china = false; // Todo ensure China flag doesn't get left on
         self.iron_lady = false;
+        self.chernobyl = None;
         self.check_win()?;
         if let Side::US = self.side {
             self.ar += 1;
@@ -330,7 +333,7 @@ impl GameState {
                 // Todo other free coups
                 let free_coup = if let Some(e) = self.current_event() {
                     match e {
-                        Card::Junta => true,
+                        Card::Junta | Card::Ortega_Elected => true,
                         _ => false,
                     }
                 } else {
@@ -470,6 +473,15 @@ impl GameState {
                 }
             }
             Action::ChangeDefcon => self.set_defcon(choice as i8),
+            Action::BlockRegion => {
+                let regions = Region::major_regions();
+                self.chernobyl = Some(regions[choice]);
+            }
+            Action::DoubleInf => {
+                let (offset, _) = Region::SouthAmerica.low_high();
+                let country = &mut self.countries[offset + choice];
+                country.ussr *= 2;
+            }
             Action::BeginAr
             | Action::EndAr
             | Action::ConductOps
@@ -669,6 +681,9 @@ impl GameState {
                 Side::Neutral => {}
             }
         }
+        if self.has_effect(Side::USSR, Effect::IranContra) {
+            us_roll -= 1;
+        }
         let country = &mut self.countries[country_index];
         match country.greater_influence() {
             Side::US => us_roll += 1,
@@ -844,7 +859,7 @@ impl GameState {
         }
         vec
     }
-    pub fn legal_coup_realign(&self, side: Side) -> Vec<usize> {
+    pub fn legal_coup_realign(&self, side: Side, coup: bool) -> Vec<usize> {
         let opp = side.opposite();
         let valid = |v: &'static Vec<usize>| {
             v.iter().filter_map(|x| {
@@ -866,6 +881,9 @@ impl GameState {
             vec.extend(valid(&ASIA));
         }
         if defcon >= 5 {
+            if side == Side::USSR && coup && self.has_effect(Side::USSR, Effect::Reformer) {
+                return vec;
+            }
             if side == Side::USSR && self.has_effect(Side::US, Effect::Nato) {
                 let mut set: HashSet<usize> = EUROPE
                     .iter()
@@ -899,7 +917,10 @@ impl GameState {
         let china = self.china;
         let vietnam = self.vietnam;
         let real_ops = ops - (china as i8) - (vietnam as i8);
-        let a = access(self, agent);
+        let mut a = access(self, agent);
+        if let (Side::USSR, Some(region)) = (agent, self.chernobyl) {
+            a = a.into_iter().filter(|x| !region.has_country(*x)).collect();
+        }
         if real_ops > 1 {
             // Doesn't need to tap into bonus influence
             a

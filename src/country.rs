@@ -144,9 +144,9 @@ pub enum Status {
 }
 
 impl Region {
-    pub fn major_regions() -> Vec<Region> {
+    pub fn major_regions() -> [Region; 6] {
         use Region::*;
-        vec![
+        [
             Europe,
             MiddleEast,
             Asia,
@@ -341,7 +341,8 @@ impl Region {
         state.vp += vp_change;
         return vp_change;
     }
-    fn low_high(&self) -> (usize, usize) {
+    /// Returns the interval (low, high] for which countries are in the Region.
+    pub fn low_high(&self) -> (usize, usize) {
         use CName::*;
         match self {
             Region::Europe => (0, Bulgaria as usize),

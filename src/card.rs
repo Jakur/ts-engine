@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Star_Wars as usize + 1;
+const NUM_CARDS: usize = Card::Latin_American_Debt_Crisis as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -134,7 +134,17 @@ fn init_cards() -> Vec<Attributes> {
         c(USSR, 3).star(),
         c(US, 3).star(),
         c(US, 2).star(),
-        c(US, 2).star(),
+        c(US, 2).star(), // Star Wars,
+        c(US, 3).star(),
+        c(USSR, 3).star(),
+        c(USSR, 2).star(),
+        c(US, 4).star(),
+        c(USSR, 4).star(),
+        c(USSR, 2).star(),
+        c(Neutral, 2),
+        c(USSR, 2).star(),
+        c(US, 3).star(),
+        c(USSR, 2),
     ];
     x
 }
@@ -236,6 +246,16 @@ pub enum Card {
     The_Iron_Lady,
     Reagan_Bombs_Libya,
     Star_Wars, // 85
+    North_Sea_Oil,
+    The_Reformer,
+    Marine_Barracks_Bombing,
+    Soviets_Shoot_Down_KAL,
+    Glasnost, // 90
+    Ortega_Elected,
+    Terrorism,
+    Iran_Contra_Scandal,
+    Chernobyl,
+    Latin_American_Debt_Crisis, // 95
 }
 
 impl Card {
@@ -298,6 +318,7 @@ impl Card {
             Card::Warsaw_Pact_Formed => 2,
             Card::Junta => 2,
             Card::South_African_Unrest => 2,
+            Card::Latin_American_Debt_Crisis => 2,
             _ => 1,
         }
     }
@@ -307,7 +328,7 @@ impl Card {
     pub fn e_choices(&self, state: &GameState) -> Option<Vec<usize>> {
         use Card::*;
         match self {
-            Blockade => {
+            Blockade | Latin_American_Debt_Crisis => {
                 if state.cards_at_least(Side::US, 3).is_empty() {
                     Some(vec![0])
                 } else {
@@ -343,6 +364,32 @@ impl Card {
             Blockade => {
                 if choice == 0 {
                     state.remove_all(Side::US, CName::WGermany);
+                } else {
+                    let cards: Vec<_> = state
+                        .cards_at_least(Side::US, 3)
+                        .into_iter()
+                        .map(|c| c as usize)
+                        .collect();
+                    let d = Decision::new(Side::US, Action::Discard, cards);
+                    pa!(state, d);
+                }
+            }
+            Latin_American_Debt_Crisis => {
+                if choice == 0 {
+                    state.set_limit(1);
+                    let (sa_start, _) = Region::SouthAmerica.low_high();
+                    let allowed: Vec<_> = country::SOUTH_AMERICA
+                        .iter()
+                        .filter_map(|&x| {
+                            if state.countries[x].has_influence(Side::USSR) {
+                                Some(x - sa_start)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let d = Decision::with_quantity(Side::USSR, Action::DoubleInf, allowed, 2);
+                    pa!(state, d);
                 } else {
                     let cards: Vec<_> = state
                         .cards_at_least(Side::US, 3)
@@ -719,7 +766,7 @@ impl Card {
             Summit => {
                 let mut ussr_roll = rng.roll(Side::USSR);
                 let mut us_roll = rng.roll(Side::US);
-                for r in Region::major_regions() {
+                for r in Region::major_regions().iter() {
                     let (status, _) = r.status(state, false);
                     match status[Side::US as usize] {
                         Status::Domination | Status::Control => us_roll += 1,
@@ -1000,7 +1047,76 @@ impl Card {
                 let d = Decision::new(Side::US, Action::Event, allowed);
                 pa!(state, d);
             }
-            Olympic_Games | Blockade | Warsaw_Pact_Formed | Junta | South_African_Unrest
+            North_Sea_Oil => {
+                state.add_effect(Side::US, Effect::NorthSeaOil);
+                state.add_effect(Side::USSR, Effect::NoOpec);
+            }
+            The_Reformer => {
+                state.add_effect(Side::USSR, Effect::Reformer);
+                state.set_limit(2);
+                let allowed = &country::EUROPE[..];
+                let q = if state.vp < 0 { 6 } else { 4 };
+                let d = Decision::with_quantity(Side::USSR, Action::Place, allowed, q);
+                pa!(state, d);
+            }
+            Marine_Barracks_Bombing => {
+                state.countries[CName::Lebanon as usize].us = 0;
+                let allowed = opp_has_inf(&country::MIDDLE_EAST, Side::USSR, state);
+                let d = Decision::with_quantity(Side::USSR, Action::Remove, allowed, 2);
+                pa!(state, d);
+            }
+            Soviets_Shoot_Down_KAL => {
+                state.set_defcon(state.defcon() - 1);
+                state.vp += 2;
+                if let Side::US = state.countries[CName::SKorea as usize].controller() {
+                    let ops = self.modified_ops(Side::US, state);
+                    let d = Decision::conduct_ops(Side::US, ops);
+                    pa!(state, d);
+                }
+            }
+            Glasnost => {
+                state.set_defcon(state.defcon() + 1);
+                state.vp -= 2;
+                if state.has_effect(Side::USSR, Effect::Reformer) {
+                    let ops = self.modified_ops(Side::USSR, state);
+                    let d = Decision::conduct_ops(Side::USSR, ops);
+                    pa!(state, d);
+                }
+            }
+            Ortega_Elected => {
+                let nic = CName::Nicaragua as usize;
+                state.countries[nic].us = 0;
+                let allowed = opp_has_inf(&country::EDGES[nic], Side::USSR, state);
+                let ops = self.modified_ops(Side::USSR, state);
+                let d = Decision::with_quantity(Side::USSR, Action::Coup, allowed, ops);
+                pa!(state, d);
+            }
+            Terrorism => {
+                let opp = side.opposite();
+                let card = state.deck.random_card(opp, rng);
+                if let Some(c) = card {
+                    state.discard_card(opp, c);
+                }
+                if side == Side::USSR && state.has_effect(Side::USSR, Effect::TerrorismPlus) {
+                    let card2 = state.deck.random_card(opp, rng);
+                    if let Some(c) = card2 {
+                        state.discard_card(opp, c);
+                    }
+                }
+            }
+            Iran_Contra_Scandal => state.add_effect(Side::USSR, Effect::IranContra),
+            Chernobyl => {
+                let allowed: Vec<_> = (0..6).collect();
+                let d = Decision::new(Side::US, Action::BlockRegion, allowed);
+                pa!(state, d);
+            }
+            _ => unimplemented!(),
+            Olympic_Games
+            | Blockade
+            | Warsaw_Pact_Formed
+            | Junta
+            | South_African_Unrest
+            | Latin_American_Debt_Crisis
             | The_China_Card => unimplemented!(),
         }
         return true;
