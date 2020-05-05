@@ -14,6 +14,7 @@ name_index![OPEC; CName::Egypt, CName::Iran, CName::Libya, CName::SaudiaArabia,
     CName::Iraq, CName::GulfStates, CName::Venezuela];
 name_index![IND_REDS; CName::Yugoslavia, CName::Romania, CName::Bulgaria, 
     CName::Hungary, CName::Czechoslovakia];
+name_index![IRAN_IRAQ; CName::Iran, CName::Iraq];
 
 lazy_static! {
     pub static ref EUROPE: Vec<usize> = Region::Europe.all_countries();

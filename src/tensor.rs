@@ -164,9 +164,13 @@ impl TensorOutput for Decision {
                 standard
             }
             Action::ConductOps => {
-                let inf = state.legal_influence(self.agent, self.quantity);
-                let mut inf_d = Decision::new(self.agent, Action::Influence, inf);
-                let mut out = inf_d.encode(state);
+                let mut out = if let Some(Card::Tear_Down_This_Wall) = state.current_event() {
+                    Vec::new()
+                } else {
+                    let inf = state.legal_influence(self.agent, self.quantity);
+                    let mut inf_d = Decision::new(self.agent, Action::Influence, inf);
+                    inf_d.encode(state)
+                };
                 // Todo coup restrictions
                 let realign = state.legal_coup_realign(self.agent, false);
                 if !state.has_effect(self.agent, Effect::CubanMissileCrisis) {

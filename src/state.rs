@@ -310,24 +310,28 @@ impl GameState {
             }
             Action::Discard => {
                 let card = Card::from_index(choice);
-                let side = decision.agent; // Todo Aldrich Ames
-                                           // Clear Quagmire / Bear Trap if applicable
-                if side == Side::US {
-                    if let Some(index) = self.effect_pos(side, Effect::Quagmire) {
-                        let roll = rng.roll(side);
-                        if roll <= 4 {
-                            self.clear_effect(side, index);
-                        }
-                    }
+                if let Some(Card::Aldrich_Ames_Remix) = self.current_event() {
+                    self.discard_card(Side::US, card);
                 } else {
-                    if let Some(index) = self.effect_pos(side, Effect::BearTrap) {
-                        let roll = rng.roll(side);
-                        if roll <= 4 {
-                            self.clear_effect(side, index);
+                    let side = decision.agent;
+                    // Clear Quagmire / Bear Trap if applicable
+                    if side == Side::US {
+                        if let Some(index) = self.effect_pos(side, Effect::Quagmire) {
+                            let roll = rng.roll(side);
+                            if roll <= 4 {
+                                self.clear_effect(side, index);
+                            }
+                        }
+                    } else {
+                        if let Some(index) = self.effect_pos(side, Effect::BearTrap) {
+                            let roll = rng.roll(side);
+                            if roll <= 4 {
+                                self.clear_effect(side, index);
+                            }
                         }
                     }
+                    self.discard_card(side, card);
                 }
-                self.discard_card(side, card);
             }
             Action::Coup => {
                 // Todo other free coups
@@ -396,7 +400,7 @@ impl GameState {
             }
             Action::War => {
                 let brush = match self.current_event().unwrap() {
-                    // Todo Brush War
+                    Card::Brush_War => true,
                     _ => false,
                 };
                 let mut roll = rng.roll(side);
@@ -467,6 +471,10 @@ impl GameState {
                         } else {
                             let card = Card::from_index(choice);
                             self.deck.play_card(Side::US, card).unwrap();
+                            // We no longer know the hand (in full, at least)
+                            if let Some(i) = self.effect_pos(Side::USSR, Effect::US_Hand_Revealed) {
+                                self.clear_effect(Side::USSR, i);
+                            }
                         }
                     }
                     _ => unimplemented!(),

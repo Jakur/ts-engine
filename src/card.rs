@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Latin_American_Debt_Crisis as usize + 1;
+const NUM_CARDS: usize = Card::Iran_Iraq_War as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -134,7 +134,7 @@ fn init_cards() -> Vec<Attributes> {
         c(USSR, 3).star(),
         c(US, 3).star(),
         c(US, 2).star(),
-        c(US, 2).star(), // Star Wars,
+        c(US, 2).star(), // Star Wars
         c(US, 3).star(),
         c(USSR, 3).star(),
         c(USSR, 2).star(),
@@ -144,7 +144,14 @@ fn init_cards() -> Vec<Attributes> {
         c(Neutral, 2),
         c(USSR, 2).star(),
         c(US, 3).star(),
-        c(USSR, 2),
+        c(USSR, 2), // LADS
+        c(US, 3).star(),
+        c(US, 3).star(),
+        c(USSR, 3).star(),
+        c(USSR, 3).star(),
+        c(Neutral, 4).star(),
+        c(US, 2).star(),
+        c(Neutral, 2).star(), // End Late War
     ];
     x
 }
@@ -256,6 +263,13 @@ pub enum Card {
     Iran_Contra_Scandal,
     Chernobyl,
     Latin_American_Debt_Crisis, // 95
+    Tear_Down_This_Wall,
+    An_Evil_Empire,
+    Aldrich_Ames_Remix,
+    Pershing_II_Deployed,
+    Wargames, // 100
+    Solidarity,
+    Iran_Iraq_War, // End Late War
 }
 
 impl Card {
@@ -319,6 +333,7 @@ impl Card {
             Card::Junta => 2,
             Card::South_African_Unrest => 2,
             Card::Latin_American_Debt_Crisis => 2,
+            Card::Wargames => 2,
             _ => 1,
         }
     }
@@ -339,6 +354,7 @@ impl Card {
             Warsaw_Pact_Formed => Some(vec![0, 1]),
             Junta => Some(vec![0, 1]),
             South_African_Unrest => Some(vec![0, 1]),
+            Wargames => Some(vec![0, 1]),
             _ => None,
         }
     }
@@ -472,6 +488,22 @@ impl Card {
                     let allowed = vec![CName::Angola as usize, CName::Botswana as usize];
                     let d = Decision::with_quantity(Side::USSR, Action::Place, allowed, 2);
                     pa!(state, d);
+                }
+            }
+            Wargames => {
+                // The only winning move is not to play
+                if choice != 0 {
+                    if let Side::USSR = side {
+                        state.vp += 6;
+                    } else {
+                        state.vp -= 6;
+                    }
+                    // End Game
+                    if state.vp < 0 {
+                        state.vp = -20;
+                    } else {
+                        state.vp = 20;
+                    }
                 }
             }
             _ => unimplemented!(),
@@ -1110,6 +1142,44 @@ impl Card {
                 let d = Decision::new(Side::US, Action::BlockRegion, allowed);
                 pa!(state, d);
             }
+            Tear_Down_This_Wall => {
+                state.countries[CName::EGermany as usize].us += 3;
+                let ops = self.modified_ops(Side::US, state);
+                let d = Decision::conduct_ops(Side::US, ops);
+                if let Some(i) = state.effect_pos(Side::USSR, Effect::WillyBrandt) {
+                    state.clear_effect(Side::USSR, i);
+                }
+                state.add_effect(Side::US, Effect::TearDown);
+                pa!(state, d);
+            }
+            An_Evil_Empire => {
+                state.vp += 1;
+                if let Some(i) = state.effect_pos(Side::USSR, Effect::FlowerPower) {
+                    state.clear_effect(Side::USSR, i);
+                }
+                state.add_effect(Side::US, Effect::EvilEmpire);
+            }
+            Aldrich_Ames_Remix => {
+                state.add_effect(Side::USSR, Effect::AldrichAmes);
+                let allowed: Vec<_> = state.deck.us_hand().iter().map(|c| *c as usize).collect();
+                let d = Decision::new(Side::USSR, Action::Discard, allowed);
+                pa!(state, d);
+            }
+            Pershing_II_Deployed => {
+                state.vp -= 1;
+                let allowed: Vec<_> = country::WESTERN_EUROPE
+                    .iter()
+                    .copied()
+                    .filter(|x| state.countries[*x].has_influence(Side::US))
+                    .collect();
+                let d = Decision::with_quantity(Side::USSR, Action::Remove, allowed, 3);
+                pa!(state, d);
+            }
+            Solidarity => state.countries[CName::Poland as usize].us += 3,
+            Iran_Iraq_War => {
+                let d = Decision::new(side, Action::War, &country::IRAN_IRAQ[..]);
+                pa!(state, d);
+            }
             _ => unimplemented!(),
             Olympic_Games
             | Blockade
@@ -1156,9 +1226,12 @@ impl Card {
             Willy_Brandt => !state.has_effect(Side::US, Effect::TearDown),
             Muslim_Revolution => !state.has_effect(Side::US, Effect::AWACS),
             OPEC => !state.has_effect(Side::US, Effect::NoOpec),
+            Flower_Power => !state.has_effect(Side::US, Effect::EvilEmpire),
             One_Small_Step => {
                 state.space[eventer as usize] < state.space[eventer.opposite() as usize]
             }
+            Wargames => state.defcon() == 2,
+            Solidarity => state.has_effect(Side::US, Effect::AllowSolidarity),
             _ => true, // todo make this accurate
         }
     }

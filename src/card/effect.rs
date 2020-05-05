@@ -36,6 +36,8 @@ pub enum Effect {
     TerrorismPlus,
     Reformer,
     IranContra,
+    EvilEmpire,
+    AldrichAmes, // More powerful hand reveal
 }
 
 impl Effect {
@@ -44,10 +46,11 @@ impl Effect {
         match self {
             ShuttleDiplomacy | FormosanResolution | IronLady | Containment | CampDavid
             | AllowNato | Nato | USSR_Hand_Revealed | US_Japan | NuclearSubs | Quagmire
-            | NorthSeaOil | TearDown | AWACS | WWBY | AllowSolidarity => Side::US,
+            | NorthSeaOil | TearDown | AWACS | WWBY | AllowSolidarity | EvilEmpire => Side::US,
 
             VietnamRevolts | Brezhnev | DeGaulle | US_Hand_Revealed | BearTrap | NoOpec
-            | WillyBrandt | FlowerPower | U2 | TerrorismPlus | Reformer | IranContra => Side::USSR,
+            | WillyBrandt | FlowerPower | U2 | TerrorismPlus | Reformer | IranContra
+            | AldrichAmes => Side::USSR,
 
             RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy | LatinAmericanPlus
             | LatinAmericanMinus => Side::Neutral,
