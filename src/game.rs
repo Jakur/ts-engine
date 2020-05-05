@@ -108,7 +108,11 @@ impl<R: TwilightRand> Game<R> {
                     .iter()
                     .all(|d| d.action != Action::ChooseCard)
                 {
-                    self.state.order_headlines();
+                    if self.state.pending().iter().any(|d| d.is_defectors()) {
+                        self.state.defectors_headline();
+                    } else {
+                        self.state.order_headlines();
+                    }
                     self.status = Status::ResolveHL;
                     self.state.side = self.state.peek_pending().unwrap().agent;
                 }

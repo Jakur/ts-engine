@@ -37,7 +37,8 @@ pub enum Effect {
     Reformer,
     IranContra,
     EvilEmpire,
-    AldrichAmes, // More powerful hand reveal
+    AldrichAmes,         // More powerful hand reveal
+    US_Scoring_Revealed, // Least powerful hand reveal
 }
 
 impl Effect {
@@ -50,7 +51,7 @@ impl Effect {
 
             VietnamRevolts | Brezhnev | DeGaulle | US_Hand_Revealed | BearTrap | NoOpec
             | WillyBrandt | FlowerPower | U2 | TerrorismPlus | Reformer | IranContra
-            | AldrichAmes => Side::USSR,
+            | AldrichAmes | US_Scoring_Revealed => Side::USSR,
 
             RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy | LatinAmericanPlus
             | LatinAmericanMinus => Side::Neutral,

@@ -12,7 +12,7 @@ mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Iran_Iraq_War as usize + 1;
+const NUM_CARDS: usize = Card::Special_Relationship as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -152,6 +152,9 @@ fn init_cards() -> Vec<Attributes> {
         c(Neutral, 4).star(),
         c(US, 2).star(),
         c(Neutral, 2).star(), // End Late War
+        c(US, 2),             // Defectors
+        c(USSR, 2),
+        c(US, 2), // Special Relationship
     ];
     x
 }
@@ -269,7 +272,10 @@ pub enum Card {
     Pershing_II_Deployed,
     Wargames, // 100
     Solidarity,
-    Iran_Iraq_War, // End Late War
+    Iran_Iraq_War,        // End Late War
+    Defectors,            // 103
+    The_Cambridge_Five,   // Begin Optionals
+    Special_Relationship, // 105
 }
 
 impl Card {
@@ -1180,13 +1186,44 @@ impl Card {
                 let d = Decision::new(side, Action::War, &country::IRAN_IRAQ[..]);
                 pa!(state, d);
             }
-            _ => unimplemented!(),
+            Defectors => {
+                if *state.side() == Side::USSR && state.ar != 0 {
+                    state.vp += 1
+                }
+            }
+            The_Cambridge_Five => {
+                state.add_effect(Side::USSR, Effect::US_Scoring_Revealed);
+                let scoring = state.deck.scoring_cards(Side::US);
+                if !scoring.is_empty() {
+                    let mut vec: Vec<usize> = Vec::new();
+                    for c in scoring {
+                        let region = c.scoring_region().unwrap();
+                        vec.extend(&region.all_countries());
+                    }
+                    let d = Decision::new(Side::US, Action::Place, vec);
+                    pa!(state, d);
+                }
+            }
+            Special_Relationship => {
+                // Check for UK control when we see if we can even event the card
+                if state.has_effect(Side::US, Effect::Nato) {
+                    state.vp += 2;
+                    let allowed = &country::WESTERN_EUROPE[..];
+                    let d = Decision::new(Side::US, Action::Place, allowed);
+                    pa!(state, d);
+                } else {
+                    let allowed = &country::EDGES[CName::UK as usize];
+                    let d = Decision::new(Side::US, Action::Place, allowed.clone());
+                    pa!(state, d);
+                }
+            }
             Olympic_Games
             | Blockade
             | Warsaw_Pact_Formed
             | Junta
             | South_African_Unrest
             | Latin_American_Debt_Crisis
+            | Wargames
             | The_China_Card => unimplemented!(),
         }
         return true;
@@ -1232,6 +1269,8 @@ impl Card {
             }
             Wargames => state.defcon() == 2,
             Solidarity => state.has_effect(Side::US, Effect::AllowSolidarity),
+            The_Cambridge_Five => state.period() != Period::Late,
+            Special_Relationship => state.countries[CName::UK as usize].controller() == Side::US,
             _ => true, // todo make this accurate
         }
     }
@@ -1246,6 +1285,18 @@ impl Card {
     }
     pub fn is_scoring(&self) -> bool {
         self.att().scoring
+    }
+    pub fn scoring_region(&self) -> Option<Region> {
+        match self {
+            Card::Africa_Scoring => Some(Region::Africa),
+            Card::Asia_Scoring => Some(Region::Asia),
+            Card::Central_America_Scoring => Some(Region::CentralAmerica),
+            Card::Europe_Scoring => Some(Region::Europe),
+            Card::Middle_East_Scoring => Some(Region::MiddleEast),
+            Card::South_America_Scoring => Some(Region::SouthAmerica),
+            Card::Southeast_Asia_Scoring => Some(Region::SoutheastAsia),
+            _ => None,
+        }
     }
     pub fn is_war(&self) -> bool {
         match self {

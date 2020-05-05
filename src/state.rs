@@ -475,6 +475,11 @@ impl GameState {
                             if let Some(i) = self.effect_pos(Side::USSR, Effect::US_Hand_Revealed) {
                                 self.clear_effect(Side::USSR, i);
                             }
+                            if let Some(i) =
+                                self.effect_pos(Side::USSR, Effect::US_Scoring_Revealed)
+                            {
+                                self.clear_effect(Side::USSR, i);
+                            }
                         }
                     }
                     _ => unimplemented!(),
@@ -1085,6 +1090,12 @@ impl GameState {
     pub fn peek_pending_mut(&mut self) -> Option<&mut Decision> {
         self.pending.last_mut()
     }
+    pub fn defectors_headline(&mut self) {
+        let keep_pos = self.pending().iter().position(|d| d.agent == Side::US);
+        let us_hl = self.pending.swap_remove(keep_pos.unwrap());
+        self.clear_pending();
+        self.add_pending(us_hl);
+    }
     pub fn order_headlines(&mut self) {
         let priority = |x: &Decision| {
             let c = Card::from_index(x.allowed.try_slice().unwrap()[0]);
@@ -1141,7 +1152,7 @@ impl GameState {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Period {
     Early,
     Middle,

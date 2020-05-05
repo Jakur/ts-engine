@@ -124,6 +124,15 @@ impl Decision {
             _ => false,
         }
     }
+    pub fn is_defectors(&self) -> bool {
+        if self.action != Action::Event {
+            return false;
+        }
+        match self.allowed.allowed {
+            AllowedType::Owned(ref vec) => vec.len() == 1 && vec[0] == Card::Defectors as usize,
+            _ => false,
+        }
+    }
     pub fn is_trivial(&self) -> bool {
         match self.action {
             Action::BeginAr | Action::ConductOps => false,
