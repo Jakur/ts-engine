@@ -39,6 +39,8 @@ pub enum Effect {
     EvilEmpire,
     AldrichAmes,         // More powerful hand reveal
     US_Scoring_Revealed, // Least powerful hand reveal
+    Norad,
+    Yuri,
 }
 
 impl Effect {
@@ -47,11 +49,13 @@ impl Effect {
         match self {
             ShuttleDiplomacy | FormosanResolution | IronLady | Containment | CampDavid
             | AllowNato | Nato | USSR_Hand_Revealed | US_Japan | NuclearSubs | Quagmire
-            | NorthSeaOil | TearDown | AWACS | WWBY | AllowSolidarity | EvilEmpire => Side::US,
+            | NorthSeaOil | TearDown | AWACS | WWBY | AllowSolidarity | EvilEmpire | Norad => {
+                Side::US
+            }
 
             VietnamRevolts | Brezhnev | DeGaulle | US_Hand_Revealed | BearTrap | NoOpec
             | WillyBrandt | FlowerPower | U2 | TerrorismPlus | Reformer | IranContra
-            | AldrichAmes | US_Scoring_Revealed => Side::USSR,
+            | AldrichAmes | US_Scoring_Revealed | Yuri => Side::USSR,
 
             RedScarePurge | CubanMissileCrisis | SALT | MissileEnvy | LatinAmericanPlus
             | LatinAmericanMinus => Side::Neutral,

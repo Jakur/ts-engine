@@ -13,3 +13,12 @@ pub fn muslim_rev(state: &GameState) -> Vec<usize> {
         })
         .collect()
 }
+
+pub fn norad(state: &GameState) -> Vec<usize> {
+    state
+        .valid_countries()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| if c.us > 0 { Some(i) } else { None })
+        .collect()
+}

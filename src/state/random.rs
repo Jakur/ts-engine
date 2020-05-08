@@ -16,9 +16,8 @@ pub trait TwilightRand {
     /// Reshuffles the discard pile of the deck into the draw pile. Cards will
     /// be drawn from the end of the draw pile vector, as in a stack.
     fn reshuffle(&mut self, deck: &mut Deck);
-    /// Draws a new card for the given side from the draw pile, adding it to that
-    /// player's hand.
-    fn draw_card(&mut self, deck: &mut Deck, side: Side);
+    /// Draws a new card for the given side from the draw pile and returns it.
+    fn draw_card(&mut self, deck: &mut Deck, side: Side) -> Card;
 }
 
 #[derive(Clone)]
@@ -57,12 +56,12 @@ impl TwilightRand for InternalRand {
         deck.discard_pile_mut().shuffle(&mut self.rng);
         deck.reset_draw_pile();
     }
-    fn draw_card(&mut self, deck: &mut Deck, side: Side) {
+    fn draw_card(&mut self, deck: &mut Deck, _side: Side) -> Card {
         match deck.pop_draw_pile() {
-            Some(c) => deck.hand_mut(side).push(c),
+            Some(c) => c,
             None => {
                 self.reshuffle(deck);
-                self.draw_card(deck, side);
+                self.draw_card(deck, _side)
             }
         }
     }
@@ -119,7 +118,7 @@ impl TwilightRand for DebugRand {
     fn reshuffle(&mut self, deck: &mut Deck) {
         todo!()
     }
-    fn draw_card(&mut self, deck: &mut Deck, side: Side) {
+    fn draw_card(&mut self, deck: &mut Deck, side: Side) -> Card {
         let card = match side {
             Side::US => self.us_draw.pop(),
             Side::USSR => self.ussr_draw.pop(),
@@ -128,17 +127,16 @@ impl TwilightRand for DebugRand {
         if let Some(card) = card {
             // dbg!(card);
             if card == Card::The_China_Card {
-                return;
+                panic!("Should not draw the China Card");
             }
             // dbg!(deck.draw_pile());
             let index = deck.draw_pile().iter().position(|&c| c == card).unwrap();
             deck.draw_pile_mut().swap_remove(index);
-            deck.hand_mut(side).push(card);
+            card
         } else {
             // We've drawn all the known cards we care about, so just draw
             // a dummy card for now
-            let card = Card::Dummy;
-            deck.hand_mut(side).push(card);
+            Card::Dummy
         }
     }
 }

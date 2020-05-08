@@ -8,11 +8,11 @@ use num_traits::FromPrimitive;
 
 pub mod deck;
 pub mod effect;
-mod legal;
+pub mod legal;
 pub use deck::*;
 pub use effect::*;
 
-const NUM_CARDS: usize = Card::Special_Relationship as usize + 1;
+const NUM_CARDS: usize = Card::AWACS as usize + 1;
 
 lazy_static! {
     static ref ATT: Vec<Attributes> = init_cards();
@@ -155,6 +155,11 @@ fn init_cards() -> Vec<Attributes> {
         c(US, 2),             // Defectors
         c(USSR, 2),
         c(US, 2), // Special Relationship
+        c(US, 3).star(),
+        c(USSR, 3),
+        c(US, 2).star(),
+        c(USSR, 2).star(),
+        c(US, 3).star(), // AWACS
     ];
     x
 }
@@ -276,6 +281,11 @@ pub enum Card {
     Defectors,            // 103
     The_Cambridge_Five,   // Begin Optionals
     Special_Relationship, // 105
+    NORAD,
+    Che,
+    Our_Man_In_Tehran,
+    Yuri_And_Samantha,
+    AWACS,
 }
 
 impl Card {
@@ -787,7 +797,12 @@ impl Card {
                 state.add_effect(side.opposite(), Effect::CubanMissileCrisis);
             }
             Nuclear_Subs => state.add_effect(side, Effect::NuclearSubs),
-            Quagmire => state.add_effect(side.opposite(), Effect::Quagmire),
+            Quagmire => {
+                state.add_effect(side.opposite(), Effect::Quagmire);
+                if let Some(i) = state.effect_pos(Side::US, Effect::Norad) {
+                    state.clear_effect(Side::US, i);
+                }
+            }
             SALT_Negotiations => {
                 state.add_effect(side, Effect::SALT);
                 state.add_effect(side.opposite(), Effect::SALT);
@@ -1216,6 +1231,35 @@ impl Card {
                     let d = Decision::new(Side::US, Action::Place, allowed.clone());
                     pa!(state, d);
                 }
+            }
+            NORAD => state.add_effect(Side::US, Effect::Norad),
+            Che => {
+                state.set_limit(1);
+                let allowed: Vec<_> = country::LATIN_AMERICA[..]
+                    .iter()
+                    .chain(&country::AFRICA[..])
+                    .copied()
+                    .filter(|x| {
+                        let c = &state.countries[*x];
+                        !c.bg && c.has_influence(Side::US)
+                    })
+                    .collect();
+                let ops = self.modified_ops(Side::USSR, state);
+                let d = Decision::with_quantity(Side::USSR, Action::Coup, allowed, ops);
+                // Get the second coup from the next_decision() API
+                pa!(state, d);
+            }
+            Our_Man_In_Tehran => {
+                let mut vec = vec![0];
+                vec.extend(state.deck.our_man(rng).iter().map(|c| *c as usize));
+                let len = vec.len() as i8;
+                let d = Decision::with_quantity(Side::US, Action::ChooseCard, vec, len);
+                pa!(state, d);
+            }
+            Yuri_And_Samantha => state.add_effect(Side::USSR, Effect::Yuri),
+            AWACS => {
+                state.add_effect(Side::US, Effect::AWACS);
+                state.countries[CName::SaudiaArabia as usize].us += 2;
             }
             Olympic_Games
             | Blockade

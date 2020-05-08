@@ -255,11 +255,13 @@ pub fn parse_lines(string: &str) -> Record {
                     | Action::Discard
                     | Action::Space => {
                         let card = parsed.card.unwrap();
-                        // Todo find exceptions to this
-                        match parsed.side {
-                            Side::US => us_cards.push(card),
-                            Side::USSR => ussr_cards.push(card),
-                            _ => unimplemented!(),
+                        if card != Card::The_China_Card {
+                            // Todo find exceptions to this
+                            match parsed.side {
+                                Side::US => us_cards.push(card),
+                                Side::USSR => ussr_cards.push(card),
+                                _ => unimplemented!(),
+                            }
                         }
                         let x = OutputIndex::encode_single(act, card as usize);
                         choices[parsed.side as usize].push(x);

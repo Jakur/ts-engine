@@ -86,14 +86,14 @@ impl Deck {
         let mut side = Side::USSR;
         // Oscillating is relevant when reshuffles do occur
         while self.ussr_hand.len() < target && self.us_hand.len() < target {
-            self.draw_card(rng, side);
+            self.draw_to_hand(rng, side);
             side = side.opposite();
         }
         while self.ussr_hand.len() < target {
-            self.draw_card(rng, Side::USSR);
+            self.draw_to_hand(rng, Side::USSR);
         }
         while self.us_hand.len() < target {
-            self.draw_card(rng, Side::US);
+            self.draw_to_hand(rng, Side::US);
         }
     }
     /// Searches the pending discard pile for a played card and removes it.
@@ -117,8 +117,9 @@ impl Deck {
         rng.card_from_hand(self, side)
     }
     /// Draws the next card from the draw pile, reshuffling if necessary.
-    pub fn draw_card<T: TwilightRand>(&mut self, rng: &mut T, side: Side) {
-        rng.draw_card(self, side);
+    pub fn draw_to_hand<T: TwilightRand>(&mut self, rng: &mut T, side: Side) {
+        let card = rng.draw_card(self, side);
+        self.hand_mut(side).push(card);
     }
     /// Returns a vector of cards which, if played by the given side, will cause
     /// the opponent's event to fire.
@@ -215,6 +216,27 @@ impl Deck {
             }
         }
     }
+    pub fn our_man<T: TwilightRand>(&mut self, rng: &mut T) -> &[Card] {
+        // Move the 5 cards to the end of the draw pile
+        let mut vec = Vec::with_capacity(5);
+        for _ in 0..5 {
+            let card = rng.draw_card(self, Side::US);
+            vec.push(card);
+        }
+        self.draw_pile.extend(vec.into_iter());
+        &self.draw_pile[self.draw_pile.len() - 5..]
+    }
+    pub fn discard_draw(&mut self, card: Card) {
+        let (index, _) = self
+            .draw_pile
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_i, c)| **c == card)
+            .expect("Found card");
+        let card = self.draw_pile.swap_remove(index);
+        self.discard_pile.push(card);
+    }
     pub fn china_available(&self, side: Side) -> bool {
         self.china == side && self.china_up
     }
@@ -235,12 +257,15 @@ impl Deck {
         rng.reshuffle(self);
     }
     pub fn add_early_war(&mut self) {
-        // Todo early war cards with higher indices
         for c_index in 1..Card::Formosan_Resolution as usize + 1 {
             let card = Card::from_index(c_index);
             if card == Card::The_China_Card {
                 continue;
             }
+            self.draw_pile.push(card);
+        }
+        for c_index in Card::Defectors as usize..Card::Che as usize {
+            let card = Card::from_index(c_index);
             self.draw_pile.push(card);
         }
     }
@@ -261,4 +286,45 @@ pub enum DeckError {
     AlreadyContains,
     CannotFind,
     ChinaException,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::DebugRand;
+    #[test]
+    fn test_our_man() {
+        let mut rand = DebugRand::new_empty();
+        // Extra cards that we don't want to hit
+        rand.us_draw = vec![Card::De_Stalinization, Card::Duck_and_Cover];
+        let vec = vec![
+            Card::CIA_Created,
+            Card::Defectors,
+            Card::Decolonization,
+            Card::Suez_Crisis,
+            Card::Socialist_Governments,
+        ];
+        rand.us_draw.extend(vec.clone().into_iter());
+        let mut deck = Deck::new();
+        let cards = deck.our_man(&mut rand);
+        assert_eq!(
+            cards,
+            &vec.clone().into_iter().rev().collect::<Vec<_>>()[..]
+        );
+        let indices: Vec<_> = cards.iter().map(|c| *c as usize).collect();
+        for i in &indices[0..3] {
+            deck.discard_draw(Card::from_index(*i));
+        }
+        // Assert discards worked
+        assert_eq!(
+            deck.discard_pile,
+            vec[2..].iter().cloned().rev().collect::<Vec<_>>()
+        );
+
+        // Assert the other cards are still in the draw pile
+        for i in &indices[3..] {
+            let card = Card::from_index(*i);
+            deck.draw_pile.contains(&card);
+        }
+    }
 }

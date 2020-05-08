@@ -131,6 +131,13 @@ impl GameState {
             self.defcon = 1;
         } else {
             self.defcon = value;
+            if self.defcon == 2 && self.ar != 0 && self.has_effect(Side::US, Effect::Norad) {
+                // Add US decision at end of AR
+                assert!(self.pending[0].action == Action::EndAr);
+                let allowed = Allowed::new_lazy(crate::card::legal::norad);
+                let d = Decision::new(Side::US, Action::Place, allowed);
+                self.pending.insert(1, d);
+            }
         }
     }
     pub fn side(&self) -> &Side {
@@ -166,8 +173,8 @@ impl GameState {
                     }
                     // Assume only the last bit of history could affect things
                     let count = history.iter().filter(|x| *x == last).count();
-                    dbg!(count);
-                    dbg!(last);
+                    // dbg!(count);
+                    // dbg!(last);
                     if count >= *num && decision.action == last.action {
                         dbg!("Got here?");
                         let remove = last.choice.expect("Not None");
@@ -343,6 +350,11 @@ impl GameState {
                 } else {
                     false
                 };
+                if let Side::US = side {
+                    if self.has_effect(Side::USSR, Effect::Yuri) {
+                        self.vp -= 1;
+                    }
+                }
                 let mut roll = rng.roll(decision.agent);
                 if Region::SouthAmerica.has_country(choice)
                     || Region::CentralAmerica.has_country(choice)
@@ -361,8 +373,19 @@ impl GameState {
                     ops -= 1;
                     self.china = false;
                 }
-                self.take_coup(side, choice, ops, roll, free_coup);
-                decision.quantity = 1; // Use up all of your ops on one action
+                let success = self.take_coup(side, choice, ops, roll, free_coup);
+                // Handle Che
+                if let Some(Card::Che) = self.current_event() {
+                    if success
+                        && history
+                            .last()
+                            .map_or(true, |dec| dec.action != Action::Coup)
+                    {
+                        decision.quantity += 1; // Make ops the same
+                    }
+                } else {
+                    decision.quantity = 1; // Use up all of your ops on one action
+                }
             }
             Action::Place => {
                 let (q, side) = if let Some(card) = self.current_event() {
@@ -465,7 +488,7 @@ impl GameState {
                             let size = hand.len();
                             hand.retain(|c| *c != Card::Dummy);
                             for _ in 0..size - hand.len() {
-                                self.deck.draw_card(rng, Side::US);
+                                self.deck.draw_to_hand(rng, Side::US);
                             }
                             decision.quantity = 1; // Done
                         } else {
@@ -480,6 +503,15 @@ impl GameState {
                             {
                                 self.clear_effect(Side::USSR, i);
                             }
+                        }
+                    }
+                    Card::Our_Man_In_Tehran => {
+                        if choice == 0 {
+                            decision.quantity = 1;
+                            self.deck.reshuffle(rng);
+                        } else {
+                            let card = Card::from_index(choice);
+                            self.deck.discard_draw(card);
                         }
                     }
                     _ => unimplemented!(),
@@ -711,8 +743,8 @@ impl GameState {
             country.us = std::cmp::max(0, country.us - diff);
         }
     }
-    pub fn take_coup(&mut self, side: Side, country_index: usize, ops: i8, roll: i8, free: bool) {
-        let c = &mut self.countries[country_index];
+    pub fn take_coup(&mut self, side: Side, c_index: usize, ops: i8, roll: i8, free: bool) -> bool {
+        let c = &mut self.countries[c_index];
         let delta = std::cmp::max(0, ops + roll - 2 * c.stability);
         match side {
             Side::US => {
@@ -742,6 +774,8 @@ impl GameState {
             let x = side as usize;
             self.mil_ops[x] = std::cmp::max(5, self.mil_ops[x] + ops);
         }
+        // Return true if we removed any influence
+        delta > 0
     }
     /// Returns cards in hand at least the given value. China is never
     /// included.
