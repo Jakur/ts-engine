@@ -15,16 +15,17 @@ use nom::{
     Err::Error,
     IResult,
 };
+use radix_trie::Trie;
 use std::collections::HashMap;
 
 lazy_static! {
-    static ref CARDS: HashMap<String, Card> = {
-        (1..Card::total())
-            .map(|i| {
-                let c = Card::from_index(i);
-                (format!("{:?}", c), c)
-            })
-            .collect()
+    static ref CARDS: Trie<String, Card> = {
+        let mut trie = Trie::new();
+        for i in 1..Card::total() {
+            let c = Card::from_index(i);
+            trie.insert(format!("{:?}", c).to_uppercase(), c);
+        }
+        trie
     };
     static ref COUNTRIES: HashMap<String, CName> = {
         (1..CName::total())
@@ -85,10 +86,24 @@ fn space(x: &str) -> IResult<&str, &str> {
     nom::bytes::complete::is_a(" \t")(x)
 }
 
+fn find_single_card(s: &str) -> Option<Card> {
+    use radix_trie::TrieCommon;
+    let key = s.to_ascii_uppercase();
+    if key == "SPECIAL" {
+        return None;
+    }
+    let subtree = CARDS.get_raw_descendant(&key)?;
+    if subtree.len() == 1 {
+        subtree.values().next().copied()
+    } else {
+        None
+    }
+}
+
 fn card(x: &str) -> IResult<&str, Card> {
     let (left, word) = nom::bytes::complete::is_not(" \t")(x)?;
-    if let Some(card) = CARDS.get(word) {
-        Ok((left, *card)) // Valid card
+    if let Some(card) = find_single_card(word) {
+        Ok((left, card)) // Valid card
     } else {
         become_err![x]
     }
@@ -342,5 +357,12 @@ mod tests {
         dbg!(side);
         dbg!(card);
         dbg!(act);
+    }
+
+    #[test]
+    fn radix_test() {
+        assert!(find_single_card("Latin_American").is_none());
+        assert!(find_single_card("nora").is_some());
+        assert!(find_single_card("Dummy").is_none());
     }
 }
