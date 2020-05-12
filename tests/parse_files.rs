@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
 use ts_engine;
-use ts_engine::country::{self, CName};
+use ts_engine::country::{self, CName, Side};
 use ts_engine::game::replay::Replay;
 use ts_engine::game::Start;
 use ts_engine::record::*;
@@ -29,6 +29,21 @@ fn check_countries(state: &GameState, us: &[(CName, i8)], ussr: &[(CName, i8)]) 
         dbg!(CName::from_index(index));
         assert_eq!(expected.us, game.us);
         assert_eq!(expected.ussr, game.ussr);
+    }
+}
+
+fn check_controlled(state: &GameState, us: &[CName], ussr: &[CName]) {
+    use std::collections::HashSet;
+    let us: HashSet<_> = us.iter().map(|c| *c as usize).collect();
+    let ussr: HashSet<_> = ussr.iter().map(|c| *c as usize).collect();
+    for (i, c) in state.valid_countries().iter().enumerate() {
+        let us_contains = us.contains(&i);
+        let ussr_contains = ussr.contains(&i);
+        match c.controller() {
+            Side::US => assert!(us_contains && !ussr_contains),
+            Side::USSR => assert!(ussr_contains && !us_contains),
+            Side::Neutral => assert!(!us_contains && !ussr_contains),
+        }
     }
 }
 
@@ -94,6 +109,25 @@ fn events1() {
     assert_eq!(replay.game.state.turn, 2);
     // assert_eq!(game.state.defcon, 4);
     // assert_eq!(game.state.vp, 0);
+}
+
+#[test]
+fn test_events2() {
+    use CName::*;
+    const US1: [CName; 6] = [UK, Italy, Thailand, LaosCambodia, Australia, Iran];
+    const USSR1: [CName; 6] = [Poland, EGermany, Egypt, Vietnam, SKorea, NKorea];
+    let s = load_file("tests/Events2.record");
+    let mut replay: Replay = ts_engine::record::parse_lines(&s).into();
+    replay.add_check(Box::new(|replay| assert_eq!(replay.game.state.ar, 1)));
+    replay.add_check(Box::new(|replay| {
+        let state = &replay.game.state;
+        assert_eq!(state.turn, 2);
+        assert_eq!(state.ar, 0);
+        assert_eq!(state.vp, 2);
+        check_controlled(state, &US1, &USSR1);
+    }));
+    let res = replay.play(Start::Beginning);
+    assert!(res.is_none());
 }
 
 #[test]

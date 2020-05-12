@@ -594,7 +594,10 @@ impl Card {
                 state.remove_all(Side::US, CName::Cuba);
                 state.control(Side::USSR, CName::Cuba);
             }
-            Vietnam_Revolts => state.add_effect(Side::USSR, Effect::VietnamRevolts),
+            Vietnam_Revolts => {
+                state.add_effect(Side::USSR, Effect::VietnamRevolts);
+                state.countries[CName::Vietnam as usize].ussr += 2
+            }
             Korean_War => {
                 let index = CName::SKorea as usize;
                 state.add_mil_ops(Side::USSR, 2);

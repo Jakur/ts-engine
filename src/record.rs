@@ -307,6 +307,8 @@ pub fn parse_lines(string: &str) -> Record {
     us_rolls.reverse();
     ussr_rolls.reverse();
     triggers.reverse();
+    us_cards.reverse();
+    ussr_cards.reverse();
     let us_agent = ScriptedAgent::new(&choices[Side::US as usize]);
     let ussr_agent = ScriptedAgent::new(&choices[Side::USSR as usize]);
     // dbg!(&us_agent.choices.lock().unwrap());

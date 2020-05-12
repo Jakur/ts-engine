@@ -176,7 +176,6 @@ impl GameState {
                     // dbg!(count);
                     // dbg!(last);
                     if count >= *num && decision.action == last.action {
-                        dbg!("Got here?");
                         let remove = last.choice.expect("Not None");
                         decision.allowed = decision
                             .allowed
