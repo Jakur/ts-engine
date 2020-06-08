@@ -1,0 +1,28 @@
+turn = {
+	"Turn" ~ number ~ "," ~ ("Headline Phase" | "Cleanup" | (side ~ "AR" ~ number))
+}
+side = {
+	"USSR" | "US"
+}
+card = {
+	ASCII_ALPHA_UPPER ~ char* ~ NEWLINE
+}
+inf = {
+	"Place Influence (" ~ number ~ "Ops):" ~ 
+    	(NEWLINE ~ country_change)+
+}
+country_change = {
+	side ~ "+" ~ number ~ "in" ~ words ~ country_status
+}
+country_status = {
+	"[" ~ number ~ "]" ~ "[" ~ number ~ "]"
+}
+file = {
+    SOI ~ inf ~ EOI
+}
+
+char = { ASCII_ALPHANUMERIC | "/" | "-" | "*"}
+word = @{char+}
+words = {word+}
+number = @{ASCII_DIGIT+}
+WHITESPACE = _{ " " }

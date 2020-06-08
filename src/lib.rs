@@ -4,11 +4,15 @@ extern crate lazy_static;
 #[macro_use]
 extern crate num_derive;
 
+#[macro_use]
+extern crate pest_derive;
+
 pub mod action;
 pub mod agent;
 pub mod card;
 pub mod country;
 pub mod game;
+mod parse2;
 pub mod record;
 pub mod state;
 mod tensor;
