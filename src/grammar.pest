@@ -1,5 +1,5 @@
 turn = {
-	"Turn" ~ number ~ "," ~ ("Headline Phase" | "Cleanup" | (side ~ "AR" ~ number))
+	"Turn" ~ ASCII_DIGIT+ ~ "," ~ ("Headline Phase" | "Cleanup" | (side ~ "AR" ~ ASCII_DIGIT+))
 }
 side = {
 	"USSR" | "US"
@@ -8,21 +8,32 @@ card = {
 	ASCII_ALPHA_UPPER ~ char* ~ NEWLINE
 }
 inf = {
-	"Place Influence (" ~ number ~ "Ops):" ~ 
-    	(NEWLINE ~ country_change)+
+	"Place Influence (" ~ number ~ "Ops):" ~ NEWLINE ~
+    	(country_change)+
 }
 country_change = {
-	side ~ "+" ~ number ~ "in" ~ words ~ country_status
+	side ~ ("+" | "-") ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
 }
 country_status = {
 	"[" ~ number ~ "]" ~ "[" ~ number ~ "]"
 }
+realign = {
+    "Realignment (" ~ number ~ "Ops):" ~ NEWLINE ~
+        (target ~ rolls ~ rolls ~ country_change?)+
+}
+target = {
+    "Target:" ~ words ~ NEWLINE
+}
+rolls = {
+    side ~ "rolls" ~ number ~ (!NEWLINE ~ ANY)* ~ NEWLINE
+}
 file = {
-    SOI ~ inf ~ EOI
+    SOI ~ buffer ~ (inf | realign) ~ buffer ~ EOI
 }
 
-char = { ASCII_ALPHANUMERIC | "/" | "-" | "*"}
-word = @{char+}
+buffer = _{NEWLINE*}
 words = {word+}
+word = @{char+}
 number = @{ASCII_DIGIT+}
+char = { ASCII_ALPHANUMERIC | "/" | "-" | "*"}
 WHITESPACE = _{ " " }

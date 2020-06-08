@@ -10,11 +10,21 @@ mod tests {
     #[test]
     fn test() {
         let f =
-            "Place Influence (2 Ops):\nUSSR +1 in Venezuela [0][2]\nUSSR +1 in South Africa [3][2]";
-        let parsed = TwilightParser::parse(Rule::file, &f)
-            .expect("Bad parse")
-            .next()
-            .unwrap();
-        dbg!(parsed);
+            "Place Influence (2 Ops):\nUSSR +1 in Venezuela [0][2]\nUSSR +1 in South Africa [3][2]\n";
+        let f2 = "Realignment (2 Ops):
+Target: Angola
+USSR rolls 6
+US rolls 4 (+2) = 6
+Target: Angola
+USSR rolls 1
+US rolls 5 (+2) = 7
+USSR -4 in Angola [4][0]\n";
+        for string in [f, f2].iter() {
+            let parsed = TwilightParser::parse(Rule::file, &string)
+                .expect("Bad parse")
+                .next()
+                .unwrap();
+            dbg!(parsed);
+        }
     }
 }
