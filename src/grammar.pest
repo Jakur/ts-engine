@@ -53,6 +53,8 @@ war = {
     country_change* ~ 
     set_mil_ops
 }
+un_inter = {side ~ "plays" ~ card ~ NEWLINE ~ conduct_ops}
+conduct_ops = {"TODO"}
 
 // Basic building blocks
 buffer = _{NEWLINE*}
