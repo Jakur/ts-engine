@@ -19,7 +19,12 @@ Target: Angola
 USSR rolls 1
 US rolls 5 (+2) = 7
 USSR -4 in Angola [4][0]\n";
-        for string in [f, f2].iter() {
+
+        let f3 = "Event: AWACS Sale To Saudis*
+US +2 in Saudi Arabia [2][3]
+AWACS Sale To Saudis* is now in play.
+";
+        for string in [f, f2, f3].iter() {
             let parsed = TwilightParser::parse(Rule::file, &string)
                 .expect("Bad parse")
                 .next()

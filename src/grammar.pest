@@ -5,11 +5,14 @@ side = {
 	"USSR" | "US"
 }
 card = {
-	ASCII_ALPHA_UPPER ~ char* ~ NEWLINE
+	(!("is" | "&") ~ word)+
 }
 inf = {
 	"Place Influence (" ~ number ~ "Ops):" ~ NEWLINE ~
     	(country_change)+
+}
+event = {
+	"Event:" ~ card ~ NEWLINE ~ outcome+
 }
 country_change = {
 	side ~ ("+" | "-") ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
@@ -25,13 +28,35 @@ target = {
     "Target:" ~ words ~ NEWLINE
 }
 rolls = {
-    side ~ "rolls" ~ number ~ (!NEWLINE ~ ANY)* ~ NEWLINE
+    side ~ "rolls" ~ number ~ eat_line
 }
 file = {
-    SOI ~ buffer ~ (inf | realign) ~ buffer ~ EOI
+    SOI ~ buffer ~ (inf | realign | event) ~ buffer ~ EOI
 }
 
+// Outcomes
+outcome = {
+	country_change | defcon_change | vp_change | start_effect | end_effect |
+    set_mil_ops | war 
+}
+defcon_change = {"DEFCON:" ~ ("degrades" | "improves") ~ "to" ~ number ~ NEWLINE}
+vp_change = {
+	side ~ "gains" ~ number ~ "VP. Score is" ~
+    	("even." | side ~ number ~ ".") ~ NEWLINE
+}
+start_effect = {card ~ "is now in play." ~ NEWLINE}
+end_effect = {card ~ "is no longer in play." ~ NEWLINE}
+set_mil_ops = {side ~ "Military Ops to" ~ number ~ NEWLINE}
+war = {
+	"War in" ~ words ~ NEWLINE ~
+    ("DEFEAT:" | "VICTORY:") ~ number ~ eat_line ~
+    country_change* ~ 
+    set_mil_ops
+}
+
+// Basic building blocks
 buffer = _{NEWLINE*}
+eat_line = _{(!NEWLINE ~ ANY)* ~ NEWLINE}
 words = {word+}
 word = @{char+}
 number = @{ASCII_DIGIT+}
