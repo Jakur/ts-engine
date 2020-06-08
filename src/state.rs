@@ -130,14 +130,18 @@ impl GameState {
         } else if value < 1 {
             self.defcon = 1;
         } else {
-            self.defcon = value;
-            if self.defcon == 2 && self.ar != 0 && self.has_effect(Side::US, Effect::Norad) {
+            if value == 2
+                && self.defcon != 2
+                && self.ar != 0
+                && self.has_effect(Side::US, Effect::Norad)
+            {
                 // Add US decision at end of AR
                 assert!(self.pending[0].action == Action::EndAr);
                 let allowed = Allowed::new_lazy(crate::card::legal::norad);
                 let d = Decision::new(Side::US, Action::Place, allowed);
                 self.pending.insert(1, d);
             }
+            self.defcon = value;
         }
     }
     pub fn side(&self) -> &Side {
