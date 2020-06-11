@@ -1,3 +1,6 @@
+file = {
+    SOI ~ buffer ~ (inf | coup | realign | event) ~ buffer ~ EOI
+}
 turn = {
 	"Turn" ~ ASCII_DIGIT+ ~ "," ~ ("Headline Phase" | "Cleanup" | (side ~ "AR" ~ ASCII_DIGIT+))
 }
@@ -10,6 +13,16 @@ card = {
 inf = {
 	"Place Influence (" ~ number ~ "Ops):" ~ NEWLINE ~
     	(country_change)+
+}
+
+// TODO figure out what free coup looks like
+coup = {
+	"Coup (" ~ number ~ "Ops):" ~ NEWLINE ~
+	target ~
+	pass_fail ~
+	country_change* ~
+	set_mil_ops? ~
+	defcon_change?
 }
 event = {
 	"Event:" ~ card ~ NEWLINE ~ outcome+
@@ -27,11 +40,11 @@ realign = {
 target = {
     "Target:" ~ words ~ NEWLINE
 }
+pass_fail = {
+	("SUCCESS:" | "FAILURE:") ~ number ~ eat_line
+}
 rolls = {
     side ~ "rolls" ~ number ~ eat_line
-}
-file = {
-    SOI ~ buffer ~ (inf | realign | event) ~ buffer ~ EOI
 }
 
 // Outcomes
@@ -39,9 +52,9 @@ outcome = {
 	country_change | defcon_change | vp_change | start_effect | end_effect |
     set_mil_ops | war 
 }
-defcon_change = {"DEFCON:" ~ ("degrades" | "improves") ~ "to" ~ number ~ NEWLINE}
+defcon_change = {"DEFCON" ~ ("degrades" | "improves") ~ "to" ~ number ~ NEWLINE}
 vp_change = {
-	side ~ "gains" ~ number ~ "VP. Score is" ~
+	(side ~ "gains" ~ number ~ "VP." | "No VP awarded.") ~ "Score is" ~
     	("even." | side ~ number ~ ".") ~ NEWLINE
 }
 start_effect = {card ~ "is now in play." ~ NEWLINE}

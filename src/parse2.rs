@@ -24,7 +24,16 @@ USSR -4 in Angola [4][0]\n";
 US +2 in Saudi Arabia [2][3]
 AWACS Sale To Saudis* is now in play.
 ";
-        for string in [f, f2, f3].iter() {
+
+        let f4 = "Coup (2 Ops):
+Target: Nigeria
+SUCCESS: 3 [ + 2 - 2x1 = 3 ]
+US -1 in Nigeria [0][0]
+USSR +2 in Nigeria [0][2]
+USSR Military Ops to 2
+DEFCON degrades to 2
+";
+        for string in [f, f2, f3, f4].iter() {
             let parsed = TwilightParser::parse(Rule::file, &string)
                 .expect("Bad parse")
                 .next()
