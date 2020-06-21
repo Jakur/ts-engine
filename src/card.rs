@@ -292,7 +292,7 @@ impl Card {
     pub fn from_index(index: usize) -> Card {
         Self::from_usize(index).unwrap()
     }
-    pub fn total() -> usize {
+    pub const fn total() -> usize {
         NUM_CARDS
     }
     pub fn is_special(&self) -> bool {

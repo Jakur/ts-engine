@@ -1,21 +1,50 @@
 file = {
-    SOI ~ buffer ~ (inf | coup | realign | event) ~ buffer ~ EOI
+    SOI ~ buffer ~ setup ~ turn+ ~ EOI
 }
+setup = {
+	"SETUP" ~ buffer ~ eat_line ~ eat_line ~ handicap ~ scenario ~ optionals ~ eat_line ~ 
+	country_change+ ~ buffer
+}
+handicap = {"Handicap influence: US +2" ~ NEWLINE} // Todo check this
+scenario = {"Scenario: Standard" ~ NEWLINE}
+optionals = {"Optional Cards Added" ~ NEWLINE}
 turn = {
-	"Turn" ~ ASCII_DIGIT+ ~ "," ~ ("Headline Phase" | "Cleanup" | (side ~ "AR" ~ ASCII_DIGIT+))
+	turn_headline | turn_cleanup | turn_std
 }
-side = {
-	"USSR" | "US"
+// Todo see what happens if Defcon ends at 5 at end of turn
+turn_headline = {
+	"Turn" ~ number ~ "," ~ "Headline Phase" ~ NEWLINE ~
+	card ~ "&" ~ card ~ NEWLINE ~
+	defcon_change ~
+	("*RESHUFFLE*" ~ NEWLINE)? ~
+	(side ~ "Headlines" ~ card ~ NEWLINE) ~
+	(side ~ "Headlines" ~ card ~ NEWLINE) ~
+	("Event: Defectors" ~ NEWLINE) | (event ~ event) ~ buffer
+
+}
+turn_cleanup = {
+	"Turn" ~ number ~ "," ~ "Cleanup" ~ NEWLINE ~ NEWLINE ~ outcome* ~ NEWLINE
+}
+turn_std = {
+	"Turn" ~ number ~ "," ~ side ~ "AR" ~ number ~ NEWLINE ~ (card ~ NEWLINE ~ play_card)? ~ NEWLINE
 }
 card = {
 	(!("is" | "&") ~ word)+
+}
+play_card = {
+	(event ~ card_use) | (card_use ~ event) | card_use
+}
+card_use = {
+	event | inf | realign | coup | space
+}
+event = {
+	"Event:" ~ card ~ NEWLINE ~ outcome*
 }
 inf = {
 	"Place Influence (" ~ number ~ "Ops):" ~ NEWLINE ~
     	(country_change)+
 }
-
-// TODO figure out what free coup looks like
+// Todo figure out what free coup looks like
 coup = {
 	"Coup (" ~ number ~ "Ops):" ~ NEWLINE ~
 	target ~
@@ -24,33 +53,41 @@ coup = {
 	set_mil_ops? ~
 	defcon_change?
 }
-event = {
-	"Event:" ~ card ~ NEWLINE ~ outcome+
-}
-country_change = {
-	side ~ ("+" | "-") ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
-}
-country_status = {
-	"[" ~ number ~ "]" ~ "[" ~ number ~ "]"
-}
 realign = {
     "Realignment (" ~ number ~ "Ops):" ~ NEWLINE ~
         (target ~ rolls ~ rolls ~ country_change?)+
 }
-target = {
-    "Target:" ~ words ~ NEWLINE
+space = {
+	"Space Race (" ~ number ~ "Ops):" ~ NEWLINE ~
+	space_roll ~ advance_space? ~ vp_change?
 }
+
+// Rolls 
 pass_fail = {
 	("SUCCESS:" | "FAILURE:") ~ number ~ eat_line
 }
 rolls = {
     side ~ "rolls" ~ number ~ eat_line
 }
+space_roll = {
+	"Die roll:" ~ number ~ "--" ~ ("Success!" | "Failed!") ~ eat_line
+}
+
+// Misc 
+country_status = {
+	"[" ~ number ~ "]" ~ "[" ~ number ~ "]"
+}
+target = {
+    "Target:" ~ words ~ NEWLINE
+}
 
 // Outcomes
 outcome = {
 	country_change | defcon_change | vp_change | start_effect | end_effect |
-    set_mil_ops | war 
+    set_mil_ops | war | advance_space | conduct_ops
+}
+country_change = {
+	side ~ ("+" | "-") ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
 }
 defcon_change = {"DEFCON" ~ ("degrades" | "improves") ~ "to" ~ number ~ NEWLINE}
 vp_change = {
@@ -63,17 +100,19 @@ set_mil_ops = {side ~ "Military Ops to" ~ number ~ NEWLINE}
 war = {
 	"War in" ~ words ~ NEWLINE ~
     ("DEFEAT:" | "VICTORY:") ~ number ~ eat_line ~
-    country_change* ~ 
+    country_change? ~ 
     set_mil_ops
 }
-un_inter = {side ~ "plays" ~ card ~ NEWLINE ~ conduct_ops}
-conduct_ops = {"TODO"}
+advance_space = {side ~ "advances to" ~ number ~ "in the Space Race." ~ NEWLINE}
+un_inter = {side ~ "plays" ~ card ~ NEWLINE ~ conduct_ops} // Todo this
+conduct_ops = {card_use}
 
 // Basic building blocks
+side = { "USSR" | "US" }
 buffer = _{NEWLINE*}
 eat_line = _{(!NEWLINE ~ ANY)* ~ NEWLINE}
 words = {word+}
 word = @{char+}
 number = @{ASCII_DIGIT+}
-char = { ASCII_ALPHANUMERIC | "/" | "-" | "*"}
+char = { ASCII_ALPHANUMERIC | "/" | "-" | "*" | "\"" | "."} // Todo handle quote literal better
 WHITESPACE = _{ " " }
