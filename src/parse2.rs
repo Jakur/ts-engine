@@ -1,6 +1,7 @@
 use crate::card::{Card, Effect};
 use crate::country::Side;
 use crate::tensor::DecodedChoice;
+use pest::iterators::Pair;
 use pest::Parser;
 use std::collections::HashMap;
 
@@ -26,6 +27,7 @@ fn standard_card_name(card: Card) -> String {
     name
 }
 
+#[derive(Debug)]
 // Outcome Order: US, USSR
 enum Outcome {
     Country { name: String, us: i8, ussr: i8 },
@@ -39,9 +41,40 @@ enum Outcome {
     ConductOps, // Todo
 }
 
+#[derive(Debug)]
 pub struct ActionRound {
     choices: Vec<DecodedChoice>,
     outcomes: Vec<Outcome>,
+    card: Card, // Debug only
+}
+
+fn parse_ar(pair: Pair<Rule>) -> Option<ActionRound> {
+    // dbg!(pair.as_rule());
+    let pair = pair.into_inner().peek().unwrap();
+    // dbg!(pair.as_rule());
+    match pair.as_rule() {
+        Rule::turn_std => {
+            let children = pair.into_inner();
+            // dbg!(&children);
+            let card = children
+                .map(|x| parse_card(x))
+                .find(|x| x.is_some())
+                .map(|x| x.unwrap());
+            card.map(|c| ActionRound {
+                choices: vec![],
+                outcomes: vec![],
+                card: c,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn parse_card(pair: Pair<Rule>) -> Option<Card> {
+    match pair.as_rule() {
+        Rule::card => Some(*CARD_NAMES.get(pair.as_str()).unwrap()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -119,6 +152,10 @@ DEFCON degrades to 2
                 .expect("Bad parse")
                 .next()
                 .unwrap();
+            if count == 1 {
+                let ar = parse_ar(parsed);
+                assert_eq!(Some(Card::Portuguese_Empire_Crumbles), ar.map(|x| x.card));
+            }
             // dbg!(parsed);
         }
     }
