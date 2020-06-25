@@ -87,7 +87,7 @@ outcome = {
     set_mil_ops | war | advance_space | conduct_ops
 }
 country_change = {
-	side ~ ("+" | "-") ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
+	side ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
 }
 defcon_change = {"DEFCON" ~ ("degrades" | "improves") ~ "to" ~ number ~ NEWLINE}
 vp_change = {
@@ -113,6 +113,6 @@ buffer = _{NEWLINE*}
 eat_line = _{(!NEWLINE ~ ANY)* ~ NEWLINE}
 words = {word+}
 word = @{char+}
-number = @{ASCII_DIGIT+}
+number = @{("+" | "-")? ~ ASCII_DIGIT+}
 char = { ASCII_ALPHANUMERIC | "/" | "-" | "*" | "\"" | "."} // Todo handle quote literal better
 WHITESPACE = _{ " " }

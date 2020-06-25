@@ -15,6 +15,7 @@ lazy_static! {
             .collect();
         map
     };
+    static ref COUNTRY_INDEX: HashMap<String, usize> = { country_names() };
 }
 
 #[derive(Parser)]
@@ -30,7 +31,7 @@ fn standard_card_name(card: Card) -> String {
 #[derive(Debug)]
 // Outcome Order: US, USSR
 enum Outcome {
-    Country { name: String, us: i8, ussr: i8 },
+    Country { index: usize, us: i8, ussr: i8 },
     Defcon(i8),
     Vp(i8),
     StartEffect(Effect), // Todo side of effect? (Harder than one would think)
@@ -39,6 +40,10 @@ enum Outcome {
     War, // Todo
     Space(Side, i8),
     ConductOps, // Todo
+}
+
+fn parse_outcome(pair: Pair<Rule>) -> Option<Outcome> {
+    unimplemented!();
 }
 
 #[derive(Debug)]
@@ -54,9 +59,13 @@ fn parse_ar(pair: Pair<Rule>) -> Option<ActionRound> {
     // dbg!(pair.as_rule());
     match pair.as_rule() {
         Rule::turn_std => {
-            let children = pair.into_inner();
+            let children: Vec<_> = pair.into_inner().collect();
             // dbg!(&children);
+            for c in children.iter() {
+                eprintln!("{:?}", c.as_rule());
+            }
             let card = children
+                .into_iter()
                 .map(|x| parse_card(x))
                 .find(|x| x.is_some())
                 .map(|x| x.unwrap());
@@ -72,9 +81,59 @@ fn parse_ar(pair: Pair<Rule>) -> Option<ActionRound> {
 
 fn parse_card(pair: Pair<Rule>) -> Option<Card> {
     match pair.as_rule() {
-        Rule::card => Some(*CARD_NAMES.get(pair.as_str()).unwrap()),
+        Rule::card => Some(
+            *CARD_NAMES
+                .get(pair.as_str())
+                .expect(&format!("{} is valid", pair.as_str())),
+        ),
         _ => None,
     }
+}
+
+fn parse_side(pair: Pair<Rule>) -> Option<Side> {
+    match pair.as_rule() {
+        Rule::side => match pair.as_str() {
+            "US" => Some(Side::US),
+            "USSR" => Some(Side::USSR),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn country_names() -> HashMap<String, usize> {
+    use crate::country::CName;
+    let names: Vec<_> = (0..CName::total() - 2)
+        .map(|x| CName::from_index(x))
+        .collect();
+    let mut first: HashMap<_, _> = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let s = format!("{:?}", name);
+            let end = s
+                .char_indices()
+                .skip(1)
+                .find(|(_i, c)| c.is_ascii_uppercase());
+            if let Some((pos, _)) = end {
+                (format!("{}", &s[0..pos]), index)
+            } else {
+                (s, index)
+            }
+        })
+        .collect();
+    let fix = [
+        ("North", CName::NKorea),
+        ("South", CName::SKorea),
+        ("SE", CName::SEAfricanStates),
+        ("UK", CName::UK),
+        ("West", CName::WGermany),
+        ("East", CName::EGermany),
+    ];
+    for (k, v) in fix.iter() {
+        first.insert(k.to_string(), *v as usize);
+    }
+    first
 }
 
 #[cfg(test)]
