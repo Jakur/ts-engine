@@ -32,14 +32,15 @@ card = {
 	(!("is" | "&") ~ word)+
 }
 play_card = {
-	(event ~ card_use) | (card_use ~ event) | card_use
+	(event ~ card_use) | (card_use ~ event?)
 }
 card_use = {
 	event | inf | realign | coup | space
 }
 event = {
-	"Event:" ~ card ~ NEWLINE ~ outcome*
+	"Event:" ~ card ~ NEWLINE ~ (conduct_ops | outcome)*
 }
+conduct_ops = {event | inf | realign | coup | space}
 inf = {
 	"Place Influence (" ~ number ~ "Ops):" ~ NEWLINE ~
     	(country_change)+
@@ -84,28 +85,28 @@ target = {
 // Outcomes
 outcome = {
 	country_change | defcon_change | vp_change | start_effect | end_effect |
-    set_mil_ops | war | advance_space | conduct_ops
+    set_mil_ops | war | advance_space
 }
 country_change = {
 	side ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
 }
 defcon_change = {"DEFCON" ~ ("degrades" | "improves") ~ "to" ~ number ~ NEWLINE}
 vp_change = {
-	(side ~ "gains" ~ number ~ "VP." | "No VP awarded.") ~ "Score is" ~
+	inner_vp_change ~ "Score is" ~
     	("even." | side ~ number ~ ".") ~ NEWLINE
 }
+inner_vp_change = _{side ~ "gains" ~ number ~ "VP." | "No VP awarded."}
 start_effect = {card ~ "is now in play." ~ NEWLINE}
 end_effect = {card ~ "is no longer in play." ~ NEWLINE}
 set_mil_ops = {side ~ "Military Ops to" ~ number ~ NEWLINE}
 war = {
 	"War in" ~ words ~ NEWLINE ~
     ("DEFEAT:" | "VICTORY:") ~ number ~ eat_line ~
-    country_change? ~ 
+    country_change* ~ 
     set_mil_ops
 }
 advance_space = {side ~ "advances to" ~ number ~ "in the Space Race." ~ NEWLINE}
 un_inter = {side ~ "plays" ~ card ~ NEWLINE ~ conduct_ops} // Todo this
-conduct_ops = {card_use}
 
 // Basic building blocks
 side = { "USSR" | "US" }
