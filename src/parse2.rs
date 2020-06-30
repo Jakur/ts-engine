@@ -1,3 +1,4 @@
+use crate::action::Action;
 use crate::card::{Card, Effect};
 use crate::country::Side;
 use crate::tensor::DecodedChoice;
@@ -190,36 +191,98 @@ fn parse_country_status(pair: Pair<Rule>) -> Option<(i8, i8)> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ARInfo {
+    turn: i8,
+    ar: i8,
+    side: Side,
+    card: Card,
+}
+
+impl ARInfo {
+    fn new(turn: i8, ar: i8, side: Side, card: Card) -> Self {
+        Self {
+            turn,
+            ar,
+            side,
+            card,
+        }
+    }
+}
+
+#[derive(Debug)]
 enum AR<'a> {
     EventBefore {
         event: Pair<'a, Rule>,
         action: Pair<'a, Rule>,
-        card: Card,
+        info: ARInfo,
     },
     EventAfter {
         action: Pair<'a, Rule>,
         event: Pair<'a, Rule>,
-        card: Card,
+        info: ARInfo,
     },
     SimpleUse {
         action: Pair<'a, Rule>,
-        card: Card,
+        info: ARInfo,
     },
 }
 
 impl<'a> AR<'a> {
-    fn consume(self, primary_side: Side) -> Vec<ActionRound> {
-        match self {
-            AR::EventBefore {
-                event,
-                action,
-                card,
-            } => {
-                let e_side = card.side();
-            }
-            _ => {}
+    fn new(pair: Pair<'a, Rule>, info: ARInfo) -> AR<'a> {
+        assert_eq!(pair.as_rule(), Rule::play_card);
+        let mut inner = pair.into_inner().into_iter();
+        let mut event = None;
+        let mut action = None;
+        let a = inner.next().expect("At least one child");
+        match a.as_rule() {
+            Rule::event => event = Some(a),
+            Rule::card_use => action = Some(a),
+            _ => unimplemented!(),
         }
-        vec![]
+        let b = inner.next();
+        if let Some(p) = b {
+            let event_first = match p.as_rule() {
+                Rule::event => {
+                    assert!(event.is_none());
+                    event = Some(p);
+                    false
+                }
+                Rule::card_use => {
+                    assert!(action.is_none());
+                    action = Some(p);
+                    true
+                }
+                _ => unimplemented!(),
+            };
+            let event = event.unwrap();
+            let action = action.unwrap();
+            if event_first {
+                AR::EventBefore {
+                    event,
+                    action,
+                    info,
+                }
+            } else {
+                AR::EventAfter {
+                    event,
+                    action,
+                    info,
+                }
+            }
+        } else {
+            if let Some(e) = event {
+                AR::SimpleUse { action: e, info }
+            } else {
+                AR::SimpleUse {
+                    action: action.unwrap(),
+                    info,
+                }
+            }
+        }
+    }
+    fn consume(self, vec: &mut Vec<ActionRound>) {
+        todo!()
     }
 }
 
@@ -234,9 +297,42 @@ fn parse_action(action: Pair<Rule>) -> ActionRound {
         outcomes: &RefCell<Vec<Outcome>>,
     ) {
         match x.as_rule() {
-            Rule::event => todo!(),
-            Rule::inf => {}
-            _ => todo!(),
+            Rule::card_use => {
+                let child = x.into_inner().into_iter().next().unwrap();
+                inner(child, choices, outcomes)
+            }
+            Rule::event => {
+                let mut iter = x.into_inner().into_iter();
+                let card = iter.next().unwrap();
+                while let Some(pair) = iter.next() {
+                    match pair.as_rule() {
+                        Rule::conduct_ops => todo!(),
+                        Rule::outcome => {
+                            let outcome = parse_outcome(pair).expect("Valid");
+                            outcomes.borrow_mut().push(outcome);
+                        }
+                        _ => unimplemented!(),
+                    }
+                }
+            }
+            Rule::inf => {
+                let mut iter = x.into_inner().into_iter().skip(1);
+                while let Some(pair) = iter.next() {
+                    let out = parse_outcome(pair).expect("Valid influence choice");
+                    if let Outcome::Country(ref cc) = out {
+                        let index = cc.index;
+                        let choice = DecodedChoice::new(Action::Influence, Some(index));
+                        choices.borrow_mut().push(choice);
+                        outcomes.borrow_mut().push(out);
+                    } else {
+                        panic!("Expected country change!");
+                    }
+                }
+            }
+            _ => {
+                dbg!(x.as_rule());
+                todo!();
+            }
         }
     }
     let choices = choices.into_inner();
@@ -245,7 +341,7 @@ fn parse_action(action: Pair<Rule>) -> ActionRound {
         choices,
         outcomes,
         card: None,
-        actor: Side::Neutral,
+        actor: Side::Neutral, // Todo correct this
     }
 }
 
@@ -257,28 +353,24 @@ pub struct ActionRound {
     actor: Side,
 }
 
-fn parse_ar(pair: Pair<Rule>) -> Option<ActionRound> {
-    // dbg!(pair.as_rule());
+fn parse_ar(pair: Pair<Rule>) -> Option<AR> {
+    let pair = pair.into_inner().into_iter().next().unwrap(); // Debug misdirection
     let pair = pair.into_inner().peek().unwrap();
-    // dbg!(pair.as_rule());
     match pair.as_rule() {
         Rule::turn_std => {
-            let children: Vec<_> = pair.into_inner().collect();
-            // dbg!(&children);
-            for c in children.iter() {
-                eprintln!("{:?}", c.as_rule());
+            let mut children = pair.into_inner().into_iter();
+            let turn: i8 = parse_num(children.next()?)?;
+            let side = parse_side(children.next()?)?;
+            let ar: i8 = parse_num(children.next()?)?;
+
+            if let Some(card) = children.next() {
+                let card = parse_card(card)?;
+                let info = ARInfo::new(turn, ar, side, card);
+                let ar = AR::new(children.next().expect("Valid"), info);
+                Some(ar)
+            } else {
+                todo!() // Pass action
             }
-            let card = children
-                .into_iter()
-                .map(|x| parse_card(x))
-                .find(|x| x.is_some())
-                .map(|x| x.unwrap());
-            card.map(|c| ActionRound {
-                choices: vec![],
-                outcomes: vec![],
-                card: Some(c),
-                actor: Side::Neutral,
-            })
         }
         _ => None,
     }
@@ -364,6 +456,7 @@ John Paul II Elected Pope* is now in play.
 Place Influence (2 Ops): 
 USSR +1 in Venezuela [0][2]
 USSR +1 in South Africa [3][2]
+
 ";
         let f2 = "Turn 6, US AR3
 Portuguese Empire Crumbles*
@@ -413,17 +506,29 @@ DEFCON degrades to 2
 ";
         for (count, string) in [f, f2, f3, f4].iter().enumerate() {
             eprintln!("Attempting f{}", count + 1);
-            let parsed = TwilightParser::parse(Rule::turn, &string)
+            let parsed = TwilightParser::parse(Rule::single_turn, &string)
                 .expect("Bad parse")
                 .next()
                 .unwrap();
             if count == 0 {
-                let ar = parse_ar(parsed);
-                assert_eq!(
-                    Some(Card::John_Paul),
-                    ar.map(|x| x.card.expect("Some card"))
-                );
+                let ar = parse_ar(parsed).expect("Valid");
+                // dbg!(&ar);
+                match ar {
+                    AR::EventBefore {
+                        event,
+                        action,
+                        info,
+                    } => {
+                        assert_eq!(info, ARInfo::new(6, 6, Side::USSR, Card::John_Paul));
+                        let a = parse_action(event);
+                        let b = parse_action(action);
+                        dbg!(a);
+                        dbg!(b);
+                    }
+                    _ => assert!(false),
+                }
             }
+            break;
             // dbg!(parsed);
         }
     }

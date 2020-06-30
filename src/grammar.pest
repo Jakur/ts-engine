@@ -8,6 +8,7 @@ setup = {
 handicap = {"Handicap influence: US +2" ~ NEWLINE} // Todo check this
 scenario = {"Scenario: Standard" ~ NEWLINE}
 optionals = {"Optional Cards Added" ~ NEWLINE}
+single_turn = {SOI ~ buffer ~ turn ~ buffer ~ EOI} // Debug purposes
 turn = {
 	turn_headline | turn_cleanup | turn_std
 }
@@ -31,16 +32,17 @@ turn_std = {
 card = {
 	(!("is" | "&") ~ word)+
 }
-play_card = {
-	(event ~ card_use) | (card_use ~ event?)
-}
+// play_card = {
+//	(event ~ card_use?) | (card_use ~ event?)
+//}
+play_card = {(event ~ buffer ~ card_use)}
 card_use = {
 	event | inf | realign | coup | space
 }
 event = {
-	"Event:" ~ card ~ NEWLINE ~ (conduct_ops | outcome)*
-}
-conduct_ops = {event | inf | realign | coup | space}
+	"Event:" ~ card ~ NEWLINE ~ outcome* 
+} // Todo figure out conduct ops in event
+conduct_ops = {inf | realign | coup | space}
 inf = {
 	"Place Influence (" ~ number ~ "Ops):" ~ NEWLINE ~
     	(country_change)+
