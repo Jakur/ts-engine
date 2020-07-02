@@ -23,6 +23,60 @@ lazy_static! {
     static ref COUNTRY_INDEX: HashMap<String, usize> = { country_names() };
 }
 
+#[derive(Debug)]
+enum Change {
+    Choice(DecodedChoice),
+    Roll(Side, i8),
+}
+
+impl Change {
+    fn choice(action: Action, val: Option<usize>) -> Self {
+        Change::Choice(DecodedChoice::new(action, val))
+    }
+    fn roll(side: Side, val: i8) -> Self {
+        Change::Roll(side, val)
+    }
+}
+
+pub struct Replay {
+    vec: Vec<FatPly>,
+}
+
+impl Replay {
+    fn get_rolls(&self) -> (Vec<i8>, Vec<i8>) {
+        let mut us_rolls = Vec::new();
+        let mut ussr_rolls = Vec::new();
+        for fp in self.vec.iter() {
+            for ch in fp.choices.iter().rev() {
+                if let Change::Roll(mut side, roll) = ch {
+                    // Neutral represents the initiating side
+                    if let Side::Neutral = side {
+                        side = fp.actor;
+                    }
+                    match side {
+                        Side::US => us_rolls.push(*roll),
+                        Side::USSR => ussr_rolls.push(*roll),
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        }
+        (us_rolls, ussr_rolls)
+    }
+}
+
+#[derive(Debug)]
+struct FatPly {
+    choices: Vec<Change>,
+    outcomes: Vec<Outcome>,
+    card: Option<Card>,
+    actor: Side,
+}
+
+pub fn parse_game() -> Replay {
+    todo!()
+}
+
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 pub struct TwilightParser;
@@ -45,7 +99,7 @@ fn parse_num<T: std::str::FromStr>(num: Pair<Rule>) -> Option<T> {
     num.as_str().parse::<T>().ok()
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct CountryChange {
     index: usize,
     us: i8,
@@ -64,7 +118,7 @@ impl CountryChange {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct MilOps {
     side: Side,
     ops: i8,
@@ -76,7 +130,7 @@ impl MilOps {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 // Outcome Order: US, USSR
 enum Outcome {
     Country(CountryChange),
@@ -281,34 +335,80 @@ impl<'a> AR<'a> {
             }
         }
     }
-    fn consume(self, vec: &mut Vec<ActionRound>) {
-        todo!()
+    fn consume(self, vec: &mut Vec<FatPly>) {
+        // Check the variant before we consume it
+        let before = if let AR::EventBefore { .. } = self {
+            true
+        } else {
+            false
+        };
+        let (event, action) = match self {
+            AR::EventBefore {
+                event,
+                action,
+                info,
+            }
+            | AR::EventAfter {
+                event,
+                action,
+                info,
+            } => {
+                // There may be some edge case that this is wrong, but it's not obvious
+                let e_side = if let Side::Neutral = info.card.side() {
+                    info.side
+                } else {
+                    info.card.side()
+                };
+                let e = parse_action(event, e_side, Some(info.card));
+                let a = parse_action(action, info.side, None);
+                (Some(e), a)
+            }
+            AR::SimpleUse { action, info } => {
+                let a = parse_action(action, info.side, None);
+                (None, a)
+            }
+        };
+        if let Some(event) = event {
+            if before {
+                vec.push(event);
+                vec.push(action);
+            } else {
+                vec.push(action);
+                vec.push(event);
+            }
+        } else {
+            vec.push(action);
+        }
     }
 }
 
-fn parse_action(action: Pair<Rule>) -> ActionRound {
+fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
     use std::cell::RefCell;
     let choices = RefCell::new(Vec::new());
     let outcomes = RefCell::new(Vec::new());
-    inner(action, &choices, &outcomes);
+    inner(action, &choices, &outcomes, card).expect("Works!");
     fn inner(
         x: Pair<Rule>,
-        choices: &RefCell<Vec<DecodedChoice>>,
+        choices: &RefCell<Vec<Change>>,
         outcomes: &RefCell<Vec<Outcome>>,
-    ) {
+        card: Option<Card>,
+    ) -> Option<()> {
         match x.as_rule() {
             Rule::card_use => {
-                let child = x.into_inner().into_iter().next().unwrap();
-                inner(child, choices, outcomes)
+                let child = x.into_inner().into_iter().next()?;
+                return inner(child, choices, outcomes, card);
             }
             Rule::event => {
                 let mut iter = x.into_inner().into_iter();
-                let card = iter.next().unwrap();
+                let c = iter.next()?;
+                if parse_card(c)? != card.expect("Valid card") {
+                    todo!() // Events calling other events!
+                }
                 while let Some(pair) = iter.next() {
                     match pair.as_rule() {
                         Rule::conduct_ops => todo!(),
                         Rule::outcome => {
-                            let outcome = parse_outcome(pair).expect("Valid");
+                            let outcome = parse_outcome(pair)?;
                             outcomes.borrow_mut().push(outcome);
                         }
                         _ => unimplemented!(),
@@ -318,15 +418,47 @@ fn parse_action(action: Pair<Rule>) -> ActionRound {
             Rule::inf => {
                 let mut iter = x.into_inner().into_iter().skip(1);
                 while let Some(pair) = iter.next() {
-                    let out = parse_outcome(pair).expect("Valid influence choice");
+                    let out = parse_outcome(pair)?;
                     if let Outcome::Country(ref cc) = out {
                         let index = cc.index;
                         let choice = DecodedChoice::new(Action::Influence, Some(index));
-                        choices.borrow_mut().push(choice);
+                        choices.borrow_mut().push(Change::Choice(choice));
                         outcomes.borrow_mut().push(out);
                     } else {
                         panic!("Expected country change!");
                     }
+                }
+            }
+            Rule::coup => {
+                let mut iter = x.into_inner().into_iter().skip(1);
+                let target = parse_target(iter.next()?);
+                let roll = iter.next()?.into_inner().peek()?;
+                let roll = roll.as_str().parse().expect("Valid number");
+                let mut outs = outcomes.borrow_mut();
+                while let Some(pair) = iter.next() {
+                    let out = parse_outcome(pair)?;
+                    outs.push(out);
+                }
+                let mut chs = choices.borrow_mut();
+                chs.push(Change::choice(Action::Coup, target));
+                chs.push(Change::roll(Side::Neutral, roll));
+            }
+            Rule::realign => {
+                let mut iter = x.into_inner().into_iter().skip(1);
+                let mut chs = choices.borrow_mut();
+                let mut outs = outcomes.borrow_mut();
+                while let Some(attempt) = iter.next() {
+                    let mut iter = attempt.into_inner().into_iter();
+                    let target = parse_target(iter.next()?);
+                    let roll = parse_roll(iter.next()?)?;
+                    let roll2 = parse_roll(iter.next()?)?;
+                    if let Some(outcome) = iter.next() {
+                        let outcome = parse_outcome(outcome)?;
+                        outs.push(outcome);
+                    }
+                    chs.push(Change::choice(Action::Realignment, target));
+                    chs.push(roll);
+                    chs.push(roll2);
                 }
             }
             _ => {
@@ -334,23 +466,17 @@ fn parse_action(action: Pair<Rule>) -> ActionRound {
                 todo!();
             }
         }
+        Some(())
     }
+    // Remove the Refcell layer
     let choices = choices.into_inner();
     let outcomes = outcomes.into_inner();
-    ActionRound {
+    FatPly {
         choices,
         outcomes,
         card: None,
-        actor: Side::Neutral, // Todo correct this
+        actor,
     }
-}
-
-#[derive(Debug)]
-pub struct ActionRound {
-    choices: Vec<DecodedChoice>,
-    outcomes: Vec<Outcome>,
-    card: Option<Card>,
-    actor: Side,
 }
 
 fn parse_ar(pair: Pair<Rule>) -> Option<AR> {
@@ -374,6 +500,22 @@ fn parse_ar(pair: Pair<Rule>) -> Option<AR> {
         }
         _ => None,
     }
+}
+
+fn parse_roll(pair: Pair<Rule>) -> Option<Change> {
+    match pair.as_rule() {
+        Rule::rolls => {
+            let mut inner = pair.into_inner().into_iter();
+            let side = parse_side(inner.next()?)?;
+            let roll = parse_num(inner.next()?)?;
+            Some(Change::roll(side, roll))
+        }
+        _ => None,
+    }
+}
+
+fn parse_target(pair: Pair<Rule>) -> Option<usize> {
+    get_country(pair.into_inner().peek()?.as_str())
 }
 
 fn parse_card(pair: Pair<Rule>) -> Option<Card> {
@@ -437,6 +579,7 @@ fn country_names() -> HashMap<String, usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::country::CName;
     #[test]
     fn card_names() {
         for i in 1..Card::total() {
@@ -511,25 +654,28 @@ DEFCON degrades to 2
                 .next()
                 .unwrap();
             if count == 0 {
+                let mut vec = vec![];
                 let ar = parse_ar(parsed).expect("Valid");
-                // dbg!(&ar);
-                match ar {
-                    AR::EventBefore {
-                        event,
-                        action,
-                        info,
-                    } => {
-                        assert_eq!(info, ARInfo::new(6, 6, Side::USSR, Card::John_Paul));
-                        let a = parse_action(event);
-                        let b = parse_action(action);
-                        dbg!(a);
-                        dbg!(b);
-                    }
-                    _ => assert!(false),
-                }
+                ar.consume(&mut vec);
+                assert_eq!(vec.len(), 2);
+                let mut iter = vec.into_iter();
+                let event = iter.next().unwrap();
+                let action = iter.next().unwrap();
+                assert_eq!(event.actor, Side::US);
+                assert_eq!(action.actor, Side::USSR);
+                let event_outcomes = vec![
+                    Outcome::Country(CountryChange::new(CName::Poland as usize, 0, 4, -2)),
+                    Outcome::Country(CountryChange::new(CName::Poland as usize, 1, 4, 1)),
+                    Outcome::StartEffect(Effect::AllowSolidarity),
+                ];
+                assert_eq!(event_outcomes, event.outcomes);
+                let action_outcomes = vec![
+                    Outcome::Country(CountryChange::new(CName::Venezuela as usize, 0, 2, 1)),
+                    Outcome::Country(CountryChange::new(CName::SouthAfrica as usize, 3, 2, 1)),
+                ];
+                assert_eq!(action_outcomes, action.outcomes);
             }
             break;
-            // dbg!(parsed);
         }
     }
 }

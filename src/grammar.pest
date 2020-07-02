@@ -58,8 +58,10 @@ coup = {
 }
 realign = {
     "Realignment (" ~ number ~ "Ops):" ~ NEWLINE ~
-        (target ~ rolls ~ rolls ~ country_change?)+
+        inner_realign+
 }
+// Unlike the coup, only one side can gain / lose influence in a single attempt
+inner_realign = {target ~ rolls ~ rolls ~ country_change?}
 space = {
 	"Space Race (" ~ number ~ "Ops):" ~ NEWLINE ~
 	space_roll ~ advance_space? ~ vp_change?
