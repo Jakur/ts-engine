@@ -92,7 +92,12 @@ fn standard_card_name(card: Card) -> String {
 // }
 
 fn get_country(name: &str) -> Option<usize> {
-    COUNTRY_INDEX.get(name.split_whitespace().next()?).copied()
+    let search = if name == "South Africa" {
+        name
+    } else {
+        name.split_whitespace().next()?
+    };
+    COUNTRY_INDEX.get(search).copied()
 }
 
 fn parse_num<T: std::str::FromStr>(num: Pair<Rule>) -> Option<T> {
@@ -569,6 +574,7 @@ fn country_names() -> HashMap<String, usize> {
         ("UK", CName::UK),
         ("West", CName::WGermany),
         ("East", CName::EGermany),
+        ("South Africa", CName::SouthAfrica),
     ];
     for (k, v) in fix.iter() {
         first.insert(k.to_string(), *v as usize);
