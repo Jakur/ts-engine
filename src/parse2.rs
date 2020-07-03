@@ -254,6 +254,10 @@ fn parse_outcome(pair: Pair<Rule>) -> Result<Outcome> {
             let level = vals.next().unwrap().as_str().parse()?;
             Ok(Outcome::Space(side, level))
         }
+        Rule::defcon_change => {
+            let defcon = parse_num(vals.next().unwrap())?;
+            Ok(Outcome::Defcon(defcon))
+        }
         _ => Err(anyhow!("Invalid outcome rule: {:?}", rule)),
     }
 }
