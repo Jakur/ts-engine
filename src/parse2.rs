@@ -14,7 +14,10 @@ lazy_static! {
                 (standard_card_name(card), card)
             })
             .collect();
-        let fix = [("John Paul II Elected Pope*", Card::John_Paul)];
+        let fix = [
+            ("John Paul II Elected Pope*", Card::John_Paul),
+            ("\"One Small Step...\"", Card::One_Small_Step),
+        ];
         for (k, v) in fix.iter() {
             map.insert(k.to_string(), *v);
         }
@@ -71,6 +74,15 @@ struct FatPly {
     outcomes: Vec<Outcome>,
     card: Option<Card>,
     actor: Side,
+}
+
+impl FatPly {
+    /// Moves all the choices and outcomes of other into Self, leaving other empty,
+    /// mimicking the behavior of Vec::append().
+    fn append(&mut self, other: &mut FatPly) {
+        self.choices.append(&mut other.choices);
+        self.outcomes.append(&mut other.outcomes);
+    }
 }
 
 pub fn parse_game() -> Replay {
@@ -411,7 +423,10 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                 }
                 while let Some(pair) = iter.next() {
                     match pair.as_rule() {
-                        Rule::conduct_ops => todo!(),
+                        Rule::conduct_ops => {
+                            let child = pair.into_inner().into_iter().next()?;
+                            inner(child, choices, outcomes, card)?;
+                        }
                         Rule::outcome => {
                             let outcome = parse_outcome(pair)?;
                             outcomes.borrow_mut().push(outcome);
@@ -479,7 +494,7 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
     FatPly {
         choices,
         outcomes,
-        card: None,
+        card,
         actor,
     }
 }
@@ -621,6 +636,7 @@ Target: Angola
 USSR rolls 1
 US rolls 5 (+2) = 7
 USSR -4 in Angola [4][0]
+
 ";
 
         let f3 = "Turn 6, USSR AR2
@@ -659,29 +675,85 @@ DEFCON degrades to 2
                 .expect("Bad parse")
                 .next()
                 .unwrap();
-            if count == 0 {
-                let mut vec = vec![];
-                let ar = parse_ar(parsed).expect("Valid");
-                ar.consume(&mut vec);
-                assert_eq!(vec.len(), 2);
-                let mut iter = vec.into_iter();
-                let event = iter.next().unwrap();
-                let action = iter.next().unwrap();
-                assert_eq!(event.actor, Side::US);
-                assert_eq!(action.actor, Side::USSR);
-                let event_outcomes = vec![
-                    Outcome::Country(CountryChange::new(CName::Poland as usize, 0, 4, -2)),
-                    Outcome::Country(CountryChange::new(CName::Poland as usize, 1, 4, 1)),
-                    Outcome::StartEffect(Effect::AllowSolidarity),
-                ];
-                assert_eq!(event_outcomes, event.outcomes);
-                let action_outcomes = vec![
-                    Outcome::Country(CountryChange::new(CName::Venezuela as usize, 0, 2, 1)),
-                    Outcome::Country(CountryChange::new(CName::SouthAfrica as usize, 3, 2, 1)),
-                ];
-                assert_eq!(action_outcomes, action.outcomes);
+            let mut vec = vec![];
+            match count {
+                0 => {
+                    let ar = parse_ar(parsed).expect("Valid");
+                    ar.consume(&mut vec);
+                    assert_eq!(vec.len(), 2);
+                    let mut iter = vec.into_iter();
+                    let event = iter.next().unwrap();
+                    let action = iter.next().unwrap();
+                    assert_eq!(event.actor, Side::US);
+                    assert_eq!(action.actor, Side::USSR);
+                    let event_outcomes = vec![
+                        cc(CName::Poland, 0, 4, -2),
+                        cc(CName::Poland, 1, 4, 1),
+                        Outcome::StartEffect(Effect::AllowSolidarity),
+                    ];
+                    assert_eq!(event_outcomes, event.outcomes);
+                    let action_outcomes = vec![
+                        cc(CName::Venezuela, 0, 2, 1),
+                        cc(CName::SouthAfrica, 3, 2, 1),
+                    ];
+                    assert_eq!(action_outcomes, action.outcomes);
+                }
+                1 => {
+                    let ar = parse_ar(parsed).expect("Valid");
+                    ar.consume(&mut vec);
+                    assert_eq!(vec.len(), 2);
+                    let mut iter = vec.into_iter();
+                    let event = iter.next().unwrap();
+                    let action = iter.next().unwrap();
+                    assert_eq!(event.actor, Side::USSR);
+                    assert_eq!(action.actor, Side::US);
+                    let event_outcomes = vec![
+                        cc(CName::SEAfricanStates, 0, 2, 2),
+                        cc(CName::Angola, 4, 4, 2),
+                    ];
+                    assert_eq!(event_outcomes, event.outcomes);
+                    let action_outcomes = vec![cc(CName::Angola, 4, 0, -4)];
+                    assert_eq!(action_outcomes, action.outcomes);
+                }
+                2 => {
+                    let ar = parse_ar(parsed).expect("Valid");
+                    ar.consume(&mut vec);
+                    let mut iter = vec.into_iter();
+                    let mut event = iter.next().unwrap();
+                    while let Some(mut next) = iter.next() {
+                        event.append(&mut next);
+                    }
+                    assert_eq!(event.actor, Side::USSR);
+                    let event_outcomes = vec![
+                        cc(CName::Colombia, 0, 0, -1),
+                        cc(CName::Colombia, 0, 1, 1),
+                        Outcome::MilitaryOps(MilOps::new(Side::USSR, 5)),
+                        cc(CName::Cameroon, 0, 0, -1),
+                        cc(CName::Cameroon, 0, 3, 3),
+                        Outcome::MilitaryOps(MilOps::new(Side::USSR, 5)),
+                    ];
+                    assert_eq!(event_outcomes, event.outcomes);
+                }
+                3 => {
+                    let ar = parse_ar(parsed).expect("Valid");
+                    ar.consume(&mut vec);
+                    assert_eq!(vec.len(), 1);
+                    let mut iter = vec.into_iter();
+                    let action = iter.next().unwrap();
+                    assert_eq!(action.actor, Side::USSR);
+                    let action_outcomes = vec![
+                        cc(CName::Nigeria, 0, 0, -1),
+                        cc(CName::Nigeria, 0, 2, 2),
+                        Outcome::MilitaryOps(MilOps::new(Side::USSR, 2)),
+                        Outcome::Defcon(2),
+                    ];
+                    assert_eq!(action_outcomes, action.outcomes);
+                }
+                _ => {}
             }
-            break;
         }
+    }
+    fn cc(cname: CName, us: i8, ussr: i8, delta: i8) -> Outcome {
+        Outcome::Country(CountryChange::new(cname as usize, us, ussr, delta))
     }
 }

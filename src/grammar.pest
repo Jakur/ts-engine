@@ -27,20 +27,20 @@ turn_cleanup = {
 	"Turn" ~ number ~ "," ~ "Cleanup" ~ NEWLINE ~ NEWLINE ~ outcome* ~ NEWLINE
 }
 turn_std = {
-	"Turn" ~ number ~ "," ~ side ~ "AR" ~ number ~ NEWLINE ~ (card ~ NEWLINE ~ play_card)? ~ NEWLINE
+	"Turn" ~ number ~ "," ~ side ~ "AR" ~ number ~ NEWLINE ~ (card ~ NEWLINE ~ play_card)? ~ NEWLINE?
 }
 card = {
 	(!("is" | "&") ~ word)+
 }
-// play_card = {
-//	(event ~ card_use?) | (card_use ~ event?)
-//}
-play_card = {(event ~ buffer ~ card_use)}
+play_card = {
+	(event ~ buffer ~ card_use?) | (card_use ~ buffer ~ event?)
+}
+//play_card = {(event ~ buffer ~ card_use)}
 card_use = {
 	event | inf | realign | coup | space
 }
 event = {
-	"Event:" ~ card ~ NEWLINE ~ outcome* 
+	"Event:" ~ card ~ NEWLINE ~ (outcome | conduct_ops)* 
 } // Todo figure out conduct ops in event
 conduct_ops = {inf | realign | coup | space}
 inf = {
