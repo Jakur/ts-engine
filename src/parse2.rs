@@ -2,6 +2,7 @@ use crate::action::Action;
 use crate::card::{Card, Effect};
 use crate::country::Side;
 use crate::tensor::DecodedChoice;
+use anyhow::{anyhow, ensure, Result};
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use std::collections::HashMap;
@@ -103,17 +104,22 @@ fn standard_card_name(card: Card) -> String {
 //     CARD_NAMES.get(name.split_whitespace().next()?).copied()
 // }
 
-fn get_country(name: &str) -> Option<usize> {
+fn get_country(name: &str) -> Result<usize> {
     let search = if name == "South Africa" {
         name
     } else {
-        name.split_whitespace().next()?
+        name.split_whitespace().next().unwrap()
     };
-    COUNTRY_INDEX.get(search).copied()
+    COUNTRY_INDEX
+        .get(search)
+        .copied()
+        .ok_or_else(|| anyhow!("Cannot find country: {}", search))
 }
 
-fn parse_num<T: std::str::FromStr>(num: Pair<Rule>) -> Option<T> {
-    num.as_str().parse::<T>().ok()
+fn parse_num<T: std::str::FromStr>(num: Pair<Rule>) -> Result<T> {
+    num.as_str()
+        .parse::<T>()
+        .map_err(|_| anyhow!("Failed num parse"))
 }
 
 #[derive(Debug, PartialEq)]
@@ -165,7 +171,7 @@ enum Outcome {
     Space(Side, i8),
 }
 
-fn parse_outcome(pair: Pair<Rule>) -> Option<Outcome> {
+fn parse_outcome(pair: Pair<Rule>) -> Result<Outcome> {
     let rule = pair.as_rule();
     let mut vals = pair.into_inner().into_iter();
     match rule {
@@ -175,11 +181,11 @@ fn parse_outcome(pair: Pair<Rule>) -> Option<Outcome> {
             parse_outcome(inner)
         }
         Rule::country_change => {
-            let delta = parse_num(vals.nth(1)?)?;
+            let delta = parse_num(vals.nth(1).unwrap())?;
             let name = vals.next().unwrap().as_str();
             let index = get_country(name)?;
             let (us, ussr) = parse_country_status(vals.next().unwrap())?;
-            Some(Outcome::Country(CountryChange {
+            Ok(Outcome::Country(CountryChange {
                 index,
                 us,
                 ussr,
@@ -190,7 +196,7 @@ fn parse_outcome(pair: Pair<Rule>) -> Option<Outcome> {
             // Todo see if this actually works
             let vp = if let Some(s) = vals.next() {
                 let side = parse_side(s)?;
-                let num = parse_num(vals.next()?)?;
+                let num = parse_num(vals.next().unwrap())?;
                 match side {
                     Side::US => num,
                     Side::USSR => num * -1,
@@ -199,27 +205,29 @@ fn parse_outcome(pair: Pair<Rule>) -> Option<Outcome> {
             } else {
                 0
             };
-            Some(Outcome::Vp(vp))
+            Ok(Outcome::Vp(vp))
         }
         Rule::start_effect => {
-            let card = parse_card(vals.next()?)?;
-            let effect = Effect::card_to_effect(card)?;
-            Some(Outcome::StartEffect(effect))
+            let card = parse_card(vals.next().unwrap())?;
+            let effect = Effect::card_to_effect(card)
+                .ok_or_else(|| anyhow!("No effect found for card: {:?}", card))?;
+            Ok(Outcome::StartEffect(effect))
         }
         Rule::end_effect => {
-            let card = parse_card(vals.next()?)?;
-            let effect = Effect::card_to_effect(card)?;
-            Some(Outcome::EndEffect(effect))
+            let card = parse_card(vals.next().unwrap())?;
+            let effect = Effect::card_to_effect(card)
+                .ok_or_else(|| anyhow!("No effect found for card: {:?}", card))?;
+            Ok(Outcome::EndEffect(effect))
         }
         Rule::set_mil_ops => {
-            let side = parse_side(vals.next()?)?;
-            let num = parse_num(vals.next()?)?;
-            Some(Outcome::MilitaryOps(MilOps::new(side, num)))
+            let side = parse_side(vals.next().unwrap())?;
+            let num = parse_num(vals.next().unwrap())?;
+            Ok(Outcome::MilitaryOps(MilOps::new(side, num)))
         }
         Rule::war => {
-            let name = vals.next()?.as_str();
+            let name = vals.next().unwrap().as_str();
             let target = get_country(name)?;
-            let roll = parse_num(vals.next()?)?;
+            let roll = parse_num(vals.next().unwrap())?;
             let mut changes = Vec::new();
             while let Some(pair) = vals.next() {
                 // Add country changes until we hit mil ops, i.e. the last line
@@ -229,37 +237,33 @@ fn parse_outcome(pair: Pair<Rule>) -> Option<Outcome> {
                         changes.push(cc);
                     }
                     Outcome::MilitaryOps(mil_ops) => {
-                        return Some(Outcome::War {
+                        return Ok(Outcome::War {
                             target,
                             roll,
                             changes,
                             mil_ops,
                         })
                     }
-                    _ => return None,
+                    _ => return Err(anyhow!("Invalid outcome for war: {:?}", outcome)),
                 }
             }
-            None
+            return Err(anyhow!("Never parsed war military ops!"));
         }
         Rule::space => {
-            let side = parse_side(vals.next()?)?;
-            let level = vals.next()?.as_str().parse().ok()?;
-            Some(Outcome::Space(side, level))
+            let side = parse_side(vals.next().unwrap())?;
+            let level = vals.next().unwrap().as_str().parse()?;
+            Ok(Outcome::Space(side, level))
         }
-        _ => None,
+        _ => Err(anyhow!("Invalid outcome rule: {:?}", rule)),
     }
 }
 
-fn parse_country_status(pair: Pair<Rule>) -> Option<(i8, i8)> {
-    match pair.as_rule() {
-        Rule::country_status => {
-            let mut vals = pair.into_inner();
-            let us = vals.next().unwrap().as_str().parse().ok()?;
-            let ussr = vals.next().unwrap().as_str().parse().ok()?;
-            Some((us, ussr))
-        }
-        _ => None,
-    }
+fn parse_country_status(pair: Pair<Rule>) -> Result<(i8, i8)> {
+    ensure!(pair.as_rule() == Rule::country_status, "Wrong Rule");
+    let mut vals = pair.into_inner();
+    let us = vals.next().unwrap().as_str().parse()?;
+    let ussr = vals.next().unwrap().as_str().parse()?;
+    Ok((us, ussr))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -403,28 +407,32 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
     use std::cell::RefCell;
     let choices = RefCell::new(Vec::new());
     let outcomes = RefCell::new(Vec::new());
-    inner(action, &choices, &outcomes, card).expect("Works!");
+    let res = inner(action, &choices, &outcomes, card);
+    if let Err(e) = res {
+        eprintln!("{}", e.root_cause());
+        panic!("Bad parse!");
+    }
     fn inner(
         x: Pair<Rule>,
         choices: &RefCell<Vec<Change>>,
         outcomes: &RefCell<Vec<Outcome>>,
         card: Option<Card>,
-    ) -> Option<()> {
+    ) -> Result<()> {
         match x.as_rule() {
             Rule::card_use => {
-                let child = x.into_inner().into_iter().next()?;
+                let child = x.into_inner().into_iter().next().unwrap();
                 return inner(child, choices, outcomes, card);
             }
             Rule::event => {
                 let mut iter = x.into_inner().into_iter();
-                let c = iter.next()?;
+                let c = iter.next().unwrap();
                 if parse_card(c)? != card.expect("Valid card") {
                     todo!() // Events calling other events!
                 }
                 while let Some(pair) = iter.next() {
                     match pair.as_rule() {
                         Rule::conduct_ops => {
-                            let child = pair.into_inner().into_iter().next()?;
+                            let child = pair.into_inner().into_iter().next().unwrap();
                             inner(child, choices, outcomes, card)?;
                         }
                         Rule::outcome => {
@@ -451,8 +459,8 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
             }
             Rule::coup => {
                 let mut iter = x.into_inner().into_iter().skip(1);
-                let target = parse_target(iter.next()?);
-                let roll = iter.next()?.into_inner().peek()?;
+                let target = parse_target(iter.next().unwrap())?;
+                let roll = iter.next().unwrap().into_inner().peek().unwrap();
                 let roll = roll.as_str().parse().expect("Valid number");
                 let mut outs = outcomes.borrow_mut();
                 while let Some(pair) = iter.next() {
@@ -460,7 +468,7 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                     outs.push(out);
                 }
                 let mut chs = choices.borrow_mut();
-                chs.push(Change::choice(Action::Coup, target));
+                chs.push(Change::choice(Action::Coup, Some(target)));
                 chs.push(Change::roll(Side::Neutral, roll));
             }
             Rule::realign => {
@@ -469,14 +477,14 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                 let mut outs = outcomes.borrow_mut();
                 while let Some(attempt) = iter.next() {
                     let mut iter = attempt.into_inner().into_iter();
-                    let target = parse_target(iter.next()?);
-                    let roll = parse_roll(iter.next()?)?;
-                    let roll2 = parse_roll(iter.next()?)?;
+                    let target = parse_target(iter.next().unwrap())?;
+                    let roll = parse_roll(iter.next().unwrap())?;
+                    let roll2 = parse_roll(iter.next().unwrap())?;
                     if let Some(outcome) = iter.next() {
                         let outcome = parse_outcome(outcome)?;
                         outs.push(outcome);
                     }
-                    chs.push(Change::choice(Action::Realignment, target));
+                    chs.push(Change::choice(Action::Realignment, Some(target)));
                     chs.push(roll);
                     chs.push(roll2);
                 }
@@ -486,7 +494,7 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                 todo!();
             }
         }
-        Some(())
+        Ok(())
     }
     // Remove the Refcell layer
     let choices = choices.into_inner();
@@ -499,64 +507,57 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
     }
 }
 
-fn parse_ar(pair: Pair<Rule>) -> Option<AR> {
+fn parse_ar(pair: Pair<Rule>) -> Result<AR> {
     let pair = pair.into_inner().into_iter().next().unwrap(); // Debug misdirection
     let pair = pair.into_inner().peek().unwrap();
     match pair.as_rule() {
         Rule::turn_std => {
             let mut children = pair.into_inner().into_iter();
-            let turn: i8 = parse_num(children.next()?)?;
-            let side = parse_side(children.next()?)?;
-            let ar: i8 = parse_num(children.next()?)?;
+            let turn: i8 = parse_num(children.next().unwrap())?;
+            let side = parse_side(children.next().unwrap())?;
+            let ar: i8 = parse_num(children.next().unwrap())?;
 
             if let Some(card) = children.next() {
                 let card = parse_card(card)?;
                 let info = ARInfo::new(turn, ar, side, card);
                 let ar = AR::new(children.next().expect("Valid"), info);
-                Some(ar)
+                Ok(ar)
             } else {
                 todo!() // Pass action
             }
         }
-        _ => None,
+        _ => todo!(),
     }
 }
 
-fn parse_roll(pair: Pair<Rule>) -> Option<Change> {
-    match pair.as_rule() {
-        Rule::rolls => {
-            let mut inner = pair.into_inner().into_iter();
-            let side = parse_side(inner.next()?)?;
-            let roll = parse_num(inner.next()?)?;
-            Some(Change::roll(side, roll))
-        }
-        _ => None,
-    }
+fn parse_roll(pair: Pair<Rule>) -> Result<Change> {
+    ensure!(pair.as_rule() == Rule::rolls, "Wrong Rule");
+    let mut inner = pair.into_inner().into_iter();
+    let side = parse_side(inner.next().unwrap())?;
+    let roll = parse_num(inner.next().unwrap())?;
+    Ok(Change::roll(side, roll))
 }
 
-fn parse_target(pair: Pair<Rule>) -> Option<usize> {
-    get_country(pair.into_inner().peek()?.as_str())
+fn parse_target(pair: Pair<Rule>) -> Result<usize> {
+    let name = pair.into_inner().peek().unwrap().as_str();
+    get_country(name)
 }
 
-fn parse_card(pair: Pair<Rule>) -> Option<Card> {
-    match pair.as_rule() {
-        Rule::card => Some(
-            *CARD_NAMES
-                .get(pair.as_str())
-                .expect(&format!("{} is valid", pair.as_str())),
-        ),
-        _ => None,
-    }
+fn parse_card(pair: Pair<Rule>) -> Result<Card> {
+    ensure!(pair.as_rule() == Rule::card, "Wrong Rule");
+    let name = pair.as_str();
+    CARD_NAMES
+        .get(name)
+        .copied()
+        .ok_or_else(|| anyhow!("No card found with name: {}", name))
 }
 
-fn parse_side(pair: Pair<Rule>) -> Option<Side> {
-    match pair.as_rule() {
-        Rule::side => match pair.as_str() {
-            "US" => Some(Side::US),
-            "USSR" => Some(Side::USSR),
-            _ => None,
-        },
-        _ => None,
+fn parse_side(pair: Pair<Rule>) -> Result<Side> {
+    ensure!(pair.as_rule() == Rule::side, "Wrong Rule");
+    match pair.as_str() {
+        "US" => Ok(Side::US),
+        "USSR" => Ok(Side::USSR),
+        _ => Err(anyhow!("Expected side got: {}", pair.as_str())),
     }
 }
 
