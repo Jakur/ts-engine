@@ -33,7 +33,7 @@ card = {
 	(!("is" | "&") ~ word)+
 }
 play_card = {
-	(event ~ buffer ~ card_use?) | (card_use ~ buffer ~ event?)
+	(card_use ~ NEWLINE)+
 }
 //play_card = {(event ~ buffer ~ card_use)}
 card_use = {

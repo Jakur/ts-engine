@@ -100,10 +100,6 @@ fn standard_card_name(card: Card) -> String {
     name
 }
 
-// fn get_card(name: &str) -> Option<Card> {
-//     CARD_NAMES.get(name.split_whitespace().next()?).copied()
-// }
-
 fn get_country(name: &str) -> Result<usize> {
     let search = if name == "South Africa" {
         name
@@ -124,6 +120,7 @@ fn parse_num<T: std::str::FromStr>(num: Pair<Rule>) -> Result<T> {
 
 #[derive(Debug, PartialEq)]
 struct CountryChange {
+    side: Side,
     index: usize,
     us: i8,
     ussr: i8,
@@ -131,8 +128,9 @@ struct CountryChange {
 }
 
 impl CountryChange {
-    fn new(index: usize, us: i8, ussr: i8, delta: i8) -> Self {
+    fn new(side: Side, index: usize, us: i8, ussr: i8, delta: i8) -> Self {
         Self {
+            side,
             index,
             us,
             ussr,
@@ -181,11 +179,13 @@ fn parse_outcome(pair: Pair<Rule>) -> Result<Outcome> {
             parse_outcome(inner)
         }
         Rule::country_change => {
-            let delta = parse_num(vals.nth(1).unwrap())?;
+            let side = parse_side(vals.next().unwrap())?;
+            let delta = parse_num(vals.next().unwrap())?;
             let name = vals.next().unwrap().as_str();
             let index = get_country(name)?;
             let (us, ussr) = parse_country_status(vals.next().unwrap())?;
             Ok(Outcome::Country(CountryChange {
+                side,
                 index,
                 us,
                 ussr,
@@ -289,139 +289,28 @@ impl ARInfo {
     }
 }
 
-#[derive(Debug)]
-enum AR<'a> {
-    EventBefore {
-        event: Pair<'a, Rule>,
-        action: Pair<'a, Rule>,
-        info: ARInfo,
-    },
-    EventAfter {
-        action: Pair<'a, Rule>,
-        event: Pair<'a, Rule>,
-        info: ARInfo,
-    },
-    SimpleUse {
-        action: Pair<'a, Rule>,
-        info: ARInfo,
-    },
-}
-
-impl<'a> AR<'a> {
-    fn new(pair: Pair<'a, Rule>, info: ARInfo) -> AR<'a> {
-        assert_eq!(pair.as_rule(), Rule::play_card);
-        let mut inner = pair.into_inner().into_iter();
-        let mut event = None;
-        let mut action = None;
-        let a = inner.next().expect("At least one child");
-        match a.as_rule() {
-            Rule::event => event = Some(a),
-            Rule::card_use => action = Some(a),
-            _ => unimplemented!(),
-        }
-        let b = inner.next();
-        if let Some(p) = b {
-            let event_first = match p.as_rule() {
-                Rule::event => {
-                    assert!(event.is_none());
-                    event = Some(p);
-                    false
-                }
-                Rule::card_use => {
-                    assert!(action.is_none());
-                    action = Some(p);
-                    true
-                }
-                _ => unimplemented!(),
-            };
-            let event = event.unwrap();
-            let action = action.unwrap();
-            if event_first {
-                AR::EventBefore {
-                    event,
-                    action,
-                    info,
-                }
-            } else {
-                AR::EventAfter {
-                    event,
-                    action,
-                    info,
-                }
-            }
-        } else {
-            if let Some(e) = event {
-                AR::SimpleUse { action: e, info }
-            } else {
-                AR::SimpleUse {
-                    action: action.unwrap(),
-                    info,
-                }
-            }
-        }
-    }
-    fn consume(self, vec: &mut Vec<FatPly>) {
-        // Check the variant before we consume it
-        let before = if let AR::EventBefore { .. } = self {
-            true
-        } else {
-            false
-        };
-        let (event, action) = match self {
-            AR::EventBefore {
-                event,
-                action,
-                info,
-            }
-            | AR::EventAfter {
-                event,
-                action,
-                info,
-            } => {
-                // There may be some edge case that this is wrong, but it's not obvious
-                let e_side = if let Side::Neutral = info.card.side() {
-                    info.side
-                } else {
-                    info.card.side()
-                };
-                let e = parse_action(event, e_side, Some(info.card));
-                let a = parse_action(action, info.side, None);
-                (Some(e), a)
-            }
-            AR::SimpleUse { action, info } => {
-                let a = parse_action(action, info.side, None);
-                (None, a)
-            }
-        };
-        if let Some(event) = event {
-            if before {
-                vec.push(event);
-                vec.push(action);
-            } else {
-                vec.push(action);
-                vec.push(event);
-            }
-        } else {
-            vec.push(action);
-        }
-    }
-}
-
-fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
+fn parse_action(action: Pair<Rule>, mut actor: Side, card: Option<Card>) -> FatPly {
     use std::cell::RefCell;
     let choices = RefCell::new(Vec::new());
     let outcomes = RefCell::new(Vec::new());
     let res = inner(action, &choices, &outcomes, card);
-    if let Err(e) = res {
-        eprintln!("{}", e.root_cause());
-        panic!("Bad parse!");
+    match res {
+        Ok(side) => match side {
+            Side::USSR | Side::US => actor = side,
+            _ => {}
+        },
+        Err(e) => {
+            eprintln!("{}", e.root_cause());
+            panic!("Bad parse!");
+        }
     }
     fn inner(
         x: Pair<Rule>,
         choices: &RefCell<Vec<Change>>,
         outcomes: &RefCell<Vec<Outcome>>,
         card: Option<Card>,
-    ) -> Result<()> {
+    ) -> Result<Side> {
+        let mut side = Side::Neutral;
         match x.as_rule() {
             Rule::card_use => {
                 let child = x.into_inner().into_iter().next().unwrap();
@@ -429,15 +318,15 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
             }
             Rule::event => {
                 let mut iter = x.into_inner().into_iter();
-                let c = iter.next().unwrap();
-                if parse_card(c)? != card.expect("Valid card") {
+                let c = parse_card(iter.next().unwrap())?;
+                if c != card.expect("Valid card") {
                     todo!() // Events calling other events!
                 }
                 while let Some(pair) = iter.next() {
                     match pair.as_rule() {
                         Rule::conduct_ops => {
                             let child = pair.into_inner().into_iter().next().unwrap();
-                            inner(child, choices, outcomes, card)?;
+                            side = inner(child, choices, outcomes, card)?;
                         }
                         Rule::outcome => {
                             let outcome = parse_outcome(pair)?;
@@ -446,12 +335,18 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                         _ => unimplemented!(),
                     }
                 }
+                // Assume for now card event side has priority over outcome side
+                match c.side() {
+                    Side::USSR | Side::US => side = c.side(),
+                    Side::Neutral => {}
+                }
             }
             Rule::inf => {
                 let mut iter = x.into_inner().into_iter().skip(1);
                 while let Some(pair) = iter.next() {
                     let out = parse_outcome(pair)?;
                     if let Outcome::Country(ref cc) = out {
+                        side = cc.side; // Implies Side is placing inf
                         let index = cc.index;
                         let choice = DecodedChoice::new(Action::Influence, Some(index));
                         choices.borrow_mut().push(Change::Choice(choice));
@@ -469,6 +364,21 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                 let mut outs = outcomes.borrow_mut();
                 while let Some(pair) = iter.next() {
                     let out = parse_outcome(pair)?;
+                    // Try to determine who is couping. This should only fail on
+                    // a failed free coup.
+                    match out {
+                        Outcome::Country(ref cc) => {
+                            if cc.delta > 0 {
+                                side = cc.side;
+                            } else {
+                                side = cc.side.opposite();
+                            }
+                        }
+                        Outcome::MilitaryOps(ref mil_ops) => {
+                            side = mil_ops.side;
+                        }
+                        _ => {}
+                    }
                     outs.push(out);
                 }
                 let mut chs = choices.borrow_mut();
@@ -498,7 +408,7 @@ fn parse_action(action: Pair<Rule>, actor: Side, card: Option<Card>) -> FatPly {
                 todo!();
             }
         }
-        Ok(())
+        Ok(side)
     }
     // Remove the Refcell layer
     let choices = choices.into_inner();
@@ -524,14 +434,47 @@ fn parse_ar(pair: Pair<Rule>) -> Result<AR> {
             if let Some(card) = children.next() {
                 let card = parse_card(card)?;
                 let info = ARInfo::new(turn, ar, side, card);
-                let ar = AR::new(children.next().expect("Valid"), info);
-                Ok(ar)
+                let ar = AR::try_new(children.next().expect("Valid"), info);
+                ar
             } else {
                 todo!() // Pass action
             }
         }
         _ => todo!(),
     }
+}
+
+#[derive(Debug)]
+struct AR {
+    actions: Vec<FatPly>,
+    info: ARInfo,
+    timing: Timing,
+}
+
+impl AR {
+    fn try_new(pair: Pair<Rule>, info: ARInfo) -> Result<Self> {
+        ensure!(pair.as_rule() == Rule::play_card, "Wrong rule!");
+        let mut actions = Vec::new();
+        let mut iter = pair.into_inner().into_iter();
+        while let Some(card_use) = iter.next() {
+            // Todo more nuanced side / card
+            let action = parse_action(card_use, info.side, Some(info.card));
+            actions.push(action);
+        }
+        Ok(Self {
+            actions,
+            info,
+            timing: Timing::Ops, // Todo
+        })
+    }
+}
+
+#[derive(Debug)]
+enum Timing {
+    EventBefore,
+    EventAfter,
+    Ops,
+    Event,
 }
 
 fn parse_roll(pair: Pair<Rule>) -> Result<Change> {
@@ -680,75 +623,68 @@ DEFCON degrades to 2
                 .expect("Bad parse")
                 .next()
                 .unwrap();
-            let mut vec = vec![];
             match count {
                 0 => {
                     let ar = parse_ar(parsed).expect("Valid");
-                    ar.consume(&mut vec);
-                    assert_eq!(vec.len(), 2);
-                    let mut iter = vec.into_iter();
-                    let event = iter.next().unwrap();
-                    let action = iter.next().unwrap();
+                    assert_eq!(ar.actions.len(), 2);
+                    let event = &ar.actions[0];
+                    let action = &ar.actions[1];
                     assert_eq!(event.actor, Side::US);
                     assert_eq!(action.actor, Side::USSR);
                     let event_outcomes = vec![
-                        cc(CName::Poland, 0, 4, -2),
-                        cc(CName::Poland, 1, 4, 1),
+                        cc(event.actor, CName::Poland, 0, 4, -2),
+                        cc(event.actor, CName::Poland, 1, 4, 1),
                         Outcome::StartEffect(Effect::AllowSolidarity),
                     ];
                     assert_eq!(event_outcomes, event.outcomes);
                     let action_outcomes = vec![
-                        cc(CName::Venezuela, 0, 2, 1),
-                        cc(CName::SouthAfrica, 3, 2, 1),
+                        cc(action.actor, CName::Venezuela, 0, 2, 1),
+                        cc(action.actor, CName::SouthAfrica, 3, 2, 1),
                     ];
                     assert_eq!(action_outcomes, action.outcomes);
                 }
                 1 => {
                     let ar = parse_ar(parsed).expect("Valid");
-                    ar.consume(&mut vec);
-                    assert_eq!(vec.len(), 2);
-                    let mut iter = vec.into_iter();
-                    let event = iter.next().unwrap();
-                    let action = iter.next().unwrap();
+                    assert_eq!(ar.actions.len(), 2);
+                    let event = &ar.actions[0];
+                    let action = &ar.actions[1];
                     assert_eq!(event.actor, Side::USSR);
                     assert_eq!(action.actor, Side::US);
                     let event_outcomes = vec![
-                        cc(CName::SEAfricanStates, 0, 2, 2),
-                        cc(CName::Angola, 4, 4, 2),
+                        cc(event.actor, CName::SEAfricanStates, 0, 2, 2),
+                        cc(event.actor, CName::Angola, 4, 4, 2),
                     ];
                     assert_eq!(event_outcomes, event.outcomes);
-                    let action_outcomes = vec![cc(CName::Angola, 4, 0, -4)];
+                    let action_outcomes = vec![cc(action.actor, CName::Angola, 4, 0, -4)];
                     assert_eq!(action_outcomes, action.outcomes);
                 }
                 2 => {
                     let ar = parse_ar(parsed).expect("Valid");
-                    ar.consume(&mut vec);
-                    let mut iter = vec.into_iter();
+                    // Todo nicer way to test Che
+                    let mut iter = ar.actions.into_iter();
                     let mut event = iter.next().unwrap();
                     while let Some(mut next) = iter.next() {
                         event.append(&mut next);
                     }
                     assert_eq!(event.actor, Side::USSR);
                     let event_outcomes = vec![
-                        cc(CName::Colombia, 0, 0, -1),
-                        cc(CName::Colombia, 0, 1, 1),
+                        cc(event.actor, CName::Colombia, 0, 0, -1),
+                        cc(event.actor, CName::Colombia, 0, 1, 1),
                         Outcome::MilitaryOps(MilOps::new(Side::USSR, 5)),
-                        cc(CName::Cameroon, 0, 0, -1),
-                        cc(CName::Cameroon, 0, 3, 3),
+                        cc(event.actor, CName::Cameroon, 0, 0, -1),
+                        cc(event.actor, CName::Cameroon, 0, 3, 3),
                         Outcome::MilitaryOps(MilOps::new(Side::USSR, 5)),
                     ];
                     assert_eq!(event_outcomes, event.outcomes);
                 }
                 3 => {
                     let ar = parse_ar(parsed).expect("Valid");
-                    ar.consume(&mut vec);
-                    assert_eq!(vec.len(), 1);
-                    let mut iter = vec.into_iter();
-                    let action = iter.next().unwrap();
+                    assert_eq!(ar.actions.len(), 1);
+                    let action = &ar.actions[0];
                     assert_eq!(action.actor, Side::USSR);
                     let action_outcomes = vec![
-                        cc(CName::Nigeria, 0, 0, -1),
-                        cc(CName::Nigeria, 0, 2, 2),
+                        cc(action.actor, CName::Nigeria, 0, 0, -1),
+                        cc(action.actor, CName::Nigeria, 0, 2, 2),
                         Outcome::MilitaryOps(MilOps::new(Side::USSR, 2)),
                         Outcome::Defcon(2),
                     ];
@@ -758,7 +694,8 @@ DEFCON degrades to 2
             }
         }
     }
-    fn cc(cname: CName, us: i8, ussr: i8, delta: i8) -> Outcome {
-        Outcome::Country(CountryChange::new(cname as usize, us, ussr, delta))
+    fn cc(side: Side, cname: CName, us: i8, ussr: i8, delta: i8) -> Outcome {
+        let side = if delta > 0 { side } else { side.opposite() };
+        Outcome::Country(CountryChange::new(side, cname as usize, us, ussr, delta))
     }
 }
