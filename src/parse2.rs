@@ -557,7 +557,38 @@ mod tests {
         }
     }
     #[test]
-    fn test() {
+    fn test_file() {
+        use std::fs::File;
+        use std::io::prelude::*;
+        let mut file = File::open("tests/1160218.txt").expect("Cannot open file");
+        let mut string = String::new();
+        file.read_to_string(&mut string).expect("Bad read");
+        let _parsed = TwilightParser::parse(Rule::file, &string)
+            .expect("Bad parse")
+            .next()
+            .unwrap();
+    }
+    #[test]
+    fn test_hl() {
+        let f = "Turn 1, Headline Phase
+De Gaulle Leads France* & Mideast Scoring
+USSR Headlines De Gaulle Leads France*
+US Headlines Mideast Scoring
+Event: De Gaulle Leads France*
+USSR +1 in France [0][1]
+De Gaulle Leads France* is now in play.
+
+Event: Mideast Scoring
+US gains 4 VP. Score is US 4.
+
+";
+        let _parsed = TwilightParser::parse(Rule::single_turn, &f)
+            .expect("Bad parse")
+            .next()
+            .unwrap();
+    }
+    #[test]
+    fn test_ars() {
         let f = "Turn 6, USSR AR6
 John Paul II Elected Pope*
 Event: John Paul II Elected Pope*

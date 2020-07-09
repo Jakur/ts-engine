@@ -16,12 +16,10 @@ turn = {
 turn_headline = {
 	"Turn" ~ number ~ "," ~ "Headline Phase" ~ NEWLINE ~
 	card ~ "&" ~ card ~ NEWLINE ~
-	defcon_change ~
+	defcon_change? ~
 	("*RESHUFFLE*" ~ NEWLINE)? ~
-	(side ~ "Headlines" ~ card ~ NEWLINE) ~
-	(side ~ "Headlines" ~ card ~ NEWLINE) ~
-	("Event: Defectors" ~ NEWLINE) | (event ~ event) ~ buffer
-
+	(side ~ "Headlines" ~ card ~ NEWLINE){2} ~ 
+	(("Event: Defectors" ~ NEWLINE?) | (event ~ NEWLINE ~ event)) ~ buffer
 }
 turn_cleanup = {
 	"Turn" ~ number ~ "," ~ "Cleanup" ~ NEWLINE ~ NEWLINE ~ outcome* ~ NEWLINE
