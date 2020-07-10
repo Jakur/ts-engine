@@ -19,26 +19,27 @@ turn_headline = {
 	defcon_change? ~
 	("*RESHUFFLE*" ~ NEWLINE)? ~
 	(side ~ "Headlines" ~ card ~ NEWLINE){2} ~ 
-	(("Event: Defectors" ~ NEWLINE?) | (event ~ NEWLINE ~ event)) ~ buffer
+	(("Event: Defectors" ~ NEWLINE?) | (event ~ NEWLINE+ ~ event)) ~ buffer
 }
 turn_cleanup = {
 	"Turn" ~ number ~ "," ~ "Cleanup" ~ NEWLINE ~ NEWLINE ~ outcome* ~ NEWLINE
 }
 turn_std = {
-	"Turn" ~ number ~ "," ~ side ~ "AR" ~ number ~ NEWLINE ~ (card ~ NEWLINE ~ play_card)? ~ NEWLINE?
-}
+	"Turn" ~ number ~ "," ~ side ~ "AR" ~ number ~ NEWLINE ~ 
+		(card ~ NEWLINE ~ outcome? ~ play_card)? ~ NEWLINE{0, 2}
+} // Outcome? allows for cards like China -> Cancel Formosan Resolution
 card = {
 	(!("is" | "&") ~ word)+
 }
 play_card = {
-	(card_use ~ NEWLINE)+
-}
-//play_card = {(event ~ buffer ~ card_use)}
+	(("USSR gains 2 VP." ~ eat_line)? ~ card_use ~ NEWLINE)+
+} // Weirdness for Flower Power
+
 card_use = {
-	event | inf | realign | coup | space
-}
+	event | inf | realign | coup | space | outcome
+} // Use outcome for NORAD, Warsaw Pact Effect, and other such oddities
 event = {
-	"Event:" ~ card ~ NEWLINE ~ (outcome | conduct_ops)* 
+	"Event:" ~ card ~ NEWLINE ~ ("Event: " ~ eat_line)? ~ (outcome | conduct_ops)* 
 } // Todo figure out conduct ops in event
 conduct_ops = {inf | realign | coup | space}
 inf = {
@@ -87,7 +88,7 @@ target = {
 // Outcomes
 outcome = {
 	country_change | defcon_change | vp_change | start_effect | end_effect |
-    set_mil_ops | war | advance_space
+    set_mil_ops | war | advance_space | discard | (misc_text ~ NEWLINE) | un_missile
 }
 country_change = {
 	side ~ number ~ "in" ~ words ~ country_status ~ NEWLINE
@@ -104,11 +105,14 @@ set_mil_ops = {side ~ "Military Ops to" ~ number ~ NEWLINE}
 war = {
 	"War in" ~ words ~ NEWLINE ~
     ("DEFEAT:" | "VICTORY:") ~ number ~ eat_line ~
-    country_change* ~ 
+    country_change{0, 2} ~ 
+	vp_change? ~
     set_mil_ops
 }
 advance_space = {side ~ "advances to" ~ number ~ "in the Space Race." ~ NEWLINE}
-un_inter = {side ~ "plays" ~ card ~ NEWLINE ~ conduct_ops} // Todo this
+discard = {side ~ "discards" ~ card ~ NEWLINE}
+misc_text = {(side ~ "has no cards to" ~ ("discard" | "reveal"))}
+un_missile = {side ~ ("plays" | "reveals") ~ card ~ NEWLINE ~ play_card} // Todo this
 
 // Basic building blocks
 side = { "USSR" | "US" }
