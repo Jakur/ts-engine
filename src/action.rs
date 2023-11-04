@@ -148,10 +148,10 @@ impl Decision {
     pub fn headline(agent: Side, state: &GameState) -> Self {
         let hand = state.deck.hand(agent);
         let vec: Vec<_> = hand
-            .iter()
+            .iter_cards()
             .filter_map(|c| {
                 if c.can_headline() {
-                    Some(*c as usize)
+                    Some(c as usize)
                 } else {
                     None
                 }
@@ -204,7 +204,7 @@ impl Decision {
             }
             Action::ChooseCard if state.current_event().unwrap() == Card::Ask_Not => {
                 let mut allowed = vec![0];
-                allowed.extend(state.deck.us_hand().iter().filter_map(|&c| {
+                allowed.extend(state.deck.hand(Side::US).iter_cards().filter_map(|c| {
                     if let Card::Dummy = c {
                         None
                     } else {

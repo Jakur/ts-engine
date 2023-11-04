@@ -70,6 +70,12 @@ impl Side {
     }
 }
 
+impl std::default::Default for Side {
+    fn default() -> Self {
+        Self::USSR
+    }
+}
+
 impl From<usize> for Side {
     fn from(num: usize) -> Self {
         if num == 0 {

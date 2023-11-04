@@ -13,6 +13,10 @@ pub mod record;
 pub mod state;
 mod tensor;
 
+pub fn main() {
+    dbg!(std::mem::size_of::<crate::card::CardSet>());
+}
+
 #[macro_export]
 #[doc(hidden)]
 macro_rules! name_index {

@@ -47,23 +47,21 @@ impl TwilightRand for InternalRand {
         if hand.len() == 0 {
             None
         } else {
-            let i = self.rng.gen_range(0, hand.len());
-            Some(hand[i])
+            let vec = hand.card_vec();
+            let i = self.rng.gen_range(0, vec.len());
+            Some(vec[i])
         }
     }
     fn reshuffle(&mut self, deck: &mut Deck) {
-        use rand::seq::SliceRandom;
-        deck.discard_pile_mut().shuffle(&mut self.rng);
         deck.reset_draw_pile();
     }
     fn draw_card(&mut self, deck: &mut Deck, _side: Side) -> Card {
-        match deck.pop_draw_pile() {
-            Some(c) => c,
-            None => {
-                self.reshuffle(deck);
-                self.draw_card(deck, _side)
-            }
-        }
+        let draw_pile = deck.draw_pile_mut();
+        let cards = draw_pile.card_vec();
+        let idx = self.rng.gen_range(0, cards.len());
+        let card = cards[idx];
+        draw_pile.pop(card);
+        card
     }
 }
 
@@ -108,8 +106,7 @@ impl TwilightRand for DebugRand {
     fn card_from_hand(&mut self, deck: &Deck, side: Side) -> Option<Card> {
         let card = self.discards.pop().unwrap();
         if let Some(card) = card {
-            let find = deck.hand(side).iter().find(|c| **c == card);
-            assert!(find.is_some());
+            assert!(deck.hand(side).contains(card));
         } else {
             assert!(deck.hand(side).is_empty());
         }
@@ -129,9 +126,7 @@ impl TwilightRand for DebugRand {
             if card == Card::The_China_Card {
                 panic!("Should not draw the China Card");
             }
-            // dbg!(deck.draw_pile());
-            let index = deck.draw_pile().iter().position(|&c| c == card).unwrap();
-            deck.draw_pile_mut().swap_remove(index);
+            deck.draw_pile_mut().pop(card);
             card
         } else {
             // We've drawn all the known cards we care about, so just draw

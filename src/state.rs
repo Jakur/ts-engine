@@ -304,7 +304,7 @@ impl GameState {
                     self.vp -= 2;
                 }
                 if card.event(self, rng) && card.is_starred() {
-                    self.deck.remove_card(card).expect("Remove Failure");
+                    self.deck.remove_card(card);
                 }
             }
             Action::SpecialEvent => {
@@ -487,9 +487,9 @@ impl GameState {
                     Card::Ask_Not => {
                         if choice == 0 {
                             // Done discarding
-                            let hand = self.deck.us_hand_mut();
+                            let hand = self.deck.hand_mut(Side::US);
                             let size = hand.len();
-                            hand.retain(|c| *c != Card::Dummy);
+                            // hand.retain(|c| *c != Card::Dummy);
                             for _ in 0..size - hand.len() {
                                 self.deck.draw_to_hand(rng, Side::US);
                             }
@@ -786,8 +786,7 @@ impl GameState {
         let cards = self.deck.hand(side);
         let offset = self.base_ops_offset(side);
         cards
-            .iter()
-            .copied()
+            .iter_cards()
             .filter(|c| c.ops(offset) >= val)
             .collect()
     }
@@ -896,7 +895,7 @@ impl GameState {
         let mut vec = Vec::new();
         let hand = self.deck.hand(side);
         let ops_offset = self.base_ops_offset(side);
-        for &c in hand.iter() {
+        for c in hand.iter_cards() {
             if self.can_space(self.side, c.ops(ops_offset)) {
                 vec.push(c as usize);
             }

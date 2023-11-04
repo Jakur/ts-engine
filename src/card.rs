@@ -166,10 +166,10 @@ fn init_cards() -> Vec<Attributes> {
 
 macro_rules! pa {
     ($s:ident, $d:ident) => {
-        $s.add_pending($d);
+        $s.add_pending($d)
     };
     ($s:ident, $d:expr) => {
-        $s.add_pending($d);
+        $s.add_pending($d)
     };
 }
 
@@ -719,8 +719,8 @@ impl Card {
                 let hand = state.deck.hand(side);
                 let opp = side.opposite();
                 let vec: Vec<_> = hand
-                    .iter()
-                    .copied()
+                    .card_vec()
+                    .into_iter()
                     .filter_map(|c| {
                         if c.side() == opp {
                             Some(c as usize)
@@ -812,8 +812,9 @@ impl Card {
                 let allowed: Vec<_> = state
                     .deck
                     .discard_pile()
-                    .iter()
-                    .map(|c| *c as usize)
+                    .card_vec()
+                    .into_iter()
+                    .map(|c| c as usize)
                     .collect();
                 let d = Decision::new(side, Action::RecoverCard, allowed);
                 pa!(state, d)
@@ -864,8 +865,7 @@ impl Card {
                 let allowed: Vec<_> = state
                     .deck
                     .highest_ops(side.opposite())
-                    .into_iter()
-                    .map(|c| c as usize)
+                    .iter_indices()
                     .collect();
                 let d = Decision::new(side.opposite(), Action::ChooseCard, allowed);
                 pa!(state, d);
@@ -1035,7 +1035,7 @@ impl Card {
                 }
             }
             Ask_Not => {
-                let allowed: Vec<_> = state.deck.us_hand().iter().map(|x| *x as usize).collect();
+                let allowed: Vec<_> = state.deck.hand(Side::US).iter_indices().collect();
                 let q = allowed.len() as i8;
                 let d = Decision::with_quantity(Side::US, Action::ChooseCard, allowed, q);
                 pa!(state, d);
@@ -1087,18 +1087,23 @@ impl Card {
                 let mut allowed: Vec<_> = state
                     .deck
                     .discard_pile()
-                    .iter()
+                    .iter_cards()
                     .filter_map(|c| {
                         if state.ar != 0 || c.can_headline() {
-                            Some(*c as usize)
+                            Some(c as usize)
                         } else {
                             None
                         }
                     })
                     .collect();
                 // Todo figure out if pending discard is an unnecessary abstraction
-                if let Some(c) = state.deck.pending_discard().iter().find(|c| *c != self) {
-                    allowed.push(*c as usize);
+                if let Some(c) = state
+                    .deck
+                    .pending_discard()
+                    .iter_cards()
+                    .find(|c| c != self)
+                {
+                    allowed.push(c as usize);
                 }
                 let d = Decision::new(Side::US, Action::Event, allowed);
                 pa!(state, d);
@@ -1185,7 +1190,12 @@ impl Card {
             }
             Aldrich_Ames_Remix => {
                 state.add_effect(Side::USSR, Effect::AldrichAmes);
-                let allowed: Vec<_> = state.deck.us_hand().iter().map(|c| *c as usize).collect();
+                let allowed: Vec<_> = state
+                    .deck
+                    .hand(Side::US)
+                    .iter_cards()
+                    .map(|c| c as usize)
+                    .collect();
                 let d = Decision::new(Side::USSR, Action::Discard, allowed);
                 pa!(state, d);
             }
@@ -1214,7 +1224,7 @@ impl Card {
                 let scoring = state.deck.scoring_cards(Side::US);
                 if !scoring.is_empty() {
                     let mut vec: Vec<usize> = Vec::new();
-                    for c in scoring {
+                    for c in scoring.iter_cards() {
                         let region = c.scoring_region().unwrap();
                         vec.extend(&region.all_countries());
                     }
@@ -1291,7 +1301,7 @@ impl Card {
                 state
                     .deck
                     .hand(*state.side())
-                    .iter()
+                    .iter_cards()
                     .any(|c| c.side() == opp)
             }
             Kitchen_Debates => {

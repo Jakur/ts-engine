@@ -80,7 +80,7 @@ impl Decision {
                 if scoring.is_empty() {
                     return encode_offsets(vec![Action::Pass.offset()]);
                 } else {
-                    let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
+                    let scoring: Vec<_> = scoring.iter_cards().map(|c| c as usize).collect();
                     let mut d = Decision::new(side, Action::Event, scoring);
                     return d.encode(state);
                 }
@@ -91,7 +91,7 @@ impl Decision {
                     .must_play_scoring(side, state.max_ar(side) - state.ar)
                 {
                     let scoring = state.deck.scoring_cards(side);
-                    let scoring: Vec<_> = scoring.into_iter().map(|c| c as usize).collect();
+                    let scoring: Vec<_> = scoring.iter_cards().map(|c| c as usize).collect();
                     let mut x = Decision::new(side, Action::Event, scoring);
                     return x.encode(state);
                 }
@@ -154,7 +154,7 @@ impl TensorOutput for Decision {
                     if !scoring_play {
                         // If not add scoring card events to our legal list
                         let scoring = state.deck.scoring_cards(self.agent);
-                        standard.extend(scoring.into_iter().map(|card| {
+                        standard.extend(scoring.iter_cards().map(|card| {
                             let a = Action::Event;
                             let offset = card as usize;
                             OutputIndex::new(a.offset() + offset)
