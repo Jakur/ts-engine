@@ -382,11 +382,10 @@ mod tests {
     fn test_summit() {
         let mut replay = get_example_replay();
         let game = &mut replay.game;
-        game.state.deck.us_hand_mut().extend(vec![Card::Summit; 7]);
-        game.state
-            .deck
-            .ussr_hand_mut()
-            .extend(vec![Card::Summit; 7]);
+        for card in vec![Card::Summit; 7] {
+            game.state.deck.hand_mut(Side::US).push(card);
+            game.state.deck.hand_mut(Side::USSR).push(card);
+        }
         let summit_play = DecodedChoice::new(Action::Event, Some(Card::Summit as usize));
         let defcon_one = DecodedChoice::new(Action::ChangeDefcon, Some(1));
         assert!(game.consume_action(summit_play).is_ok());
@@ -418,7 +417,10 @@ mod tests {
             .map(|s| s.to_string())
             .collect();
         let game = &mut replay.game;
-        game.state.deck.ussr_hand_mut().push(Card::De_Stalinization);
+        game.state
+            .deck
+            .hand_mut(Side::USSR)
+            .push(Card::De_Stalinization);
         let destal = DecodedChoice::new(Action::Event, Some(Card::De_Stalinization as usize));
         game.consume_action(destal).unwrap();
 

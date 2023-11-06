@@ -242,6 +242,15 @@ impl Decision {
     }
 }
 
+#[derive(Clone, Copy, FromPrimitive)]
+pub enum CardUse {
+    Influence,
+    Coup,
+    Space,
+    Realignment,
+}
+// Todo do not ignore event first / event second
+
 #[derive(Clone, Copy, FromPrimitive, Debug, PartialEq)]
 pub enum Action {
     BeginAr = 0,

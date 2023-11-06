@@ -375,7 +375,9 @@ mod tests {
         let mut state = GameState::new();
         let mut hand: Vec<_> = (14..21).map(|x| Card::from_index(x)).collect();
         hand.push(Card::Asia_Scoring);
-        state.deck.us_hand_mut().extend(hand);
+        for card in hand {
+            state.deck.hand_mut(Side::US).push(card);
+        }
         let side = Side::US;
         let mut d = Decision::begin_ar(side);
         let output_vec = d.encode(&state);

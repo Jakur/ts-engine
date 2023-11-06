@@ -802,9 +802,35 @@ fn edges() -> Vec<(CName, CName)> {
     ]
 }
 
+fn importance() {
+    let countries = countries();
+    let mut imp: Vec<_> = countries
+        .iter()
+        .enumerate()
+        .map(|(idx, c)| {
+            let mut base = 1.0;
+            if c.bg {
+                base += 1.0 / ((c.stability + 1) as f32);
+                base *= 2.0;
+            } else if c.stability > 2 {
+                base *= 0.5;
+            }
+            if SOUTHEAST_ASIA.contains(&idx) {
+                base *= 1.25;
+            }
+            base
+        })
+        .collect();
+    dbg!(imp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn foo() {
+        importance();
+    }
     #[test]
     fn check_countries() {
         let countries = countries();

@@ -11,6 +11,8 @@ pub mod effect;
 pub mod legal;
 pub use deck::*;
 pub use effect::*;
+mod event_value;
+pub use event_value::event_value;
 
 const NUM_CARDS: usize = Card::AWACS as usize + 1;
 
